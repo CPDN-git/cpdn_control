@@ -1,22 +1,29 @@
-# CPDN control code for climate models running in climateprediction.net (CPDN)
+# CPDN controller to manage meterological/climate models running in climateprediction.net (CPDN)
 
-This respository contains the instructions and code for building the controlling application 
-used for controlling the climate models in the climateprediction.net project, at this point 
-the ECMWF OpenIFS (43r3) models.
+This respository contains the instructions and code for building the application (controller)
+used for managing the models in the climateprediction.net project under a BOINC framework. This code acts
+as the interface between the BOINC client and the model. The BOINC client only knows about 
+this program and only this program knows how to manage the model.
+
+The design of this code allows it to be (mostly) agnostic about the underlying model. The
+model details and configuration are read from input XML files.  A class architecture is
+used to instantiate the model(s) handled by this code.
 
 [![CTest Unit Tests](https://github.com/CPDN-git/cpdn_control/actions/workflows/run_unit_tests.yml/badge.svg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/run_unit_tests.yml)
 [![Controller CI](https://github.com/CPDN-git/cpdn_control/actions/workflows/controller_ci.yml/badge.svg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/controller_ci.yml)
 
+A number of prerequisite libraries are required.
+
 ## Prerequisite: BOINC library
 
-To compile the controlling code you will need to download and build the BOINC code (this is available from: https://github.com/BOINC/boinc). 
-For instructions on building this code see: [BOINC github](https://github.com/BOINC/boinc/wiki/).
+Download and build the BOINC libraries which this code links with (BOINC is available from: https://github.com/BOINC/boinc). 
+For instructions on building BOINC see: [BOINC github](https://github.com/BOINC/boinc/wiki/).
 
 As only the libraries are required, the boinc client and manager can be disabled (reduces system packages required).
 
 Install and build the boinc library to a directory outside this repository and note the install path.
 
-Note the boinczip library is no longer used.
+Note the boinczip library is no longer used as the repository contains an updated compression/zip library.
 
 In short:
 ```
@@ -33,15 +40,15 @@ In short:
 
 This installs the boinc libraries and include files to the directory specified in the `--prefix` argument. 
 It's preferable not to install into the same directory as the source. 
-When compiling the control code, specify the location of the include files using the -I argument and the libraries using -L argument
-on the compiler command line (see Makefile).
+When compiling the controller, specify the location of the include files using the -I argument and the libraries using -L argument
+on the compiler command line (see the CMakeLists.txt in the top dir).
 
 ## Prerequisite: ZipLib and cpdn_zip library
 
-As of Oct 2025, the control code no longer uses the boinc zip routines as distributed in the boinc code.
+As of Oct 2025, the controller no longer uses the BOINC library zip routines.
 These old routines are not memory safe; they use fixed sized buffers and unbounded string copy routines.
 
-The 'zip' directory now contains code to build `cpdn_zip` and `cpdn_unzip` functions to replace
+The 'zip' subdirectory now contains code to build `cpdn_zip` and `cpdn_unzip` functions to replace
 `boinc_zip` and `boinc_unzip`.
 
 ### ZipLib
@@ -53,11 +60,12 @@ and improved error reporting.
 
 It supports zip, bzip2 and lzma compression techniques. bzip2 offers higher
 compression at increased execution time and could be suitable for CPDN.
+Currently only zip compression is used.
 
 ZipLib is already installed and setup as required by the cpdn_zip wrapper code.
 However, if ZipLib source needs to be upgraded follow these steps:
 
-- To update ZipLib for this repo, download the ZipLib repo from github to a **temporary location** and not this repository.
+- To update ZipLib for this repo, download the ZipLib repo from github to a **temporary location** outside this repository.
 - Copy the `Zip/LibSource/ZipLib` directory to `ZipLib` in this directory. 
 - Also copy the README.md and LICENSE files for reference into ZipLib.
 
@@ -66,7 +74,7 @@ However, if ZipLib source needs to be upgraded follow these steps:
 This is a simple wrapper around ZipLib to provide `cpdn_zip` and `cpdn_unzip` functions
 now called by the control code.
 
-It is built as a static library, and combined with ZipLib object files and its 
+It is built as a static library and combined with ZipLib object files and its 
 compression library dependencies. cpdn_zip and unzip use the zip library by default.
 
 CMake is the preferred build tool and the software is built in separate `build` and
@@ -87,7 +95,7 @@ more details.
  ./test_zip
  ```
 
-## Build control code
+## Build CPDN Controller executable.
 ### OpenIFS 43r3 model
 #### Linux
 
@@ -165,16 +173,3 @@ To upgrade the controller code in the future to later versions of OpenIFS consid
 to be made whether there are any changes to the command line parameters the compiled version of 
 OpenIFS takes in, and whether there are changes to the structure and content of the supporting ancillary files.
 
-Currently in the controller code the following variables are fixed (this will change with further development):
-
-    OIFS_DUMMY_ACTION=abort    : Action to take if a dummy (blank) subroutine is entered (quiet/verbose/abort)
-    OMP_SCHEDULE=STATIC        : OpenMP thread scheduling to use. STATIC usually gives the best performance.
-    OMP_STACKSIZE=128M         : Set OpenMP stack size per thread. Default is usually too low for OpenIFS.
-    OMP_NUM_THREADS=1          : Number of threads (cores). Defaults to 1, can be changed by argument.
-    OIFS_RUN=1                 : Run number
-    DR_HOOK=1                  : DrHook is OpenIFS's tracing facility. Set to '1' to enable.
-    DR_HOOK_HEAPCHECK=no       : Enable/disable DrHook heap checking. Usually 'no' unless debugging.
-    DR_HOOK_STACKCHECK=no      : Enable/disable DrHook stack checks. Usually 'no' unless debugging.
-    DR_HOOK_NOT_MPI=true       : If set true, DrHook will not make calls to MPI (OpenIFS does not use MPI in CPDN).
-    EC_MEMINFO=0               : Disable EC_MEMINFO messages in stdout.
-    NAMELIST=fort.4            : NAMELIST file

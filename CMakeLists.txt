@@ -46,6 +46,8 @@ include(cmake/TargetHelpers.cmake)
 set(RELEASE_TARGET_NAME cpdn_release)
 set(DEBUG_TARGET_NAME   cpdn_debug)
 
+#--------------------------- Dependencies -----------------------------------
+
 # --- CONFIGURATION FOR BOINC LIBRARY (headers & lib)
 include(cmake/BoincConfig.cmake)
 set(BOINC_DIR "../boinc-8.0.2-x86_64" CACHE STRING "Root directory of BOINC install." ) 
@@ -58,15 +60,21 @@ configure_cpdnzip()
 # Other packages required
 find_package(Threads REQUIRED)
 
-# ----------------------------------------------------
+#--------------------------- Include paths -----------------------------------
 
-# Add the source include dirs
+# Add the source include dirs (local headers only)
 set(LOCAL_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/lib
     ${CMAKE_CURRENT_SOURCE_DIR}/api
 )
+
+#--------------------------- Model sources -----------------------------------
+
+add_subdirectory(models)
+
+#--------------------------- Libraries ---------------------------------------
 
 # Unit tests need just these source files; create a library for them to link against.
 add_library(cpdn_control 
@@ -76,6 +84,10 @@ add_library(cpdn_control
         ./api/trickle_handler.cpp
 )
 
+# Add the model object files to the controller library
+# (merges model helpers without creating extra archives per model)
+target_sources(cpdn_control PRIVATE $<TARGET_OBJECTS:cpdn_models>)
+
 # Add external header paths for boinc and cpdnzip
 # These paths are PUBLIC because the main code needs them to compile.
 target_include_directories(cpdn_control PUBLIC 
@@ -83,7 +95,7 @@ target_include_directories(cpdn_control PUBLIC
                     ${CPDNZIP_INCLUDE_DIR}
 )
 
-# Add local header paths
+# Add local header paths (needed by executables that include project headers)
 target_include_directories(cpdn_control PUBLIC ${LOCAL_INCLUDE_DIRS})
 
 # Link the external libraries
@@ -97,7 +109,10 @@ target_link_libraries(cpdn_control PUBLIC
 get_git_hash(CODE_VERSION_HASH)
 target_compile_definitions(cpdn_control PUBLIC CODE_VERSION="${CODE_VERSION_HASH}")
 
+#--------------------------- Executables -------------------------------------
+
 # Configure release and debug targets using the helper function
+# (If more executables are added, keep using add_cpdn_executable to stay consistent.)
 add_cpdn_executable(${RELEASE_TARGET_NAME} ./src/cpdn_main.cpp ${RELEASE_OUTPUT_NAME} 
                     "${RELEASE_COMPILE_OPTIONS}" 
                     "${RELEASE_LINK_OPTIONS}")

@@ -5,99 +5,62 @@
 //
 //    Glenn Carver, CPDN, 2025.
 
-#include "oifs_utils.h"
-#include "../../lib/utils.h"
 
 #include <iostream>
 #include <sstream>
 #include <iomanip>
 #include <cstdlib>
 #include <fstream>
+#include <vector>
+
+#include "oifs_utils.h"
+#include "../../lib/utils.h"
 
 
-// Set the required OpenIFS environment variables.
+/**
+ * @brief Set the required OpenIFS environment variables.
+ *        OMP_NUM_THREADS uses the incoming nthreads value; other values are fixed.
+ */
 bool oifs_setenvs(const std::string& slot_path, const std::string& nthreads) {
 
-    // For memory safety, keep env strings static so they persist for the life of the program.
+    // Ordered list of environment variables to set.
+    // vector of pairs is more efficient than map for single use & small number of items.
+    // Use emplace_back to avoid unnecessary copies, rather than push_back.
+    std::vector<std::pair<std::string, std::string>> env_vars;
 
-    // Set the OIFS_DUMMY_ACTION environmental variable, this controls what OpenIFS does if it goes into a dummy subroutine
-    // Possible values are: 'quiet', 'verbose' or 'abort'
-    if ( !set_env_var("OIFS_DUMMY_ACTION", "abort") ) {
-      std::cerr << "..Setting the OIFS_DUMMY_ACTION environmental variable failed" << std::endl;
-      return false;
-    }
+    // OIFS_DUMMY_ACTION controls what the model does when it gets into a dummy subroutine.
+    // Possible values are 'quiet', 'verbose' or 'abort'. We use 'abort' to stop the model.
+    env_vars.emplace_back("OIFS_DUMMY_ACTION", "abort");
+    env_vars.emplace_back("OMP_NUM_THREADS", nthreads);
+    env_vars.emplace_back("OMP_SCHEDULE", "STATIC");    // Enforce static scheduling for OpenMP threads.
+    env_vars.emplace_back("DR_HOOK", "1");              // Enable DrHook tracing; 1=on, 0=off.
+    env_vars.emplace_back("DR_HOOK_HEAPCHECK", "no");   // Report heap size stats at end; yes/no.
+    env_vars.emplace_back("DR_HOOK_STACKCHECK", "no");  // Report stack usage stats at end; yes/no.
+    env_vars.emplace_back("EC_MEMINFO", "0");           // disable noisy EC_MEMINFO output
+    env_vars.emplace_back("EC_PROFILE_HEAP", "0");      // disable heap stats; does not work with CPDN version.
+    env_vars.emplace_back("EC_PROFILE_MEM", "0");       // disable memory stats; does not work with CPDN version.
+    env_vars.emplace_back("OMP_STACKSIZE", "128M");     // OpenIFS needs more stack per thread
 
-    // Set the OMP_NUM_THREADS environmental variable; nthreads must be a positive integer string
-    if ( !set_env_var("OMP_NUM_THREADS", nthreads) ) {
-      std::cerr << "..Setting the OMP_NUM_THREADS environmental variable failed" << std::endl;
-      return false;
-    }
-    std::cerr << "Info: OMP_NUM_THREADS is set to: " << getenv("OMP_NUM_THREADS") << "\n";
+    // Paths depend on the slot directory.
+    std::string grib_samples = slot_path + "/eccodes/ifs_samples/grib1_mlgrib2";
+    std::string grib_defs    = slot_path + "/eccodes/definitions";
+    env_vars.emplace_back("GRIB_SAMPLES_PATH", grib_samples);
+    env_vars.emplace_back("GRIB_DEFINITION_PATH", grib_defs);
 
-    // Set the OMP_SCHEDULE environmental variable, this enforces static thread scheduling
-    if ( !set_env_var("OMP_SCHEDULE", "STATIC") ) {
-      std::cerr << "..Setting the OMP_SCHEDULE environmental variable failed" << std::endl;
-      return false;
-    }
+    for (const auto& [name, value] : env_vars) {
+        if (!set_env_var(name, value)) {
+            std::cerr << "..Setting the " << name << " environmental variable failed" << std::endl;
+            return false;
+        }
 
-    // Set the DR_HOOK environmental variable, this controls the tracing facility in OpenIFS, off=0 and on=1
-    if ( !set_env_var("DR_HOOK", "1") ) {
-      std::cerr << "..Setting the DR_HOOK environmental variable failed" << std::endl;
-      return false;
+        if (name == "OMP_NUM_THREADS") {
+            std::cerr << "Info: OMP_NUM_THREADS is set to: " << getenv("OMP_NUM_THREADS") << "\n";
+        } else if (name == "GRIB_SAMPLES_PATH") {
+            std::cerr << "The GRIB_SAMPLES_PATH environmental variable is: " << getenv("GRIB_SAMPLES_PATH") << "\n";
+        } else if (name == "GRIB_DEFINITION_PATH") {
+            std::cerr << "The GRIB_DEFINITION_PATH environmental variable is: " << getenv("GRIB_DEFINITION_PATH") << "\n";
+        }
     }
-
-    // Set the DR_HOOK_HEAPCHECK environmental variable, this ensures the heap size statistics are reported
-    if ( !set_env_var("DR_HOOK_HEAPCHECK", "no") ) {
-      std::cerr << "..Setting the DR_HOOK_HEAPCHECK environmental variable failed" << std::endl;
-      return false;
-    }
-
-    // Set the DR_HOOK_STACKCHECK environmental variable, this ensures the stack size statistics are reported
-    if ( !set_env_var("DR_HOOK_STACKCHECK", "no") ) {
-      std::cerr << "..Setting the DR_HOOK_STACKCHECK environmental variable failed" << std::endl;
-      return false;
-    }
-
-    // Set the EC_MEMINFO environment variable, only applies to OpenIFS 43r3.
-    // Disable EC_MEMINFO to remove the useless EC_MEMINFO messages to the stdout file to reduce filesize.
-    if ( !set_env_var("EC_MEMINFO", "0") ) {
-       std::cerr << "..Setting the EC_MEMINFO environment variable failed" << std::endl;
-       return false;
-    }
-
-    // Disable Heap memory stats at end of run; does not work for CPDN version of OpenIFS
-    if ( !set_env_var("EC_PROFILE_HEAP", "0") ) {
-       std::cerr << "..Setting the EC_PROFILE_HEAP environment variable failed" << std::endl;
-       return false;
-    }
-
-    // Disable all memory stats at end of run; does not work for CPDN version of OpenIFS
-    if ( !set_env_var("EC_PROFILE_MEM", "0") ) {
-       std::cerr << "..Setting the EC_PROFILE_MEM environment variable failed" << std::endl;
-       return false;
-    }
-
-    // Set the OMP_STACKSIZE environmental variable, OpenIFS needs more stack memory per process
-    if ( !set_env_var("OMP_STACKSIZE", "128M") ) {
-      std::cerr << "..Setting the OMP_STACKSIZE environmental variable failed" << std::endl;
-      return false;
-    }
-
-    // Set the GRIB_SAMPLES_PATH environmental variable
-    std::string GRIB_SAMPLES_var = slot_path + "/eccodes/ifs_samples/grib1_mlgrib2";
-    if ( !set_env_var("GRIB_SAMPLES_PATH", GRIB_SAMPLES_var) )  {
-      std::cerr << "..Setting the GRIB_SAMPLES_PATH failed" << std::endl;
-      return false;
-    }
-    std::cerr << "The GRIB_SAMPLES_PATH environmental variable is: " << getenv("GRIB_SAMPLES_PATH") << "\n";
-
-    // Set the GRIB_DEFINITION_PATH environmental variable
-    std::string GRIB_DEF_var = slot_path + "/eccodes/definitions";
-    if ( !set_env_var("GRIB_DEFINITION_PATH", GRIB_DEF_var) )  {
-      std::cerr << "..Setting the GRIB_DEFINITION_PATH failed" << std::endl;
-      return false;
-    }
-    std::cerr << "The GRIB_DEFINITION_PATH environmental variable is: " << getenv("GRIB_DEFINITION_PATH") << "\n";
 
     return true;
 }

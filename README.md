@@ -11,7 +11,6 @@ The design of this code allows it to be (mostly) agnostic about the underlying m
 model details and configuration are read from input XML files.  A class architecture is
 used to instantiate the model(s) handled by this code.
 
-[![CTest Unit Tests](https://github.com/CPDN-git/cpdn_control/actions/workflows/run_unit_tests.yml/badge.svg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/run_unit_tests.yml)
 [![Controller CI](https://github.com/CPDN-git/cpdn_control/actions/workflows/controller_ci.yml/badge.svg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/controller_ci.yml)
 
 A number of prerequisite libraries are required.

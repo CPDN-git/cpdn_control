@@ -109,14 +109,16 @@ jobs:
         if: ${{ success() }}
         uses: actions/upload-artifact@v4
         with:
-          name: Built executable
+          overwrite: true
+          name: Build-executable-${{ runner.os }}
           path: cpdn_control_1.0.0_x86_64-pc-linux-gnu
 
       - name: Upload logs on fail
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4
         with:
-          name: Build failure log
+          overwrite: true
+          name: Build-fail-log-${{ runner.os }}
           path: ${{ runner.temp }}/build_log
 
       - name: Set up test environment
@@ -144,5 +146,6 @@ jobs:
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4
         with:
-          name: Test failure log
+          overwrite: true
+          name: Test-fail-log-${{ runner.os }}
           path: stdout_and_stderr

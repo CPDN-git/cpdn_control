@@ -9,15 +9,15 @@
 
 #include "cpdn_control.h"
 #include "lib/utils.h"
-#include "src/cpdn_main.h" // this can be removed once we have a class fn for call to oifs_setenvs.
 
 #include "boinc/boinc_api.h"
 #include "boinc/diagnostics.h"
 #include "boinc/util.h"
 
 
-// *********** CONTROLLER *******************
-// Initialise BOINC and set the options
+/**
+ * @brief Initialise BOINC and set the options
+ */
 // TODO: all the workunit parameters should be part of a struct/class.
 int initialise_boinc(std::string& wu_name, std::string& project_dir, std::string& version, int& standalone) {
 
@@ -58,12 +58,12 @@ int initialise_boinc(std::string& wu_name, std::string& project_dir, std::string
 }
 
 
+
 // Next function allows the use of an override file to set environment variables for testing
 // on live tasks on remote machines.  The file is a simple text file with one variable per line in the format:
 // VAR=VALUE  or export VAR='VALUE'  (single or double quotes can be used, or no quotes)
 // e.g. export OMP_NUM_THREADS=6
 
-//*********** CONTROLLER ***************
 /**
  * @brief Checks for the override file and sets environment variables if found.
  * * 
@@ -113,7 +113,16 @@ bool process_env_overrides(const fs::path& override_envs)
 }
 
 
-// *********** CONTROLLER *******************
+
+/**
+ * @brief Copies the application zip file to the slot directory and unzips it.
+ * 
+ * @param app_name     The name of the application.
+ * @param version      The version string of the application.
+ * @param project_path The path to the project directory.
+ * @param slot_path    The path to the slot directory.
+ * @return int         Returns 0 on success, non-zero on failure.
+ */
 int move_and_unzip_app_file(std::string app_name, std::string version, std::string project_path, std::string slot_path) {
    // GC. TODO. This code could be combined with copy_and_unzip() to avoid code duplication.
 
@@ -165,7 +174,13 @@ int move_and_unzip_app_file(std::string app_name, std::string version, std::stri
 }
 
 
-// *********** CONTROLLER *******************
+
+/**
+ * @brief Checks the status of a child process.
+ * @param handleProcess The process handle of the child process.
+ * @param process_status The current status of the process.
+ * @return The updated process status.
+ */
 int check_child_status(long handleProcess, int process_status) {
     int stat = 0;
     int pid = 0;
@@ -201,7 +216,14 @@ int check_child_status(long handleProcess, int process_status) {
 }
 
 
-// ************* CONTROLLER *******************
+
+/**
+ * @brief Checks the BOINC client status and handles suspend, quit, and abort requests.
+ * 
+ * @param handleProcess The process handle of the child process.
+ * @param process_status The current status of the process.
+ * @return The updated process status.
+ */
 int check_boinc_status(long handleProcess, int process_status) {
     BOINC_STATUS status;
     boinc_get_status(&status);
@@ -263,8 +285,18 @@ int check_boinc_status(long handleProcess, int process_status) {
 }
 
 
-// *********** CONTROLLER *******************
-// Returns process id on success, -1 on failure.
+
+/**
+ * @brief Launches a child process to run the model executable.
+ * 
+ * @param project_path The path to the project directory.
+ * @param slot_path The path to the slot directory.
+ * @param strCmd The command to execute (model executable).
+ * @param nthreads The number of threads to use.
+ * @param exptid The experiment ID.
+ * @param app_name The application name.
+ * @return long The process handle of the launched child process, or -1 on failure.
+ */
 long launch_process(const std::string& project_path, const std::string& slot_path, 
                     const std::string& strCmd, const std::string& nthreads,
                     const std::string& exptid, const std::string& app_name)
@@ -343,7 +375,7 @@ long launch_process(const std::string& project_path, const std::string& slot_pat
 }
 
 
-// *********** CONTROLLER *******************
+
 // Open a file and return the "jf_*" string contained between the arrow tags else empty string
 // Explanation for Glenn's benefit :).  First run of task the filename contains a 'reference'
 // to the real zip file stored in the projects directory.  The reference is in the form of a
@@ -413,7 +445,16 @@ std::string get_tag(const std::string &filename) {
 }
 
 
-// ************ CONTROLLER -- CANDIDATE FOR A NEW CLASS? ***************
+
+/**
+ * @brief Reads the last line from a file, maintaining state between calls.
+ * @param progress_file The path to the progress file.
+ * @param last_cpu_time Reference to store the last CPU time read.
+ * @param upload_file_number Reference to store the upload file number read.
+ * @param last_iter Reference to store the last iteration read.
+ * @param last_upload Reference to store the last upload read.
+ * @param model_completed Reference to store the model completed status read.
+ */
 void read_progress_file(std::string progress_file, int& last_cpu_time, int& upload_file_number, 
                         std::string& last_iter, int& last_upload, int& model_completed) {
 
@@ -450,9 +491,15 @@ void read_progress_file(std::string progress_file, int& last_cpu_time, int& uplo
 }
 
 
-// ************** CONTROLLER -- CANDIDATE FOR A NEW CLASS? ***************
+
 /**
  * @brief Store task progress in progress_file
+ * @param progress_file The path to the progress file.
+ * @param last_cpu_time The last CPU time to write.
+ * @param upload_file_number The upload file number to write.
+ * @param last_iter The last iteration to write.
+ * @param last_upload The last upload to write.
+ * @param model_completed The model completed status to write.
  */
 void update_progress_file(std::string& progress_file, int last_cpu_time, int upload_file_number,
                           std::string& last_iter, int last_upload, int model_completed)
@@ -475,9 +522,17 @@ void update_progress_file(std::string& progress_file, int last_cpu_time, int upl
 }
 
 
-//************* CONTROLLER OR MODEL? ************
-// returns fraction completed of model run
-// (candidate for moving into OpenIFS specific src file)
+
+/**
+ * @brief Returns fraction completed of model run
+ *        This is currently based on OpenIFS but should be general enough for other models.
+ *        The function uses a 'heartbeat' mechanism to provide a smoother progress update
+ *        between model steps.
+ * @param step The current model step.
+ * @param total_steps The total number of model steps.
+ * @param nthreads The number of threads being used.
+ * @return double The fraction completed (0.0 to 1.0).
+ */
 double model_frac_done(double step, double total_steps, int nthreads ) {
    static int     stepm1 = -1;
    static double  heartbeat = 0.0;
@@ -527,24 +582,15 @@ double model_frac_done(double step, double total_steps, int nthreads ) {
 }
 
 
-//********** MODEL **********
-// Construct the second part of the output model filename to be uploaded
-// nb. exptid is always 4 characters for OpenIFS.
-std::string get_second_part(const std::string& last_iter, const std::string& exptid) {
-    std::ostringstream oss;
-    oss << exptid << "+" << std::setw(6) << std::setfill('0') << last_iter;
-    return oss.str();
-}
-
-
-//*********** CONTROLLER BUT NEED TO REMOVE MODEL SPECIFICS ***************
+/**
+ * @brief Moves the result file from the slot directory to the temporary project directory.
+ */
 int move_result_file(const std::string& slot_path, const std::string& temp_path, const std::string& result) {
     int retval = 0;
 
     // Move result file to the temporary folder in the project directory
     std::string result_file = slot_path + "/" + result;
     std::string temp_file = temp_path + "/" + result;
-    //std::cerr << "Checking for result file: " << result_file << "\n";
 
     if(file_exists(result_file)) {
        std::cerr << "Moving result file: " <<  fs::path(result_file).filename() << " to projects directory.\n";
@@ -563,117 +609,15 @@ int move_result_file(const std::string& slot_path, const std::string& temp_path,
 }
 
 
-//********* UTILITY OR CONTROLLER ********************
-bool check_stoi(std::string& cin) {
-    //  check input string is convertable to an integer by checking for any letters
-    //  nb. stoi() will convert leading digits if alphanumeric but we know step must be all digits.
-    //  Returns true on success, false if non-numeric data in input string.
-    //  Glenn Carver
 
-    if (std::any_of(cin.begin(), cin.end(), ::isalpha)) {
-        std::cerr << "..Invalid characters in stoi string: " << cin << "\n";
-        return false;
-    }
-
-    //  check stoi standard exceptions
-    //  n.b. still need to check step <= max_step
-    try {
-        std::stoi(cin);
-        return true;
-    }
-    catch (const std::invalid_argument &excep) {
-        std::cerr << "..Invalid input argument for stoi : " << excep.what() << "\n";
-        return false;
-    }
-    catch (const std::out_of_range &excep) {
-        std::cerr << "..Out of range value for stoi : " << excep.what() << "\n";
-        return false;
-    }
-}
-
-
-// ************ MODEL ************
-bool oifs_parse_stat(const std::string& logline, std::string& stat_column, const int index) {
-   //   Parse a line of the OpenIFS ifs.stat log file.
-   //      logline  : incoming ifs.stat logfile line to be parsed
-   //      stat_col : returned string given by position 'index'
-   //  Returns false if string is empty.
-
-   std::istringstream tokens;
-   std::string statstr="";
-
-   //  split input, get token specified by 'column' unless file is corrupted
-   tokens.str(logline);
-   for (int i=0; i<index; ++i)
-      tokens >> statstr;
-
-   if ( statstr.empty() ){
-      std::cerr << "..oifs_parse_stat: warning, statstr is empty: " << logline << '\n';
-      return false;
-   } else {
-      stat_column = statstr;
-      return true;
-   }
-}
-
-// ***************** MODEL ****************
-bool oifs_valid_step(std::string& step, int nsteps) {
-   //  checks for a valid step count in arg 'step'
-   //  Returns :   true if step is valid, otherwise false
-   //      Glenn
-
-   // make sure step is valid integer
-   if (!check_stoi(step)) {
-      std::cerr << "..oifs_valid_step: Invalid characters in stoi string, unable to convert step to int: " << step << '\n';
-      return false;
-   } else {
-      // check step is in valid range: 0 -> total no. of steps
-      if (stoi(step)<0) {
-         return false;
-      } else if (stoi(step) > nsteps) {
-         return false;
-      }
-   }
-   return true;
-}
-
-
-//********** MODEL *********
 /**
- * @brief Read the rcf_file line by line and extract CTIME and CSTEP variables.
- *        The input stream rcf_file must be at file start and ctime_value & cstep_value
- *        must be empty strings.
+ * @brief Takes the zip file, checks existence and whether empty and copies it to destination and unzips it
+ * @param zipfile The path to the zip file containing the jf_ reference.
+ * @param destination The path to copy the zip file to.
+ * @param unzip_path The path to unzip the contents to.
+ * @param type A string indicating the type of file (for logging purposes).
+ * @return int Returns 0 on success, non-zero on failure.
  */
-bool read_rcf_file(std::ifstream& rcf_file, std::string& ctime_value, std::string& cstep_value)
-{
-    std::string delimiter = "\"";
-    std::string rcf_file_line;
-    int position = 2;
-
-    // Extract the values of CSTEP and CTIME from the rcf file
-    while ( std::getline( rcf_file, rcf_file_line ))
-    {
-       // Check for CSTEP, if present return value
-       read_delimited_line(rcf_file_line, delimiter, "CSTEP", position, cstep_value);
-
-       // Check for CTIME, if present return value
-       read_delimited_line(rcf_file_line, delimiter, "CTIME", position, ctime_value);
-    }
-
-    if (cstep_value.empty()) {
-       std::cerr << "CSTEP value not present in rcf file" << '\n';
-       return false;
-    } else if (ctime_value.empty()) {
-       std::cerr << "CTIME value not present in rcf file" << '\n';
-       return false;
-    } else {
-       return true;
-    }
-}
-
-
-//******  CONTROLLER *******
-// Takes the zip file, checks existence and whether empty and copies it to destination and unzips it
 // GC. TODO. Convert this to accept  fs::path args.
 int copy_and_unzip(const std::string& zipfile, const std::string& destination, const std::string& unzip_path, const std::string& type) {
     int retval = 0;

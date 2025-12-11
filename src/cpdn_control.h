@@ -41,14 +41,9 @@ int check_boinc_status(long, int);
 long launch_process(const std::string&, const std::string&, const std::string&, const std::string&, const std::string&, const std::string&);
 std::string get_tag(const std::string &str);
 double model_frac_done(double, double, int);
-std::string get_second_part(const std::string&, const std::string&);
 int move_result_file(const std::string&, const std::string&, const std::string&);
-bool check_stoi(std::string& cin);
-bool oifs_parse_stat(const std::string&, std::string&, const int);
-bool oifs_valid_step(std::string&,int);
 void read_progress_file(std::string, int&, int&, std::string&, int&, int&);
 void update_progress_file(std::string&, int, int, std::string&, int, int);
-bool read_rcf_file(std::ifstream&, std::string&, std::string&);
 int copy_and_unzip(const std::string&, const std::string&, const std::string&, const std::string&);
 bool process_env_overrides(const std::filesystem::path&);
 

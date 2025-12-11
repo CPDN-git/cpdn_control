@@ -381,7 +381,37 @@ void sleep_seconds(double seconds)
         std::chrono::duration<double> duration(remaining);
         std::this_thread::sleep_for(duration);
     }
-}   
+}
+
+
+
+/**  
+ * @brief Check input string is convertable to an integer by checking for any letters.
+ *        stoi() will convert leading digits if alphanumeric but we know step must be all digits.
+ * @return true on success, false if non-numeric data in input string.
+ */
+bool check_stoi(std::string& cin) {
+
+    if (std::any_of(cin.begin(), cin.end(), ::isalpha)) {
+        std::cerr << "..Invalid characters in stoi string: " << cin << "\n";
+        return false;
+    }
+
+    //  check stoi standard exceptions
+    //  n.b. still need to check step <= max_step
+    try {
+        std::stoi(cin);
+        return true;
+    }
+    catch (const std::invalid_argument &excep) {
+        std::cerr << "..Invalid input argument for stoi : " << excep.what() << "\n";
+        return false;
+    }
+    catch (const std::out_of_range &excep) {
+        std::cerr << "..Out of range value for stoi : " << excep.what() << "\n";
+        return false;
+    }
+}
 
 
 /**

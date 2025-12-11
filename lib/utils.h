@@ -1,3 +1,6 @@
+//  Utility function declarations for the CPDN task controller
+//       Glenn Carver, CPDN, 2025.
+
 #pragma once
 
 #include <string>
@@ -16,4 +19,5 @@ bool fread_last_line(const std::string&, std::string&);
 std::string getDateTime();
 std::vector<std::string> get_out_files(const std::string&);
 void sleep_seconds(double seconds);
+bool check_stoi(std::string& cin);
 void banner(const std::string& model_name, const std::string& model_version);

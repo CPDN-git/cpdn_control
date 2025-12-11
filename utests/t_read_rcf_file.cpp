@@ -2,6 +2,9 @@
 //
 //  Glenn Carver, CPDN, 2025
 
+#include <fstream>
+
+#include "../models/openifs/oifs_utils.h"
 #include "unit_tests.h"
 
 /**
@@ -32,7 +35,7 @@
     std::string cstep;
     std::ifstream rcf_file("rcf");
 
-    bool ret = read_rcf_file( rcf_file, ctime, cstep );
+    bool ret = oifs_read_rcf_file( rcf_file, ctime, cstep );
     std::cout << "read_rcf_file : ctime = '" << ctime << "'\n";
     std::cout << "read_rcf_file : cstep = '" << cstep << "'\n";
 

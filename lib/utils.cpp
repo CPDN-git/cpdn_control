@@ -4,8 +4,6 @@
  *    Glenn Carver, CPDN, 2025.
  */
 
-#include "cpdn_linux_cpu_time.h"
-
 #include <string>
 #include <filesystem>
 #include <fstream>
@@ -22,6 +20,8 @@
   #include <unistd.h>    // for access
 #endif
 #include <sys/stat.h>  // for chmod
+
+#include "cpdn_linux_cpu_time.h"
 
 namespace  fs = std::filesystem;
 

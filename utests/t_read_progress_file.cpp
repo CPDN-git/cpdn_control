@@ -2,6 +2,10 @@
 //
 //  Glenn Carver, CPDN, 2025
 
+
+#include <fstream>
+
+#include "../src/cpdn_control.h"
 #include "unit_tests.h"
 
 

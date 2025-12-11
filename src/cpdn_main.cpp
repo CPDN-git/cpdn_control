@@ -16,12 +16,15 @@
 #include <cstdlib>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <dirent.h>  // this and...
+#include <regex.h>   // this for regex matching of output files.
+
+#include "boinc/boinc_api.h"
 
 #include "cpdn_control.h"
 #include "lib/utils.h"
 #include "api/trickle_handler.h"
-
-#include "boinc/boinc_api.h"
+#include "cpdn_zip.h"
 
 namespace chrono = std::chrono;
 namespace     fs = std::filesystem;

@@ -93,9 +93,6 @@ jobs:
           echo "BOINC cache not found; unit_tests job should have populated it." >&2
           exit 1
 
-      - name: List contents of boinc-install
-        run: ls -lt boinc-install/include/boinc > stdout_and_stderr
-
       - name: Build cpdn-zip library
         run:  cd zip && mkdir -p build && cd build && cmake -DCMAKE_INSTALL_PREFIX=../install .. && make && make install
 

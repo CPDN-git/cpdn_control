@@ -9,17 +9,11 @@
 #include "unit_tests.h"
 
 
- /**
-  * @brief Dummy routine to satisfy linking test code without linking against main program
-  */
-bool oifs_setenvs(const std::string& slot_path, const std::string& nthreads) { return true; }
-
 
  /****************************************
   * @brief Run tests; pass test name on command line
   * 
   */
-
  int main(int argc, char* argv[])
  {
 

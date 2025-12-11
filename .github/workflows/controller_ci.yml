@@ -4,14 +4,14 @@ on: [ push, pull_request ]
 
 env:
   BOINC_VERSION: client_release/8.0/8.0.2
-  # Placeholder. If changing this, also change the matrix.os values below.
+  # Reminder placeholder. Github actions does not support 20.04, only 22.04 and up.
   RELEASE_IMAGE: ubuntu-20.04
 
 jobs:
   unit_tests:
     strategy:
       matrix:
-        os: [ ubuntu-20.04, ubuntu-latest ]
+        os: [ ubuntu-22.04, ubuntu-latest ]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -71,7 +71,7 @@ jobs:
   build_and_test:
     strategy:
       matrix:
-        os: [ ubuntu-20.04, ubuntu-latest ]
+        os: [ ubuntu-22.04, ubuntu-latest ]
     runs-on: ${{ matrix.os }}
 
     needs: unit_tests

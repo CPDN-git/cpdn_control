@@ -1,76 +1,137 @@
 name: Controller CI
 
-# Trigger only after unit tests workflow completes successfully
-on:
-  workflow_run:
-    workflows: ["CTest Unit Tests"]
-    types:
-      - completed
+on: [ push, pull_request ]
+
+env:
+  BOINC_VERSION: client_release/8.0/8.0.2
 
 jobs:
+  unit_tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Restore BOINC build from cache
+        id: cache-boinc
+        uses: actions/cache@v4
+        with:
+          path: boinc-install
+          key: boinc-${{ runner.os }}-${{ env.BOINC_VERSION }}-v1
+
+      - name: Clone BOINC/boinc PUBLIC repository
+        if: steps.cache-boinc.outputs.cache-hit != 'true'
+        run: git clone https://github.com/BOINC/boinc.git
+
+      - name: Run autosetup
+        if: steps.cache-boinc.outputs.cache-hit != 'true'
+        run: cd boinc && git checkout "$BOINC_VERSION" && ./_autosetup
+
+      - name: Build BOINC
+        if: steps.cache-boinc.outputs.cache-hit != 'true'
+        run: cd boinc && ./configure --disable-server --disable-fcgi --disable-manager --disable-client --enable-libraries --disable-boinczip --prefix=$PWD/../boinc-install CXXFLAGS='-O3'
+
+      - name: Run make install
+        if: steps.cache-boinc.outputs.cache-hit != 'true'
+        run: cd boinc && make install
+
+      - name: Build cpdn-zip library
+        run:  cd zip && mkdir -p build && cd build && cmake -DCMAKE_INSTALL_PREFIX=../install .. && make && make install
+
+      - name: Create Build Directory for testing
+        run: mkdir build
+
+      - name: Configure CMake
+        run: |
+          cd build
+          cmake .. \
+              -DBOINC_INCLUDE_DIR="../boinc-install/include" \
+              -DBOINC_LIB_DIR="../boinc-install/lib" \
+              -DCPDNZIP_INCLUDE_DIR="../zip/install/include" \
+              -DCPDNZIP_LIB_DIR="../zip/install/lib"
+
+      - name: Build and Test Executable
+        # Compiles all targets, including the 'unit_tests' executable.
+        run: |
+          cd build
+          cmake --build .
+
+      - name: Run Unit Tests with CTest
+        # CTest will run all tests registered via add_test() in the build directory. The -V flag (Verbose) is useful, it prints test output to the CI log.
+        run: |
+          cd build
+          ctest --output-on-failure -V
+
   build_and_test:
     runs-on: ubuntu-latest
-    # Skip if the triggering workflow did not succeed
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    env:
-      BOINC_VERSION: client_release/8.0/8.0.2
+    needs: unit_tests
+    if: needs.unit_tests.result == 'success'
     steps:
-    - uses: actions/checkout@v3
-    - name: Restore BOINC build from cache
-      id: cache-boinc
-      uses: actions/cache@v4
-      with:
-        path: boinc-install
-        key: boinc-${{ runner.os }}-${{ env.BOINC_VERSION }}-v1
-    - name: Clone BOINC/boinc PUBLIC repository
-      if: steps.cache-boinc.outputs.cache-hit != 'true'
-      run: git clone https://github.com/BOINC/boinc.git
-    - name: Run autosetup
-      if: steps.cache-boinc.outputs.cache-hit != 'true'
-      run: cd boinc && git checkout "$BOINC_VERSION" && ./_autosetup
-    - name: Build BOINC
-      if: steps.cache-boinc.outputs.cache-hit != 'true'
-      run: cd boinc && ./configure --disable-server --disable-fcgi --disable-manager --disable-client --enable-libraries --disable-boinczip --prefix=$PWD/../boinc-install CXXFLAGS='-O3'
-    - name: Run make install
-      if: steps.cache-boinc.outputs.cache-hit != 'true'
-      run: cd boinc && make install
-    - name: List contents of boinc-install
-      run: ls -lt boinc-install/include/boinc > stdout_and_stderr
-    - name: Build cpdn-zip library
-      run:  cd zip && mkdir build && cd build && cmake -DCMAKE_INSTALL_PREFIX=../install .. && make && make install
-    - name: Build the CPDN control executable
-      run:  mkdir build && cd build && cmake .. -DBOINC_DIR=./boinc-install && make && cp cpdn_control_1.0.0_x86_64-pc-linux-gnu ..
-    - name: Build the test model -- uses Makefile for now
-      run:  BOINC_DIR=./boinc-install make 
-    - name: Upload built executable
-      if: ${{ success() }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: Built executable
-        path: cpdn_control_1.0.0_x86_64-pc-linux-gnu
-    - name: Upload logs on fail
-      if: ${{ failure() }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: Build failure log
-        path: ${{ runner.temp }}/build_log
-    - name: Set up test environment
-      run: cd test && chmod 744 setup_test.py && ./setup_test.py
-    - name: Copy CPDN controller exe
-      run: cp cpdn_control_1.0.0_x86_64-pc-linux-gnu test/projects/
-    - name: List contents of the root folder
-      run: ls -lt >> stdout_and_stderr
-    - name: List contents of projects folder
-      run: cd test/projects/ && ls -lt >> ../stdout_and_stderr
-    - name: Copy test_model to slot
-      run: cp test_model.exe test/slots/0/oifs_43r3_test.exe
-    - name: List contents of slots folder
-      run: cd test/slots/0 && ls -lt >> ../stdout_and_stderr
-    - name: Run test model
-      run: cd test/slots/0 && ../../projects/cpdn_control_1.0.0_x86_64-pc-linux-gnu yyyymmddhh 0000 NNNN d000 0 1 oifs_43r3 1 1.00 0 && cat stderr.txt >> ../stdout_and_stderr
-    - name: Upload test log
-      if: ${{ failure() }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: Test failure log
-        path: stdout_and_stderr
+      - uses: actions/checkout@v4
+
+      - name: Restore BOINC build from cache
+        id: cache-boinc
+        uses: actions/cache@v4
+        with:
+          path: boinc-install
+          key: boinc-${{ runner.os }}-${{ env.BOINC_VERSION }}-v1
+
+      - name: Fail if BOINC cache missing
+        if: steps.cache-boinc.outputs.cache-hit != 'true'
+        run: |
+          echo "BOINC cache not found; unit_tests job should have populated it." >&2
+          exit 1
+
+      - name: List contents of boinc-install
+        run: ls -lt boinc-install/include/boinc > stdout_and_stderr
+
+      - name: Build cpdn-zip library
+        run:  cd zip && mkdir -p build && cd build && cmake -DCMAKE_INSTALL_PREFIX=../install .. && make && make install
+
+      - name: Build the CPDN control executable
+        run:  mkdir build && cd build && cmake .. -DBOINC_DIR=./boinc-install && make && cp cpdn_control_1.0.0_x86_64-pc-linux-gnu ..
+
+      - name: Build the test model -- uses Makefile for now
+        run:  BOINC_DIR=./boinc-install make 
+
+      - name: Upload built executable
+        if: ${{ success() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Built executable
+          path: cpdn_control_1.0.0_x86_64-pc-linux-gnu
+
+      - name: Upload logs on fail
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Build failure log
+          path: ${{ runner.temp }}/build_log
+
+      - name: Set up test environment
+        run: cd test && chmod 744 setup_test.py && ./setup_test.py
+
+      - name: Copy CPDN controller exe
+        run: cp cpdn_control_1.0.0_x86_64-pc-linux-gnu test/projects/
+
+      - name: List contents of the root folder
+        run: ls -lt >> stdout_and_stderr
+
+      - name: List contents of projects folder
+        run: cd test/projects/ && ls -lt >> ../stdout_and_stderr
+
+      - name: Copy test_model to slot
+        run: cp test_model.exe test/slots/0/oifs_43r3_test.exe
+
+      - name: List contents of slots folder
+        run: cd test/slots/0 && ls -lt >> ../stdout_and_stderr
+
+      - name: Run test model
+        run: cd test/slots/0 && ../../projects/cpdn_control_1.0.0_x86_64-pc-linux-gnu yyyymmddhh 0000 NNNN d000 0 1 oifs_43r3 1 1.00 0 && cat stderr.txt >> ../stdout_and_stderr
+
+      - name: Upload test log
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Test failure log
+          path: stdout_and_stderr

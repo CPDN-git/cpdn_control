@@ -1,9 +1,11 @@
-# CPDN controller to manage meterological/climate models running in climateprediction.net (CPDN)
+# CPDN control application to manage meterological/climate models running in climateprediction.net (CPDN)
 
-This respository contains the instructions and code for building the application (controller)
-used for managing the models in the climateprediction.net project under a BOINC framework. This code acts
-as the interface between the BOINC client and the model. The BOINC client only knows about 
-this program and only this program knows how to manage the model.
+This respository contains the instructions and code for building the CPDN control application
+used for managing the models in the CPDN project at the University of Oxford.  This code acts
+as the interface between the BOINC client and the underlying model which does not (usually)
+know that it is running under a BOINC client. The advantage of doing this is the model code
+needs a minimal set of changes. The BOINC client only knows about 
+this application and only this application knows how to manage the model.
 
 The design of this code allows it to be (mostly) agnostic about the underlying model. The
 model details and configuration are read from input XML files.  A class architecture is
@@ -16,16 +18,17 @@ A number of prerequisite libraries are required.
 
 ## Prerequisite: BOINC library
 
-Download and build the BOINC libraries which this code links with (BOINC is available from: https://github.com/BOINC/boinc). 
+Download and build the BOINC libraries which this code links with 
+(BOINC is available from: https://github.com/BOINC/boinc). 
 For instructions on building BOINC see: [BOINC github](https://github.com/BOINC/boinc/wiki/).
 
 As only the libraries are required, the boinc client and manager can be disabled (reduces system packages required).
 
-Install and build the boinc library to a directory outside this repository and note the install path.
+Install and build the boinc library to a directory **outside** this repository and note the install path.
 
-Note the boinczip library is no longer used as the repository contains an updated compression/zip library.
+The boinczip library is no longer used as this repository contains an improved compression/zip library.
 
-In short:
+In short, outside this repo do:
 ```
     git clone https://github.com/BOINC/boinc.git
     cd boinc
@@ -38,17 +41,18 @@ In short:
     cd ..
 ```
 
-This installs the boinc libraries and include files to the directory specified in the `--prefix` argument. 
+This installs the boinc libraries and include files to the directory specified in the `--prefix` argument.
+Change the value of prefix to suit.
 It's preferable not to install into the same directory as the source. 
-When compiling the controller, specify the location of the include files using the -I argument and the libraries using -L argument
-on the compiler command line (see the CMakeLists.txt in the top dir).
+When compiling the control application, specify the location of the include files using the -I argument and the libraries using -L argument on the compiler command line (see the CMakeLists.txt file in the top dir).
 
 ## Prerequisite: ZipLib and cpdn_zip library
 
-As of Oct 2025, the controller no longer uses the BOINC library zip routines.
+As of Oct 2025, the control app no longer uses the BOINC library zip routines.
 These old routines are not memory safe; they use fixed sized buffers and unbounded string copy routines.
+They also do not work correctly under Windows (their low-level file handling breaks in Windows Update environments).
 
-The 'zip' subdirectory now contains code to build `cpdn_zip` and `cpdn_unzip` functions to replace
+The 'zip' subdirectory in this repo now contains code to build `cpdn_zip` and `cpdn_unzip` functions to replace
 `boinc_zip` and `boinc_unzip`.
 
 ### ZipLib
@@ -63,7 +67,7 @@ compression at increased execution time and could be suitable for CPDN.
 Currently only zip compression is used.
 
 ZipLib is already installed and setup as required by the cpdn_zip wrapper code.
-However, if ZipLib source needs to be upgraded follow these steps:
+However, if the ZipLib source needs to be upgraded follow these steps:
 
 - To update ZipLib for this repo, download the ZipLib repo from github to a **temporary location** outside this repository.
 - Copy the `Zip/LibSource/ZipLib` directory to `ZipLib` in this directory. 
@@ -71,13 +75,13 @@ However, if ZipLib source needs to be upgraded follow these steps:
 
 ### cpdn_zip library
 
-This is a simple wrapper around ZipLib to provide `cpdn_zip` and `cpdn_unzip` functions
-now called by the control code.
+This is a simple wrapper around ZipLib to provide `cpdn_zip` and `cpdn_unzip` functions to the 
+control app.
 
-It is built as a static library and combined with ZipLib object files and its 
-compression library dependencies. cpdn_zip and unzip use the zip library by default.
+It's built as a static library and combined with ZipLib object files and its 
+compression library dependencies. cpdn_zip and unzip use the zip compression by default.
 
-CMake is the preferred build tool and the software is built in separate `build` and
+The software is built in separate `build` and
 `install` directories to the source. See `CMakeLists.txt` in the `zip` folder for
 more details.
 
@@ -95,81 +99,92 @@ more details.
  ./test_zip
  ```
 
-## Build CPDN Controller executable.
-### OpenIFS 43r3 model
-#### Linux
+## Models
+The `models` folder contains the model specific code for this application.
 
-If not already present, obtain the RapidXml header for parsing XML files. 
+The meteorological and climate models themselves are not contained in this repository. They
+are built separately.
+
+Each model interface code in should use the class structure described by the code in the `api`
+directory. See that code for more details.
+
+### Test model
+A small test model code is available which behaves similarly to the OpenIFS 43r3 model. 
+This is used to test functionality of the control app. See the `test` folder for 
+more details.
+
+The 'Makefile' in the top directory currently builds the test model code.
+
+## Build CPDN Controller
+
+### RapidXML
+If not already present, obtain the RapidXml code (as a header) for parsing XML files. 
 This is downloaded from the site: [RapidXml](http://rapidxml.sourceforge.net/).
-We only need the file: 'rapidxml.hpp'. Download this file and put in the same folder as the code.
+We only need the file: 'rapidxml.hpp'. Download this file and put in the `src` folder along with cpdn_main.cpp.
 
-A Makefile is used to build the control code for the OpenIFS 43r3 model.
+### Linux
+cmake is used to build the controller application. Ensure the prerequisite steps
+above have been completed.
 
-Ensure the Makefile uses ../zip/install/lib and ../zip/install/include and then run:
+BOINC libraries: These can either be specified by editing the CMakeLists.txt file directly
+and changing the line:
 ```
-make clean
-make
+set(BOINC_DIR "../boinc-8.0.2-x86_64" CACHE STRING "Root directory of BOINC install." )
 ```
-This creates 3 executables:
+Or make a temporary change on the cmake command line by using the -DBOINC_DIR argument.
+
+#### Steps to build
+In the top level directory:
+1. mkdir build (or remove it for fresh build).
+2. cd build
+3. cmake ..
+4. cmake --build . --verbose (omit --verbose if not interested in compile commands)
+5. ctest -V    (run unit tests, -V is verbose, optional)
+
+This creates 3 executables in the build directory:
 ```
 VERSION = 43r3_1.00
 TARGET  = oifs_$(VERSION)_x86_64-pc-linux-gnu
 DEBUG   = oifs_$(VERSION)_x86_64-pc-linux-gnu-debug
-TEST    = oifs_43r3_test.exe
 ```
+
 The DEBUG target is compiled with AddressSanitizer enabled and should be used for testing to check
 for memory leaks and memory corruption.
 
-The default 'TARGET' is the build intended for production.
+The default TARGET is the build intended for production.
 
 The version number of the executable is best left as-is and changed when transferring to CPDN.
 
 ### Windows
-
 Not yet ported to Windows.
 
-#### ARM
-
-To build OpenIFS on an ARM architecture machine modify the Makefile and set `-D_ARM` and the object file becomes `oifs_43r3_1.00_aarch64-poky-linux`.
-
 #### macOS
+OLD: Build the BOINC and cpdn_zip libraries using Xcode. Modify the Makefile to use `clang++` as the compiler and the object file as `oifs_43r3_100_x86_64-apple-darwin`.
 
-Build the BOINC and cpdn_zip libraries using Xcode. Modify the Makefile to use `clang++` as the compiler and the object file as `oifs_43r3_100_x86_64-apple-darwin`.
+#### ARM
+OLD: To build OpenIFS on an ARM architecture machine modify the Makefile and set `-D_ARM` and the object file becomes `oifs_43r3_1.00_aarch64-poky-linux`.
 
-## How to run the control code executable with OpenIFS
-
-This creates the control code executable to control the OpenIFS model in the BOINC environment. 
-In order for OpenIFS to run, its ancillary files need to be installed correctly. This is the responsibility of the control code.
+## How to run the controller executable with OpenIFS
+In order for OpenIFS to run, its ancillary files need to be installed correctly from the
+download directory on the client. This is the responsibility of the controller code.
 
 The command to run the control in standalone mode with OpenIFS on Linux is:
 ```
     ./oifs_43r3_1.00_x86_64-pc-linux-gnu 2000010100 gw3a 0001 1 00001 1 oifs_43r3 1.00
 ```
-Or for macOS:
+
+### Command line parameters
+The command line parameters are:
 ```
-    ./oifs_43r3_1.00_x86_64-apple-darwin 2000010100 gw3a 0001 1 00001 1 oifs_43r3 1.00
+0 : compiled executable, 
+1 : start date in YYYYMMDDHH format, 
+2 : experiment id, 
+3 : unique member id, 
+4 : batch id, 
+5 : workunit id, 
+6 : forecast length (days: FCLEN), 
+7 : app name, 
+8 : nthreads, 
+9 : app version id (only used in standalone mode)
 ```
-
-## Control code command line parameters
-
-The command line parameters are: 
-[0] compiled executable, 
-[1] start date in YYYYMMDDHH format, 
-[2] experiment id, 
-[3] unique member id, 
-[4] batch id, 
-[5] workunit id, 
-[6] FCLEN, 
-[7] app name, 
-[8] nthreads, 
-[9] app version id.
-
-Note, [9] is only used in standalone mode.
-
-Currently supports version 43r3 of OpenIFS and it's model variants. 
-
-The OpenIFS code is compiled separately and is installed alongside the OpenIFS controller in BOINC. 
-To upgrade the controller code in the future to later versions of OpenIFS consideration will need 
-to be made whether there are any changes to the command line parameters the compiled version of 
-OpenIFS takes in, and whether there are changes to the structure and content of the supporting ancillary files.
 

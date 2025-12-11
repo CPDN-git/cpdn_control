@@ -4,10 +4,16 @@ on: [ push, pull_request ]
 
 env:
   BOINC_VERSION: client_release/8.0/8.0.2
+  # Placeholder. If changing this, also change the matrix.os values below.
+  RELEASE_IMAGE: ubuntu-20.04
 
 jobs:
   unit_tests:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ ubuntu-20.04, ubuntu-latest ]
+    runs-on: ${{ matrix.os }}
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -17,7 +23,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: boinc-install
-          key: boinc-${{ runner.os }}-${{ env.BOINC_VERSION }}-v1
+          key: boinc-${{ env.BOINC_VERSION }}-${{ matrix.os }}-v1
 
       - name: Clone BOINC/boinc PUBLIC repository
         if: steps.cache-boinc.outputs.cache-hit != 'true'
@@ -63,9 +69,14 @@ jobs:
           ctest --output-on-failure -V
 
   build_and_test:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ ubuntu-20.04, ubuntu-latest ]
+    runs-on: ${{ matrix.os }}
+
     needs: unit_tests
     if: needs.unit_tests.result == 'success'
+
     steps:
       - uses: actions/checkout@v4
 
@@ -74,7 +85,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: boinc-install
-          key: boinc-${{ runner.os }}-${{ env.BOINC_VERSION }}-v1
+          key: boinc-${{ env.BOINC_VERSION }}-${{ matrix.os }}-v1
 
       - name: Fail if BOINC cache missing
         if: steps.cache-boinc.outputs.cache-hit != 'true'

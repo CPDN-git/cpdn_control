@@ -3,6 +3,7 @@
 #pragma once
 
 #include <string>
+#include <fstream>
 
 bool oifs_setenvs(const std::string&, const std::string&);
 std::string get_second_part(const std::string&, const std::string&);

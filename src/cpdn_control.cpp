@@ -7,12 +7,42 @@
 // Rewritten and refactored into class structure and modular form: Glenn Carver (CPDN), 2025->
 //
 
+#include <chrono>
+#include <thread>
+#include <fstream>
+#include <sstream>
+#include <iostream>
+#include <iomanip>
+#include <filesystem>
+#include <exception>
+#include <vector>
+#include <cerrno>
+#include <cstring>
+
+#include <cstdlib>
+#include <cstdio>
+#include <unistd.h>
+#include <signal.h>
+#include <fcntl.h>
+#include <dirent.h>
+#include <regex.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/stat.h>   // for mkdir
+#include <sys/resource.h>
+
 #include "cpdn_control.h"
+#include "cpdn_zip.h"
 #include "lib/utils.h"
 
 #include "boinc/boinc_api.h"
 #include "boinc/diagnostics.h"
 #include "boinc/util.h"
+
+#include "models/openifs/oifs_utils.h" // for oifs_*() functions. Will be replaced by Model derived class later.
+
+namespace chrono = std::chrono;
+namespace     fs = std::filesystem;
 
 
 /**
@@ -674,5 +704,4 @@ int copy_and_unzip(const std::string& zipfile, const std::string& destination, c
 	 // Success, retval is 0
     return retval;
 }
-
 

@@ -1,37 +1,15 @@
 //
 // Control code header file for the OpenIFS application in the climateprediction.net project
 //
-// Written by Andy Bowery (Oxford eResearch Centre, Oxford University) November 2022
-// Contributions from Glenn Carver (ex-ECMWF), 2022->
+//     Glenn Carver, CPDN, 2025.
+//      Original version by Andy Bowery, Oxford University November 2022
 //
 
 #pragma once
 
 #include <string>
-#include <chrono>
-#include <thread>
-#include <fstream>
-#include <sstream>
-#include <iostream>
-#include <iomanip>
 #include <filesystem>
-#include <exception>
-#include <algorithm>
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <signal.h>
-#include <fcntl.h>
-#include <dirent.h>
-#include <regex.h>
-#include <sys/wait.h>
-#include <sys/types.h>
-#include <sys/stat.h>   // for mkdir
-#include <sys/resource.h>
-
-#include "rapidxml.hpp"
-#include "cpdn_zip.h"
+#include <string>
 
 
 int initialise_boinc(std::string&, std::string&, std::string&, int&);
@@ -46,10 +24,4 @@ void read_progress_file(std::string, int&, int&, std::string&, int&, int&);
 void update_progress_file(std::string&, int, int, std::string&, int, int);
 int copy_and_unzip(const std::string&, const std::string&, const std::string&, const std::string&);
 bool process_env_overrides(const std::filesystem::path&);
-
-using namespace rapidxml;
-
-namespace chrono = std::chrono;
-namespace     fs = std::filesystem;
-
 

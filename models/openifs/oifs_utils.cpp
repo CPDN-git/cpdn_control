@@ -9,6 +9,10 @@
 #include "../../lib/utils.h"
 
 #include <iostream>
+#include <sstream>
+#include <iomanip>
+#include <cstdlib>
+#include <fstream>
 
 
 // Set the required OpenIFS environment variables.

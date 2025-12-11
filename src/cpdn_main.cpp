@@ -5,11 +5,31 @@
 // Original version by Andy Bowery (Oxford eResearch Centre, Oxford University) December 2023.
 //
 
+#include <chrono>
+#include <thread>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <iostream>
+#include <iomanip>
+#include <vector>
+#include <cstdlib>
+#include <sys/stat.h>
+#include <sys/types.h>
+
 #include "cpdn_control.h"
 #include "lib/utils.h"
 #include "api/trickle_handler.h"
 
 #include "boinc/boinc_api.h"
+
+namespace chrono = std::chrono;
+namespace     fs = std::filesystem;
+
+// these includes will disappear when the code moves to Model derived classes
+#include "models/openifs/oifs_utils.h" // for get_second_part, oifs_*() functions.
+
+#include <vector>
 
 // Define the code version if not defined at compile time with -D option.
 #ifndef CODE_VERSION

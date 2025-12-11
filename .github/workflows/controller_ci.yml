@@ -12,7 +12,7 @@ jobs:
     - name: Clone BOINC/boinc PUBLIC repository
       run: git clone https://github.com/BOINC/boinc.git
     - name: Run autosetup
-      run: cd boinc && ./_autosetup
+      run: cd boinc && git checkout client_release/8.0/8.0.2 && ./_autosetup
     - name: Build BOINC
       run: cd boinc && ./configure --disable-server --disable-fcgi --disable-manager --disable-client --enable-libraries --disable-boinczip --prefix=$PWD/../boinc-install CXXFLAGS='-O3'
     - name: Run make install

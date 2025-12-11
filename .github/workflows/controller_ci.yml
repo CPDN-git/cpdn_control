@@ -1,21 +1,38 @@
 name: Controller CI
 
-on: [ push, pull_request ]
+# Trigger only after unit tests workflow completes successfully
+on:
+  workflow_run:
+    workflows: ["CTest Unit Tests"]
+    types:
+      - completed
 
 jobs:
   build_and_test:
     runs-on: ubuntu-latest
+    # Skip if the triggering workflow did not succeed
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    env:
+      BOINC_VERSION: client_release/8.0/8.0.2
     steps:
     - uses: actions/checkout@v3
-    - name: Make the boinc-install directory
-      run: mkdir boinc-install
+    - name: Restore BOINC build from cache
+      id: cache-boinc
+      uses: actions/cache@v4
+      with:
+        path: boinc-install
+        key: boinc-${{ runner.os }}-${{ env.BOINC_VERSION }}-v1
     - name: Clone BOINC/boinc PUBLIC repository
+      if: steps.cache-boinc.outputs.cache-hit != 'true'
       run: git clone https://github.com/BOINC/boinc.git
     - name: Run autosetup
-      run: cd boinc && git checkout client_release/8.0/8.0.2 && ./_autosetup
+      if: steps.cache-boinc.outputs.cache-hit != 'true'
+      run: cd boinc && git checkout "$BOINC_VERSION" && ./_autosetup
     - name: Build BOINC
+      if: steps.cache-boinc.outputs.cache-hit != 'true'
       run: cd boinc && ./configure --disable-server --disable-fcgi --disable-manager --disable-client --enable-libraries --disable-boinczip --prefix=$PWD/../boinc-install CXXFLAGS='-O3'
     - name: Run make install
+      if: steps.cache-boinc.outputs.cache-hit != 'true'
       run: cd boinc && make install
     - name: List contents of boinc-install
       run: ls -lt boinc-install/include/boinc > stdout_and_stderr

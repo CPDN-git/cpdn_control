@@ -110,7 +110,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           overwrite: true
-          name: Build-executable-${{ runner.os }}
+          name: Build-executable-${{ matrix.os }}
           path: cpdn_control_1.0.0_x86_64-pc-linux-gnu
 
       - name: Upload logs on fail
@@ -118,7 +118,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           overwrite: true
-          name: Build-fail-log-${{ runner.os }}
+          name: Build-fail-log-${{ matrix.os }}
           path: ${{ runner.temp }}/build_log
 
       - name: Set up test environment
@@ -147,5 +147,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           overwrite: true
-          name: Test-fail-log-${{ runner.os }}
+          name: Test-fail-log-${{ matrix.os }}
           path: stdout_and_stderr

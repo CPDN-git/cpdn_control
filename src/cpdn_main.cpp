@@ -21,18 +21,16 @@
 
 #include "boinc/boinc_api.h"
 
+#include "cpdn_zip.h"
 #include "cpdn_control.h"
 #include "lib/utils.h"
 #include "api/trickle_handler.h"
-#include "cpdn_zip.h"
-
-namespace chrono = std::chrono;
-namespace     fs = std::filesystem;
 
 // these includes will disappear when the code moves to Model derived classes
 #include "models/openifs/oifs_utils.h" // for get_second_part, oifs_*() functions.
 
-#include <vector>
+namespace chrono = std::chrono;
+namespace     fs = std::filesystem;
 
 // Define the code version if not defined at compile time with -D option.
 #ifndef CODE_VERSION
@@ -57,8 +55,9 @@ int main(int argc, char** argv)
        std::cerr << "..BOINC initialisation failed" << "\n";
        return retval;
     }
+    if ( standalone ) std::cerr << "Running in standalone mode" << '\n';
 
-    banner("CPDN task controller", CODE_VERSION);    // TODO. will come from XML input later.
+    banner("CPDN task controller", CODE_VERSION);    //  will come from XML input later.
 
     // TODO. Read in the model config.xml
 
@@ -164,7 +163,7 @@ int main(int argc, char** argv)
     }
     // Running in standalone
     else {
-      std::cerr << "Running in standalone mode" << '\n';
+
       // Set the project path. Assume usual boinc dir structure.
       project_path = slot_path + std::string("/../../projects/");
       std::cerr << "Project directory is: " << project_path << '\n';

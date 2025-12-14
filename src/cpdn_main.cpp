@@ -67,6 +67,19 @@ int main(int argc, char** argv)
     }
     if ( standalone ) std::cerr << "Running in standalone mode" << '\n';
 
+    // Set the task related paths
+    // GC. TODO. make these fs::path variables.
+    std::string slot_path = fs::current_path();
+    if (slot_path.empty()) {
+      std::cerr << "..Error. Can't determine slot path: current_path() returned empty" << std::endl;
+      return 1;
+    }
+    std::cerr << "Working slot directory is: "<< slot_path << '\n';
+    
+    project_path = project_dir + std::string("/");
+    std::cerr << "Project directory is: " << project_path << '\n';
+
+    // Say who we are.
     banner("CPDN task controller", CODE_VERSION);    //  will come from XML input later.
 
     // TODO. Read in the model config.xml.  The XML file contains all the information
@@ -150,20 +163,7 @@ int main(int argc, char** argv)
 
     double num_days = atof(fclen.c_str());   // number of simulation days; fclen should come from fort.4, not the command line.
 
-    // Get the slots path (the current working path)
-    std::string slot_path = fs::current_path();
-    if (slot_path.empty()) {
-      std::cerr << "..current_path() returned empty" << std::endl;
-    }
-    else {
-      std::cerr << "Working directory is: "<< slot_path << '\n';      
-    }
-
     if (!standalone) {
-
-      // Get the project path
-      project_path = project_dir + std::string("/");
-      std::cerr << "Project directory is: " << project_path << '\n';
 
       // Get the app version and re-parse to add a dot
       // GC. This assumes version is X.Y, X.YY or XX.YY format, will get it wrong if not.
@@ -193,12 +193,12 @@ int main(int argc, char** argv)
 
     boinc_begin_critical_section();
 
-    // Create temporary folder for moving the results to and uploading the results from
+    // Create temp upload folder for moving the results to and uploading the results from.
     // BOINC measures the disk usage on the slots directory so we must move all results out of this folder
-    std::string temp_path = project_path + app_name + "_" + wuid;
-    std::cerr << "Location of temp folder: " << temp_path << '\n';
-    if ( !file_exists(temp_path) ) {
-      if (mkdir(temp_path.c_str(),S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) != 0) {
+    std::string upload_dir = project_path + app_name + "_" + wuid;
+    std::cerr << "Location of temp folder: " << upload_dir << '\n';
+    if ( !file_exists(upload_dir) ) {
+      if (mkdir(upload_dir.c_str(),S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) != 0) {
          std::cerr << "..mkdir for temp folder for results failed" << std::endl;
       }
     }
@@ -658,7 +658,7 @@ int main(int argc, char** argv)
              std::vector<std::string> icm = {"ICMGG", "ICMSH", "ICMUA"};
              for (const auto& part : icm) {
                std::string result = part + second_part;
-               retval = move_result_file(slot_path, temp_path, result);
+               retval = move_result_file(slot_path, upload_dir, result);
                if (retval) {
                   std::cerr << "..Copying " << part << " result file to the temp folder in the projects directory failed" << "\n";
                   return retval;
@@ -695,7 +695,7 @@ int main(int argc, char** argv)
                    // Add ICM result files to zip to be uploaded
                    std::vector<std::string> icm = {"ICMGG", "ICMSH", "ICMUA"};
                    for (const auto& part : icm) {
-                      fs::path  fpath = temp_path;
+                      fs::path  fpath = upload_dir;
                                 fpath /= part + second_part;
                       if (file_exists(fpath.string())) {
                          std::cerr << "Adding to the zip: " << fpath << '\n';
@@ -884,7 +884,7 @@ int main(int argc, char** argv)
     std::vector<std::string> icm = {"ICMGG", "ICMSH", "ICMUA"};
     for (const auto& part : icm) {
        std::string result = part + second_part;
-       retval = move_result_file(slot_path, temp_path, result);
+       retval = move_result_file(slot_path, upload_dir, result);
        if (retval) {
           std::cerr << "..Copying " << part << " result file to the temp folder in the projects directory failed" << "\n";
           return retval;
@@ -905,7 +905,7 @@ int main(int argc, char** argv)
 
     // Read the remaining list of files from the slots directory and add the matching files to the list of files for the zip
     // GC. TODO. Update to C++ 17.
-    DIR *dirp = opendir(temp_path.c_str());
+    DIR *dirp = opendir(upload_dir.c_str());
     if (dirp)
     {
       regex_t regex;
@@ -916,8 +916,8 @@ int main(int argc, char** argv)
          //std::cerr << "In temp folder: "<< dir->d_name << '\n';
 
          if (!regexec(&regex,dir->d_name,(size_t) 0,NULL,0)) {
-            zfl.push_back(temp_path + "/" + dir->d_name);
-            std::cerr << "Adding to the zip: " << (temp_path+"/" + dir->d_name) << '\n';
+            zfl.push_back(upload_dir + "/" + dir->d_name);
+            std::cerr << "Adding to the zip: " << (upload_dir+"/" + dir->d_name) << '\n';
          }
       }
       regfree(&regex);
@@ -1018,7 +1018,7 @@ int main(int argc, char** argv)
     //-------------------------------------------------------------------------------------------------------
 
     // Now that the task has finished, remove the temp folder
-    fs::remove_all(temp_path);
+    fs::remove_all(upload_dir);
 
     boinc_end_critical_section();
 

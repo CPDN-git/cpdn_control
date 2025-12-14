@@ -39,8 +39,8 @@ bool set_env_var(const std::string& name, const std::string& val) {
 /**
  * @brief  Check whether a file exists
  */
-bool file_exists(const std::string& filename) {
-    std::ifstream infile(filename.c_str());
+bool file_exists(std::string_view filename) {
+    std::ifstream infile{std::string(filename)};    // GC. C++20 allows string_view directly.
     return infile.good();
 }
 
@@ -50,7 +50,7 @@ bool file_exists(const std::string& filename) {
  * from: https://stackoverflow.com/questions/2390912/checking-for-an-empty-file-in-c
  * returns True if file is zero bytes, otherwise False.
  */
-bool file_is_empty(const std::string& fpath) {
+bool file_is_empty(std::string_view fpath) {
    return ( fs::file_size(fpath) == 0);
 }
 

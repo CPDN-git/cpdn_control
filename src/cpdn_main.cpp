@@ -23,14 +23,17 @@
 
 #include "cpdn_zip.h"
 #include "cpdn_control.h"
+#include "cpdn_main.h"
 #include "lib/utils.h"
 #include "api/trickle_handler.h"
 
 // these includes will disappear when the code moves to Model derived classes
 #include "models/openifs/oifs_utils.h" // for get_second_part, oifs_*() functions.
 
+
 namespace chrono = std::chrono;
 namespace     fs = std::filesystem;
+
 
 // Define the code version if not defined at compile time with -D option.
 #ifndef CODE_VERSION
@@ -39,29 +42,13 @@ namespace     fs = std::filesystem;
 
 
 // Constants
-// If more are needed, better top put them in a 'cpdn' namespace.
 constexpr std::string_view  MODEL_CONFIG_FILE = "model_config.xml";
 
 
+
 /**
- * @struct TaskState
- * @brief Encapsulates all task-related state variables for managing model execution.
- *        Groups logically related variables for better code organization and clarity.
+ * @brief Main program for the CPDN task controller.
  */
-struct TaskState {
-    int last_cpu_time = 0;          // CPU time at last checkpoint
-    int upload_file_number = 0;     // Sequential counter for upload files
-    std::string last_iter = "0";    // Last completed iteration step
-    int last_upload = 0;            // Time of last upload file (in seconds)
-    int model_completed = 0;        // Model completion state: 0=running, 1=completed
-    int current_iter = 0;           // Current iteration step (in seconds)
-    int last_trickle_iter = 0;      // Last iteration when trickle was sent
-    int process_status = 1;         // Child process status: 0=running, 1=stopped, etc.
-    double current_cpu_time = 0.0;  // Current accumulated CPU time
-    double fraction_done = 0.0;     // Fraction of model run completed (0.0-1.0)
-};
-
-
 int main(int argc, char** argv)
 {
     std::string project_path;
@@ -464,7 +451,7 @@ int main(int argc, char** argv)
        return 1;
     }
     else if ( file_exists(progress_file) && !file_exists(rcf_file) ) {
-       read_progress_file(progress_file, task.last_cpu_time, task.upload_file_number, task.last_iter, task.last_upload, task.model_completed);
+       read_progress_file(progress_file, task);
        // If last_iter less than the restart interval, then model is at beginning and rcf has yet to be produced then continue
        if (std::stoi(task.last_iter) >= restart_interval) {
           // Otherwise if progress file exists and rcf file does not exist, an error has occurred, then kill model run
@@ -508,7 +495,7 @@ int main(int argc, char** argv)
        }
        rcf_file_stream.close();
 
-       read_progress_file(progress_file, task.last_cpu_time, task.upload_file_number, task.last_iter, task.last_upload, task.model_completed);
+       read_progress_file(progress_file, task);
 
        // Check if the CSTEP variable from rcf is greater than the last_iter, if so then quit model run
        if ( stoi(cstep_value) > stoi(task.last_iter) ) {
@@ -527,7 +514,7 @@ int main(int argc, char** argv)
     }
 
     // Update progress file with current values
-    update_progress_file(progress_file, task.current_cpu_time, task.upload_file_number, task.last_iter, task.last_upload, task.model_completed);
+    update_progress_file(progress_file, task);
 
     // seconds between upload files: upload_interval
     // seconds between ICM files: ICM_file_interval * timestep
@@ -823,7 +810,7 @@ int main(int argc, char** argv)
           count = 0;
 
           // Update progress file with current values
-          update_progress_file(progress_file, task.current_cpu_time, task.upload_file_number, task.last_iter, task.last_upload, task.model_completed);
+          update_progress_file(progress_file, task);
        }
 
        // Calculate current_cpu_time, only update if cpu_time returns a value

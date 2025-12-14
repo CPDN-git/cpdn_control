@@ -6,6 +6,7 @@
 #include <fstream>
 
 #include "../src/cpdn_control.h"
+#include "../src/cpdn_main.h"
 #include "unit_tests.h"
 
 
@@ -28,20 +29,17 @@ int t_read_progress_file()
                 "model_completed=0\n";
     progress_test.close();
 
-    // Test setup
-    std::string last_iter;
-    int last_cpu_time = -1;
-    int upload_number = -1;
-    int last_upload = -1;
-    int completed = -1;
+    // Test setup - Create TaskState struct
+    TaskState task;
 
-    read_progress_file(progress_filename, last_cpu_time, upload_number, last_iter, last_upload, completed );
-    if ( last_iter.empty() || last_cpu_time != 76828 || upload_number != 3 || last_upload != 1036800 || completed != 0 )
+    read_progress_file(progress_filename, task);
+    if ( task.last_iter.empty() || task.last_cpu_time != 76828 || task.upload_file_number != 3 || 
+         task.last_upload != 1036800 || task.model_completed != 0 )
     {
         FAIL;
-        std::cout << "last_iter = " << last_iter << ", last_cpu_time = " << last_cpu_time
-                  << ", upload_number = " << upload_number << ", last_upload = " << last_upload
-                  << ", completed = " << completed << "\n";
+        std::cout << "last_iter = " << task.last_iter << ", last_cpu_time = " << task.last_cpu_time
+                  << ", upload_number = " << task.upload_file_number << ", last_upload = " << task.last_upload
+                  << ", completed = " << task.model_completed << "\n";
         return EXIT_FAILURE;
     }
     SUCCESS;

@@ -38,6 +38,29 @@ namespace     fs = std::filesystem;
 #endif
 
 
+// Constants
+// If more are needed, better top put them in a 'cpdn' namespace.
+constexpr std::string_view  MODEL_CONFIG_FILE = "model_config.xml";
+
+
+/**
+ * @struct TaskState
+ * @brief Encapsulates all task-related state variables for managing model execution.
+ *        Groups logically related variables for better code organization and clarity.
+ */
+struct TaskState {
+    int last_cpu_time = 0;          // CPU time at last checkpoint
+    int upload_file_number = 0;     // Sequential counter for upload files
+    std::string last_iter = "0";    // Last completed iteration step
+    int last_upload = 0;            // Time of last upload file (in seconds)
+    int model_completed = 0;        // Model completion state: 0=running, 1=completed
+    int current_iter = 0;           // Current iteration step (in seconds)
+    int last_trickle_iter = 0;      // Last iteration when trickle was sent
+    int process_status = 1;         // Child process status: 0=running, 1=stopped, etc.
+    double current_cpu_time = 0.0;  // Current accumulated CPU time
+    double fraction_done = 0.0;     // Fraction of model run completed (0.0-1.0)
+};
+
 
 int main(int argc, char** argv)
 {
@@ -59,7 +82,14 @@ int main(int argc, char** argv)
 
     banner("CPDN task controller", CODE_VERSION);    //  will come from XML input later.
 
-    // TODO. Read in the model config.xml
+    // TODO. Read in the model config.xml.  The XML file contains all the information
+    // about the model. It's required to initialize the correct model class later on.
+
+    // Check for existence of config.xml in current directory (task) and fail if not found.
+    if( !file_exists(MODEL_CONFIG_FILE) ) {
+        std::cerr << "..The model config.xml file does not exist in the current directory: " << MODEL_CONFIG_FILE << std::endl;
+        //GC. Testing only; return 1;        // should terminate, the model won't run.
+    }
 
     // Argument processing; at least 9 args always.
     // TODO: THIS NEEDS TO BE HANDLED BY THE SPECIFIC MODEL CLASS
@@ -129,9 +159,9 @@ int main(int argc, char** argv)
               << "project_dir: " << project_dir << '\n'
               << "version: " << version << '\n';
 
-    const std::string namelist="fort.4";    // namelist file
+    const std::string namelist="fort.4";    // namelist file. will come from XML input later.
 
-    double num_days = atof(fclen.c_str()); // number of simulation days
+    double num_days = atof(fclen.c_str());   // number of simulation days; fclen should come from fort.4, not the command line.
 
     // Get the slots path (the current working path)
     std::string slot_path = fs::current_path();
@@ -195,6 +225,7 @@ int main(int argc, char** argv)
 
     //------------------------------------------Process the namelist-----------------------------------------
     // GC. Note, this is not the 'model fort.4' namelist file being referred to here. Needs renaming to avoid confusion.
+    // This should really be part of a general piece of code to process the model ancil files. Needs refactoring later.
     
    fs::path namelist_zip_path = slot_path;
    namelist_zip_path /= std::string(app_name) + "_" +
@@ -414,24 +445,16 @@ int main(int argc, char** argv)
     std::string progress_file = slot_path + "/progress_file";
     std::string rcf_file = slot_path + "/rcf";
 
-    std::string last_iter = "0";
-
-    int model_completed = 0;  // Indicates model state; 0=not completed, 1=completed
-    int last_upload;          // The time of the last upload file (in seconds)
-    int upload_file_number = 0;
-    int last_cpu_time = 0;
+    TaskState task;  // Initialize task state with default values
 
     // Check whether the rcf file and the progress file (contains model progress) are not already present from an unscheduled shutdown
     std::cerr << "Checking for rcf file and progress file: " << progress_file << '\n';
 
     // Handle the cases of the various states of the rcf file and progress file
     if ( !file_exists(progress_file) && !file_exists(rcf_file) ) {
-       // If both progress file and rcf file do not exist, then model has not run, then set the initial values of run
-       last_cpu_time = 0;
-       upload_file_number = 0;
-       last_iter = "0";
-       last_upload = 0;
-       model_completed = 0;
+       // If both progress file and rcf file do not exist, then model has not run.
+       // Do nothing as the task state variables are already initialized to zero values above.
+       std::cerr << "-- Starting new model run --\n";
     }
     else if ( file_exists(progress_file) && file_is_empty(progress_file) ) {
        // If progress file exists and is empty, an error has occurred, then kill model run
@@ -441,26 +464,19 @@ int main(int argc, char** argv)
        return 1;
     }
     else if ( file_exists(progress_file) && !file_exists(rcf_file) ) {
-       read_progress_file(progress_file, last_cpu_time, upload_file_number, last_iter, last_upload, model_completed);
+       read_progress_file(progress_file, task.last_cpu_time, task.upload_file_number, task.last_iter, task.last_upload, task.model_completed);
        // If last_iter less than the restart interval, then model is at beginning and rcf has yet to be produced then continue
-       if (std::stoi(last_iter) >= restart_interval) {
+       if (std::stoi(task.last_iter) >= restart_interval) {
           // Otherwise if progress file exists and rcf file does not exist, an error has occurred, then kill model run
           print_last_lines("NODE.001_01", 70);
           print_last_lines("ifs.stat",8);
           std::cerr << "..progress file exists, but rcf file does not exist => problem with model, quitting run" << '\n';
           return 1;
        }
-       else {
-          // Else model restarts from the beginning
-          last_cpu_time = 0;
-          upload_file_number = 0;
-          last_iter = "0";
-          last_upload = 0;
-          model_completed = 0;
-       }
     }
     else if ( !file_exists(progress_file) && file_exists(rcf_file) ) {
        // If rcf file exists and progress file does not exist, an error has occurred, then kill model run
+       // TODO: we should be able to bootstrap the progress file from the rcf file here?
        print_last_lines("NODE.001_01", 70);
        print_last_lines("ifs.stat",8);
        std::cerr << "..rcf file exists, but progress file does not exist => problem with model, quitting run" << '\n';
@@ -492,10 +508,10 @@ int main(int argc, char** argv)
        }
        rcf_file_stream.close();
 
-       read_progress_file(progress_file, last_cpu_time, upload_file_number, last_iter, last_upload, model_completed);
+       read_progress_file(progress_file, task.last_cpu_time, task.upload_file_number, task.last_iter, task.last_upload, task.model_completed);
 
        // Check if the CSTEP variable from rcf is greater than the last_iter, if so then quit model run
-       if ( stoi(cstep_value) > stoi(last_iter) ) {
+       if ( stoi(cstep_value) > stoi(task.last_iter) ) {
           std::cerr << "..CSTEP variable from rcf is greater than last_iter from progress file, error has occurred, quitting model run" << '\n';
           return 1;
        }
@@ -504,17 +520,14 @@ int main(int argc, char** argv)
        // This is always a multiple of the restart frequency
 
        std::cerr << "-- Model is restarting --\n";
-       std::cerr << "Adjusting last_iter, " << last_iter << ", to previous model restart step.\n";
-       int restart_iter = stoi(last_iter);
+       std::cerr << "Adjusting last_iter, " << task.last_iter << ", to previous model restart step.\n";
+       int restart_iter = stoi(task.last_iter);
        restart_iter = restart_iter - ((restart_iter % restart_interval) - 1);   // -1 because the model will continue from restart_iter.
-       last_iter = std::to_string(restart_iter); 
+       task.last_iter = std::to_string(restart_iter); 
     }
 
     // Update progress file with current values
-    double current_cpu_time = 0;
-    double fraction_done = 0;
-
-    update_progress_file(progress_file, current_cpu_time, upload_file_number, last_iter, last_upload, model_completed);
+    update_progress_file(progress_file, task.current_cpu_time, task.upload_file_number, task.last_iter, task.last_upload, task.model_completed);
 
     // seconds between upload files: upload_interval
     // seconds between ICM files: ICM_file_interval * timestep
@@ -592,11 +605,10 @@ int main(int argc, char** argv)
     }
 
     // Start the OpenIFS job
-    int process_status=1;
-
     std::cerr << "Launching OpenIFS executable: " << exe_cmd << std::endl;
     long model_process = launch_process(project_path, slot_path, exe_cmd, nthreads, exptid, app_name);
-    if (model_process > 0) process_status = 0;     //GC TODO. Need to handle when model_process =-1, i.e. launch failed (see code in launch_process_oifs)
+    if (model_process > 0) task.process_status = 0;     //GC TODO. Need to handle when model_process =-1, i.e. launch failed (see code in launch_process_oifs)
+
 
     boinc_end_critical_section();
 
@@ -619,11 +631,9 @@ int main(int argc, char** argv)
     std::vector<fs::path> zfl;
 
     int count = 0;
-    int current_iter = 0;
-    int last_trickle_iter = 0;
     std::string iter = "0";
 
-    while (process_status == 0 && model_completed == 0)
+    while (task.process_status == 0 && task.model_completed == 0)
     {
        sleep_seconds(1);         // Time delay to reduce overhead
 
@@ -634,7 +644,7 @@ int main(int argc, char** argv)
        // Going too low can cause the %age done on boincmgr to flip backwards.
        if(count==7) {
 
-          iter = last_iter;
+          iter = task.last_iter;
           if ( file_exists(ifs_stat) ) {
 
              // Read completed step from last line of ifs.stat file.
@@ -646,15 +656,15 @@ int main(int argc, char** argv)
              if ( fread_last_line(ifs_stat, stat_lastline) ) {       // only returns true if lastline has changed
                  if ( oifs_parse_stat(stat_lastline, iter, 4) ) {    // iter updates
                     if ( !oifs_valid_step(iter,total_nsteps) ) {
-                       iter = last_iter;                             // revert to last valid step
+                       iter = task.last_iter;                             // revert to last valid step
                     }
                  }
              }
           }
 
-          if (std::stoi(iter) != std::stoi(last_iter)) {
+          if (std::stoi(iter) != std::stoi(task.last_iter)) {
              // Construct file name of the ICM result file
-             second_part = get_second_part(last_iter, exptid);
+             second_part = get_second_part(task.last_iter, exptid);
 
              // Move the ICMGG, ICMSH & ICMUA result files to the task folder in the project directory
              // GC. Why do this every timestep? This should be done at same frequency as NFRPOS.
@@ -669,15 +679,15 @@ int main(int argc, char** argv)
              }
 
              // Convert iteration number to seconds
-             current_iter = (std::stoi(last_iter)) * timestep;
+             task.current_iter = (std::stoi(task.last_iter)) * timestep;
 
-             //std::cerr << "Current iteration of model: " << last_iter << '\n';
+             //std::cerr << "Current iteration of model: " << task.last_iter << '\n';
              //std::cerr << "timestep: " << timestep << '\n';
-             //std::cerr << "current_iter: " << current_iter << '\n';
-             //std::cerr << "last_upload: " << last_upload << '\n';
+             //std::cerr << "current_iter: " << task.current_iter << '\n';
+             //std::cerr << "last_upload: " << task.last_upload << '\n';
 
              // Upload a new upload file if the end of an upload_interval has been reached
-             if((( current_iter - last_upload ) >= (upload_interval * timestep)) && (current_iter < total_length_of_simulation)) {
+             if((( task.current_iter - task.last_upload ) >= (upload_interval * timestep)) && (task.current_iter < total_length_of_simulation)) {
                 // Create an intermediate results zip file
                 zfl.clear();
 
@@ -687,9 +697,9 @@ int main(int argc, char** argv)
                 boinc_begin_critical_section();
 
                 // Cycle through all the steps from the last upload to the current upload
-                for (auto i = (last_upload / timestep); i < (current_iter / timestep); i++) {   //  current_iter/timestep is just last_iter!
-                   //std::cerr << "last_upload/timestep: " << (last_upload/timestep) << '\n';
-                   //std::cerr << "current_iter/timestep: " << (current_iter/timestep) << '\n';
+                for (auto i = (task.last_upload / timestep); i < (task.current_iter / timestep); i++) {   //  task.current_iter/timestep is just task.last_iter!
+                   //std::cerr << "last_upload/timestep: " << (task.last_upload/timestep) << '\n';
+                   //std::cerr << "current_iter/timestep: " << (task.current_iter/timestep) << '\n';
                    //std::cerr << "i: " << (std::to_string(i)) << '\n';
 
                    // Construct file name of the ICM result file
@@ -713,7 +723,7 @@ int main(int argc, char** argv)
                    if (zfl.size() > 0)
                    {
                       // Create the zipped upload file from the list of files added to zfl
-                      std::string upload_file = project_path + result_base_name + "_" + std::to_string(upload_file_number) + ".zip";
+                      std::string upload_file = project_path + result_base_name + "_" + std::to_string(task.upload_file_number) + ".zip";
 
                       std::cerr << "Compressing upload file: " << upload_file << '\n';
 
@@ -744,7 +754,7 @@ int main(int argc, char** argv)
                       }
 
                       // Upload the file. In BOINC the upload file is the logical name, not the physical name
-                      std::string upload_file_name = "upload_file_" + std::to_string(upload_file_number) + ".zip";
+                      std::string upload_file_name = "upload_file_" + std::to_string(task.upload_file_number) + ".zip";
                       std::cerr << "Uploading the intermediate file: " << upload_file_name << '\n';
                       std::this_thread::sleep_until(chrono::system_clock::now() + chrono::seconds(20));
                       retval = boinc_upload_file(upload_file_name);
@@ -758,14 +768,14 @@ int main(int argc, char** argv)
                          std::cerr << "Finished the upload of the intermediate file: " << upload_file_name << '\n';
                       }
                    }
-                   last_upload = current_iter; 
+                   task.last_upload = task.current_iter; 
                 }
 
                 // Else running in standalone
                 else {
                    std::string upload_file_name = app_name + "_" + unique_member_id + "_" + start_date + "_" + \
                                                   std::to_string((int)num_days) + "_" + batchid + "_" + wuid + "_" + \
-                                                  std::to_string(upload_file_number) + ".zip";
+                                                  std::to_string(task.upload_file_number) + ".zip";
                    std::cerr << "The current upload_file_name is: " << upload_file_name << '\n';
 
                    // Create the zipped upload file from the list of files added to zfl
@@ -793,54 +803,54 @@ int main(int argc, char** argv)
                          }
                       }
                    }
-                   last_upload = current_iter;
+                   task.last_upload = task.current_iter;
 
                 }
 
                 // *****  Normal end of critical section  *****
                 boinc_end_critical_section();
-                upload_file_number++;
+                task.upload_file_number++;
              }                            // end of upload new output file block.
 
              // Trickle every required fraction of the model run
              if ( (std::stoi(iter) % trickle_freq) == 0 ) {
                std::cerr << "Sending progress trickle message to CPDN at step: " << iter << '\n';
-               trickler.process_trickle(current_cpu_time, current_iter);
-               last_trickle_iter = current_iter;
+               trickler.process_trickle(task.current_cpu_time, task.current_iter);
+               task.last_trickle_iter = task.current_iter;
              }
           }                               // end of if it's a new timestep block.
-          last_iter = iter;
+          task.last_iter = iter;
           count = 0;
 
           // Update progress file with current values
-          update_progress_file(progress_file, current_cpu_time, upload_file_number, last_iter, last_upload, model_completed);
+          update_progress_file(progress_file, task.current_cpu_time, task.upload_file_number, task.last_iter, task.last_upload, task.model_completed);
        }
 
        // Calculate current_cpu_time, only update if cpu_time returns a value
        if (cpu_time(model_process)) {
-          current_cpu_time = last_cpu_time + cpu_time(model_process);
+          task.current_cpu_time = task.last_cpu_time + cpu_time(model_process);
        }
 
       // Calculate the fraction done
-      fraction_done = model_frac_done( std::stof(iter), total_nsteps, std::stoi(nthreads) );
+      task.fraction_done = model_frac_done( std::stof(iter), total_nsteps, std::stoi(nthreads) );
 
       if (!standalone) {
          // If the current iteration is at a restart iteration
          double restart_cpu_time = 0;
          if ( !(std::stoi(iter)%restart_interval)) {
-            restart_cpu_time = current_cpu_time;
+            restart_cpu_time = task.current_cpu_time;
          }
 
          // Provide the current cpu_time to the BOINC server (note: this is deprecated in BOINC)
-         boinc_report_app_status(current_cpu_time, restart_cpu_time, fraction_done);
+         boinc_report_app_status(task.current_cpu_time, restart_cpu_time, task.fraction_done);
 
          // Provide the fraction done to the BOINC client, necessary for the percentage bar on the client
-         boinc_fraction_done(fraction_done);
+         boinc_fraction_done(task.fraction_done);
     
-         process_status = check_boinc_status(model_process,process_status);
+         task.process_status = check_boinc_status(model_process, task.process_status);
       }
    
-      process_status = check_child_status(model_process,process_status);
+      task.process_status = check_child_status(model_process, task.process_status);
     }
 
     //----- End of main loop ---------------------------------------------------------------------------	
@@ -878,10 +888,10 @@ int main(int argc, char** argv)
     }
 
     // Update model_completed
-    model_completed = 1;
+    task.model_completed = 1;
 
     // Handle the last ICM files
-    second_part = get_second_part(last_iter, exptid);
+    second_part = get_second_part(task.last_iter, exptid);
 
     // Move the ICMGG, ICMSH and ICMUA model output files to the task folder in the project directory
     std::vector<std::string> icm = {"ICMGG", "ICMSH", "ICMUA"};
@@ -932,7 +942,7 @@ int main(int argc, char** argv)
        if (zfl.size() > 0){
 
           // Create the zipped upload file from the list of files added to zfl
-          std::string upload_file = project_path + result_base_name + "_" + std::to_string(upload_file_number) + ".zip";
+          std::string upload_file = project_path + result_base_name + "_" + std::to_string(task.upload_file_number) + ".zip";
 
           std::cerr << "Compressing final upload file: " << upload_file << '\n';
 
@@ -963,7 +973,7 @@ int main(int argc, char** argv)
           }
 
           // Upload the file. In BOINC the upload file is the logical name, not the physical name
-          std::string upload_file_name = "upload_file_" + std::to_string(upload_file_number) + ".zip";
+          std::string upload_file_name = "upload_file_" + std::to_string(task.upload_file_number) + ".zip";
           std::cerr << "Uploading the final file: " << upload_file_name << '\n';
           std::this_thread::sleep_until(chrono::system_clock::now() + chrono::seconds(20));
           retval = boinc_upload_file(upload_file_name);
@@ -978,8 +988,8 @@ int main(int argc, char** argv)
           }
 
 	       // Produce final trickle it's the same timestep as the last main loop trickle
-          if ( current_iter > last_trickle_iter ) {
-            trickler.process_trickle(current_cpu_time,current_iter);
+          if ( task.current_iter > task.last_trickle_iter ) {
+            trickler.process_trickle(task.current_cpu_time, task.current_iter);
           }
        }
        boinc_end_critical_section();
@@ -989,7 +999,7 @@ int main(int argc, char** argv)
     else {
        std::string upload_file_name = app_name + "_" + unique_member_id + "_" + start_date + "_" + \
                                       std::to_string((int)num_days) + "_" + batchid + "_" + wuid + "_" + \
-                                      std::to_string(upload_file_number) + ".zip";
+                                      std::to_string(task.upload_file_number) + ".zip";
        std::cerr << "The final upload_file_name is: " << upload_file_name << '\n';
 
        // Create the zipped upload file from the list of files added to zfl
@@ -1030,11 +1040,11 @@ int main(int argc, char** argv)
     std::cerr << "Task finished." << std::endl;
 
     // if finished normally
-    if (process_status == 1){
+    if (task.process_status == 1){
       boinc_finish(0);     // boinc_finish() exits, no further code executed after this call.
       return 0;
     }
-    else if (process_status == 2){
+    else if (task.process_status == 2){
       boinc_finish(0);
       return 0;
     }

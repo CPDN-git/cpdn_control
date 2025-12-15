@@ -30,8 +30,20 @@ struct TaskState {
     double fraction_done = 0.0;     // Fraction of model run completed (0.0-1.0)
 };
 
+/**
+ * @struct BoincConfig
+ * @brief Encapsulates BOINC configuration parameters for the task.
+ *        Variables extracted from BOINC APP_INIT_DATA structure after boinc initialization.
+ */
+struct BoincConfig {
+    std::string wu_name;           // Workunit name
+    std::string project_dir;       // Project directory path
+    std::string version;           // Application version
+    int standalone = 0;            // Standalone mode flag
+};
 
-int initialise_boinc(std::string&, std::string&, std::string&, int&);
+
+int init_boinc(BoincConfig&);
 int move_and_unzip_app_file(std::string, std::string, std::string, std::string);
 int check_child_status(long, int);
 int check_boinc_status(long, int);

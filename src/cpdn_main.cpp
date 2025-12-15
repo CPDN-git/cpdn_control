@@ -50,21 +50,17 @@ constexpr std::string_view  MODEL_CONFIG_FILE = "model_config.xml";
  */
 int main(int argc, char** argv)
 {
-    std::string project_path;
-    std::string wu_name;
-    std::string project_dir;
-    std::string version;
-    int standalone=0;
+    BoincConfig config;
     int retval=0;
 
     // Initialise BOINC to get the project directory, workunit name and app version
     // Note this redirects stderr output to stderr.txt in slot dir.
-    retval = initialise_boinc(wu_name, project_dir, version, standalone);
+    retval = init_boinc(config);
     if (retval) {
        std::cerr << "..BOINC initialisation failed" << "\n";
        return retval;
     }
-    if ( standalone ) std::cerr << "Running in standalone mode" << '\n';
+    if ( config.standalone ) std::cerr << "Running in standalone mode" << '\n';
 
     // Set the task related paths
     // GC. TODO. make these fs::path variables.
@@ -75,8 +71,7 @@ int main(int argc, char** argv)
     }
     std::cerr << "Working slot directory is: "<< slot_path << '\n';
     
-    project_path = project_dir + std::string("/");
-    std::cerr << "Project directory is: " << project_path << '\n';
+    std::cerr << "Project directory is: " << config.project_dir << '\n';
 
     // Say who we are.
     banner("CPDN task controller", CODE_VERSION);    //  will come from XML input later.
@@ -154,38 +149,38 @@ int main(int argc, char** argv)
     }
 
     std::cerr << "\nCPDN task controller version: " << CODE_VERSION << '\n' // CODE_VERSION is a macro set at compile time
-              << "wu_name: " << wu_name << '\n'
-              << "project_dir: " << project_dir << '\n'
-              << "version: " << version << '\n';
+              << "wu_name: " << config.wu_name << '\n'
+              << "project_dir: " << config.project_dir << '\n'
+              << "version: " << config.version << '\n';
 
     const std::string namelist="fort.4";    // namelist file. will come from XML input later.
 
     double num_days = atof(fclen.c_str());   // number of simulation days; fclen should come from fort.4, not the command line.
 
-    if (!standalone) {
+    if (!config.standalone) {
 
       // Get the app version and re-parse to add a dot
       // GC. This assumes version is X.Y, X.YY or XX.YY format, will get it wrong if not.
-      auto vlen = version.length();
+      auto vlen = config.version.length();
       if ( vlen == 2 ) {
-         version.insert(1, ".");
+         config.version.insert(1, ".");
       }
       else if (vlen > 2 ) {
-         version.insert(vlen-2, ".");
+         config.version.insert(vlen-2, ".");
       }
 
       std::cerr << "app name: " << app_name << '\n'
-                << "version: " << version << '\n';
+                << "version: " << config.version << '\n';
     }
     // Running in standalone
     else {
 
       // Set the project path. Assume usual boinc dir structure.
-      project_path = slot_path + std::string("/../../projects/");
-      std::cerr << "Project directory is: " << project_path << '\n';
+      config.project_dir = slot_path + std::string("/../../projects/");
+      std::cerr << "Project directory is: " << config.project_dir << '\n';
 
       // In standalone get the app version from the command line
-      version = argv[9];
+      config.version = argv[9];
       std::cerr << "app name: " << app_name << '\n'
                 << "(argv9) app_version: " << argv[9] << '\n'; 
     }
@@ -194,7 +189,7 @@ int main(int argc, char** argv)
 
     // Create temp upload folder for moving the results to and uploading the results from.
     // BOINC measures the disk usage on the slots directory so we must move all results out of this folder
-    std::string upload_dir = project_path + app_name + "_" + wuid;
+    std::string upload_dir = config.project_dir + app_name + "_" + wuid;
     std::cerr << "Location of temp folder: " << upload_dir << '\n';
     if ( !file_exists(upload_dir) ) {
       if (mkdir(upload_dir.c_str(),S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) != 0) {
@@ -203,7 +198,7 @@ int main(int argc, char** argv)
     }
 
     //  Unpack application into slot
-    retval = move_and_unzip_app_file(app_name, version, project_path, slot_path);
+    retval = move_and_unzip_app_file(app_name, config.version, config.project_dir, slot_path);
     if (retval) {
       std::cerr << "..move_and_unzip_app_file failed" << "\n";
       return retval;
@@ -534,7 +529,7 @@ int main(int argc, char** argv)
 
     std::string result_base_name;
 
-    if (!standalone) {
+    if (!config.standalone) {
        std::string resolved_name;
        retval = boinc_resolve_filename_s("upload_file_0.zip", resolved_name);
        if (retval) {
@@ -555,7 +550,7 @@ int main(int argc, char** argv)
     }
 
     // Create the trickle handler (only trickle if not in standalone mode)
-    TrickleHandler trickler(wu_name, result_base_name, slot_path);
+    TrickleHandler trickler(config.wu_name, result_base_name, slot_path);
 
     // Determine which OpenIFS executable to run.
     // GC. This should be an input parameter on the command line.
@@ -592,7 +587,7 @@ int main(int argc, char** argv)
 
     // Start the OpenIFS job
     std::cerr << "Launching OpenIFS executable: " << exe_cmd << std::endl;
-    long model_process = launch_process(project_path, slot_path, exe_cmd, nthreads, exptid, app_name);
+    long model_process = launch_process(config.project_dir, slot_path, exe_cmd, nthreads, exptid, app_name);
     if (model_process > 0) task.process_status = 0;     //GC TODO. Need to handle when model_process =-1, i.e. launch failed (see code in launch_process_oifs)
 
 
@@ -704,12 +699,12 @@ int main(int argc, char** argv)
                 }
 
                 // If running under a BOINC client
-                if (!standalone) {
+                if (!config.standalone) {
 
                    if (zfl.size() > 0)
                    {
                       // Create the zipped upload file from the list of files added to zfl
-                      std::string upload_file = project_path + result_base_name + "_" + std::to_string(task.upload_file_number) + ".zip";
+                      std::string upload_file = config.project_dir + result_base_name + "_" + std::to_string(task.upload_file_number) + ".zip";
 
                       std::cerr << "Compressing upload file: " << upload_file << '\n';
 
@@ -765,7 +760,7 @@ int main(int argc, char** argv)
                    std::cerr << "The current upload_file_name is: " << upload_file_name << '\n';
 
                    // Create the zipped upload file from the list of files added to zfl
-                   std::string upload_file = project_path + upload_file_name;
+                   std::string upload_file = config.project_dir + upload_file_name;
 
                    if (zfl.size() > 0){
                       if (!cpdn_zip(upload_file, zfl)) {
@@ -820,7 +815,7 @@ int main(int argc, char** argv)
       // Calculate the fraction done
       task.fraction_done = model_frac_done( std::stof(iter), total_nsteps, std::stoi(nthreads) );
 
-      if (!standalone) {
+      if (!config.standalone) {
          // If the current iteration is at a restart iteration
          double restart_cpu_time = 0;
          if ( !(std::stoi(iter)%restart_interval)) {
@@ -924,11 +919,11 @@ int main(int argc, char** argv)
     }
 
     // If running under a BOINC client
-    if (!standalone) {
+    if (!config.standalone) {
        if (zfl.size() > 0){
 
           // Create the zipped upload file from the list of files added to zfl
-          std::string upload_file = project_path + result_base_name + "_" + std::to_string(task.upload_file_number) + ".zip";
+          std::string upload_file = config.project_dir + result_base_name + "_" + std::to_string(task.upload_file_number) + ".zip";
 
           std::cerr << "Compressing final upload file: " << upload_file << '\n';
 
@@ -989,7 +984,7 @@ int main(int argc, char** argv)
        std::cerr << "The final upload_file_name is: " << upload_file_name << '\n';
 
        // Create the zipped upload file from the list of files added to zfl
-       std::string upload_file = project_path + upload_file_name;
+       std::string upload_file = config.project_dir + upload_file_name;
 
        if (zfl.size() > 0) {
           if (!cpdn_zip(upload_file, zfl)) {

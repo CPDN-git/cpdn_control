@@ -46,8 +46,7 @@ namespace     fs = std::filesystem;
 /**
  * @brief Initialise BOINC and set the options
  */
-// TODO: all the workunit parameters should be part of a struct/class.
-int initialise_boinc(std::string& wu_name, std::string& project_dir, std::string& version, int& standalone) {
+int init_boinc(BoincConfig& config) {
 
     //boinc_init_diagnostics(BOINC_DIAG_DEFAULTS);
     boinc_init();
@@ -57,9 +56,10 @@ int initialise_boinc(std::string& wu_name, std::string& project_dir, std::string
     APP_INIT_DATA dataBOINC;
     boinc_get_init_data(dataBOINC);
     
-    wu_name = dataBOINC.wu_name;
-    project_dir = dataBOINC.project_dir;
-    version = std::to_string(dataBOINC.app_version);
+    config.wu_name = dataBOINC.wu_name;
+    config.project_dir = dataBOINC.project_dir;
+    config.project_dir += "/";  // Add trailing slash for consistent path handling
+    config.version = std::to_string(dataBOINC.app_version);
 
     // Set BOINC optional values
     BOINC_OPTIONS options;
@@ -80,7 +80,7 @@ int initialise_boinc(std::string& wu_name, std::string& project_dir, std::string
                                             // Set in worker programs.
 
     // Check whether BOINC is running in standalone mode
-    standalone = boinc_is_standalone();
+    config.standalone = boinc_is_standalone();
     
     return boinc_init_options(&options);
 }

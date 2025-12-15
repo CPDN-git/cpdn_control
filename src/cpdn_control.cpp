@@ -34,7 +34,6 @@
 #include "boinc/util.h"
 
 #include "cpdn_control.h"
-#include "cpdn_main.h"
 #include "cpdn_zip.h"
 #include "lib/utils.h"
 

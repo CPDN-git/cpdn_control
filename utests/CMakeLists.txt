@@ -14,6 +14,13 @@ add_executable(unit_tests unit_tests.cpp
                         t_read_rcf_file.cpp
                         t_read_progress_file.cpp
                         t_cputime_comparison.cpp
+                        t_parse_key_value.cpp
+                        t_get_tag.cpp
+                        t_check_stoi.cpp
+                        t_fread_last_line.cpp
+                        t_model_frac_done.cpp
+                        t_path_exists.cpp
+                        t_file_is_empty.cpp
 )
 
 # Link the test executable to the control code
@@ -25,3 +32,10 @@ target_link_libraries(unit_tests PRIVATE cpdn_control)
 add_test( NAME RCFTest       COMMAND unit_tests "Read RCF File" )
 add_test( NAME ProgressTest  COMMAND unit_tests "Read Progress File" )
 add_test( NAME CPUTimeComparisonTest COMMAND unit_tests "CPU Time Comparison" )
+add_test( NAME ParseKeyValueTest COMMAND unit_tests "Parse Key Value" )
+add_test( NAME GetTagTest COMMAND unit_tests "Get Tag" )
+add_test( NAME CheckStoiTest COMMAND unit_tests "Check Stoi" )
+add_test( NAME FreadLastLineTest COMMAND unit_tests "Fread Last Line" )
+add_test( NAME ModelFracDoneTest COMMAND unit_tests "Model Frac Done" )
+add_test( NAME PathExistsTest COMMAND unit_tests "Path Exists" )
+add_test( NAME FileIsEmptyTest COMMAND unit_tests "File Is Empty" )

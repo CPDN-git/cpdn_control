@@ -22,6 +22,13 @@
                 {"Read RCF File",       t_read_rcf_file},
                 {"Read Progress File",  t_read_progress_file},
                 {"CPU Time Comparison", t_cputime_comparison},
+                {"Parse Key Value",     t_parse_key_value},
+                {"Get Tag",             t_get_tag},
+                {"Check Stoi",          t_check_stoi},
+                {"Fread Last Line",     t_fread_last_line},
+                {"Model Frac Done",     t_model_frac_done},
+                {"Path Exists",         t_path_exists},
+                {"File Is Empty",       t_file_is_empty},
                 // Add new test functions here! Remember previous trailing comma!
     };
 

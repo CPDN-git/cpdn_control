@@ -7,7 +7,7 @@
 #include <vector>
 
 bool set_env_var(const std::string&, const std::string&);
-bool file_exists(std::string_view filename);
+bool path_exists(std::string_view pathname);
 bool file_is_empty(std::string_view fpath);
 bool set_exec_perms(const std::string&);
 bool parse_key_value(const std::string&, std::string&, std::string&);

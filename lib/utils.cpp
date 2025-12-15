@@ -37,10 +37,10 @@ bool set_env_var(const std::string& name, const std::string& val) {
 
 
 /**
- * @brief  Check whether a file exists
+ * @brief  Check whether a filesystem path exists (file, directory, or symlink)
  */
-bool file_exists(std::string_view filename) {
-    std::ifstream infile{std::string(filename)};    // GC. C++20 allows string_view directly.
+bool path_exists(std::string_view pathname) {
+    std::ifstream infile{std::string(pathname)};    // GC. C++20 allows string_view directly.
     return infile.good();
 }
 
@@ -268,14 +268,25 @@ bool fread_last_line(const std::string& fname, std::string& logline) {
     static std::streamoff last_offset = 0;
     static std::string    last_line;
     std::string           line;
+    bool                  new_line_read = false;
 
     // Check file exists and non-empty
     std::ifstream logfile(fname, std::ios::in);
     if (!logfile.is_open()) {
         logline.clear();
         last_offset = 0;
+        last_line.clear();
         std::cerr << ".. file_last_line(): warning, " << fname << " does not exist." << std::endl;
         return false;
+    }
+
+    // Detect file truncation: if our last offset is beyond the current file size,
+    // the file has been truncated (e.g., due to model restart). Reset to beginning.
+    logfile.seekg(0, std::ios::end);
+    std::streamoff file_size = logfile.tellg();
+    if (last_offset > file_size) {
+        last_offset = 0;
+        last_line.clear();
     }
 
    // Seek to last offset and read lines to file end
@@ -283,6 +294,7 @@ bool fread_last_line(const std::string& fname, std::string& logline) {
 
    while (std::getline(logfile, line)) {
       last_line = line;
+      new_line_read = true;
    }
    //std::cerr << "fread_last_line: last line read: " << last_line << '\n';
 
@@ -297,7 +309,8 @@ bool fread_last_line(const std::string& fname, std::string& logline) {
 
     logfile.close();
 
-    if (!last_line.empty()) {
+    // Only return true and update logline if we actually read a new line
+    if (new_line_read) {
         logline = last_line;
         return true;
     }

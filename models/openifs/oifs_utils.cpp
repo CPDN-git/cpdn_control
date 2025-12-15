@@ -67,9 +67,9 @@ bool oifs_setenvs(const std::string& slot_path, const std::string& nthreads) {
 
 
 
-// Construct the second part of the output model filename to be uploaded
+// Construct the filename part of the output model filename containing the iteration count.
 // nb. exptid is always 4 characters for OpenIFS.
-std::string get_second_part(const std::string& last_iter, const std::string& exptid) {
+std::string oifs_get_filename_part(const std::string& last_iter, const std::string& exptid) {
     std::ostringstream oss;
     oss << exptid << "+" << std::setw(6) << std::setfill('0') << last_iter;
     return oss.str();

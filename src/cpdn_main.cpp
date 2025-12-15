@@ -736,6 +736,7 @@ int main(int argc, char** argv)
                 // *****  Normal end of critical section  *****
                 boinc_end_critical_section();
                 task.upload_file_number++;
+                
              }                            // end of upload new output file block.
 
              // Trickle every required fraction of the model run
@@ -863,44 +864,17 @@ int main(int argc, char** argv)
       closedir(dirp);
     }
 
-    // If running under a BOINC client
-    if (!config.standalone) {
-       if (zfl.size() > 0){
+   std::string upload_file = config.project_dir + result_base_name + "_" + std::to_string(task.upload_file_number) + ".zip";
+   std::cerr << "Compressing final upload file: " << upload_file << '\n';
 
-          // Create the zipped upload file from the list of files added to zfl
-          std::string upload_file = config.project_dir + result_base_name + "_" + std::to_string(task.upload_file_number) + ".zip";
+   if (zfl.size() > 0) {
+      retval = zip_and_delete(upload_file, zfl);
 
-          std::cerr << "Compressing final upload file: " << upload_file << '\n';
+      if (!config.standalone) {
 
-          // Time the compression for diagnostics
-          auto start = chrono::high_resolution_clock::now();
-          auto outcome = cpdn_zip(upload_file, zfl);
-          auto stop = chrono::high_resolution_clock::now();
-          auto duration = chrono::duration_cast<chrono::milliseconds>(stop - start);
-          std::cerr << "Time taken to compress final upload file: " << duration.count() << " ms\n";
-          
-          retval = outcome ? 0 : 1;
-
-          if (retval) {
-             std::cerr << "..compressing final upload file failed" << std::endl;
-             boinc_end_critical_section();
-             return retval;
-          }
-          else {
-             // Files have been successfully zipped, they can now be deleted
-             for (auto j = 0; j < (int) zfl.size(); ++j) {
-                // Delete the zipped file
-                try {
-                    fs::remove(zfl[j]);
-                } catch (fs::filesystem_error& e) {
-                    std::cerr << "Error deleting file: " << zfl[j] << ", error: " << e.what() << '\n';
-                }
-             }
-          }
-
-          // Upload the file. In BOINC the upload file is the logical name, not the physical name
           std::string upload_file_name = "upload_file_" + std::to_string(task.upload_file_number) + ".zip";
           std::cerr << "Uploading the final file: " << upload_file_name << '\n';
+
           std::this_thread::sleep_until(chrono::system_clock::now() + chrono::seconds(20));
           retval = boinc_upload_file(upload_file_name);
           if (retval) {
@@ -919,39 +893,6 @@ int main(int argc, char** argv)
           }
        }
        boinc_end_critical_section();
-    }
-
-    // Else running in standalone
-    else {
-       std::string upload_file_name = app_name + "_" + unique_member_id + "_" + start_date + "_" + \
-                                      std::to_string((int)num_days) + "_" + batchid + "_" + wuid + "_" + \
-                                      std::to_string(task.upload_file_number) + ".zip";
-       std::cerr << "The final upload_file_name is: " << upload_file_name << '\n';
-
-       // Create the zipped upload file from the list of files added to zfl
-       std::string upload_file = config.project_dir + upload_file_name;
-
-       if (zfl.size() > 0) {
-          if (!cpdn_zip(upload_file, zfl)) {
-             retval = 1;
-          }
-          if (retval) {
-             std::cerr << "..Creating the compressed upload file failed" << std::endl;
-             boinc_end_critical_section();
-             return retval;
-          }
-          else {
-             // Files have been successfully zipped, they can now be deleted
-             for (auto j = 0; j < (int) zfl.size(); ++j) {
-                // Delete the zipped file
-                try {
-                  fs::remove(zfl[j]);
-                } catch (const fs::filesystem_error& e) {
-                  std::cerr << "Error deleting file: " << zfl[j] << ", error: " << e.what() << '\n';
-                }
-             }
-         }
-       }
     }
 
     //-------------------------------------------------------------------------------------------------------

@@ -92,7 +92,7 @@ int init_boinc(BoincConfig& config) {
                                             // Set in worker programs.
 
     // Check whether BOINC is running in standalone mode
-    config.standalone = boinc_is_standalone();
+    config.standalone = boinc_is_standalone() == 1;
     
     return boinc_init_options(&options);
 }

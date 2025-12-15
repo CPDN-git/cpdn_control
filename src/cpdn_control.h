@@ -40,7 +40,7 @@ struct BoincConfig {
     std::string wu_name;           // Workunit name
     std::string project_dir;       // Project directory path
     std::string version;           // Application version
-    int standalone = 0;            // Standalone mode flag
+    bool standalone = false;            // Standalone mode flag
 };
 
 

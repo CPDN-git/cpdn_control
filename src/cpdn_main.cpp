@@ -708,10 +708,10 @@ int main(int argc, char** argv)
 
                 // Create the zipped upload file from the list of files added to zfl
                 if (zfl.size() > 0) {
-                  retval = zip_and_delete(upload_file, zfl);
+                  auto zret = zip_and_delete(upload_file, zfl);
 
                   // If running under a BOINC client
-                  if (!config.standalone) {
+                  if (!config.standalone && zret == 0) {
 
                       // Upload the file. In BOINC the upload file is the logical name, not the physical name
                       std::string upload_file_name = "upload_file_" + std::to_string(task.upload_file_number) + ".zip";
@@ -736,7 +736,7 @@ int main(int argc, char** argv)
                 // *****  Normal end of critical section  *****
                 boinc_end_critical_section();
                 task.upload_file_number++;
-                
+
              }                            // end of upload new output file block.
 
              // Trickle every required fraction of the model run
@@ -868,9 +868,9 @@ int main(int argc, char** argv)
    std::cerr << "Compressing final upload file: " << upload_file << '\n';
 
    if (zfl.size() > 0) {
-      retval = zip_and_delete(upload_file, zfl);
+      auto zret = zip_and_delete(upload_file, zfl);
 
-      if (!config.standalone) {
+      if (!config.standalone && zret==0) {
 
           std::string upload_file_name = "upload_file_" + std::to_string(task.upload_file_number) + ".zip";
           std::cerr << "Uploading the final file: " << upload_file_name << '\n';

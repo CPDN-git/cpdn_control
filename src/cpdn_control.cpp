@@ -727,7 +727,6 @@ int zip_and_delete(const std::string& upload_file, const std::vector<std::filesy
 
    if (retval) {
       std::cerr << ".. compressing upload file failed" << std::endl;
-      boinc_end_critical_section();
       return retval;
    }
    else {

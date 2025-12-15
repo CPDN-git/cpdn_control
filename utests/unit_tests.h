@@ -20,3 +20,4 @@ int t_fread_last_line();
 int t_model_frac_done();
 int t_path_exists();
 int t_file_is_empty();
+int t_zip_and_delete();

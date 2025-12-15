@@ -21,6 +21,7 @@ add_executable(unit_tests unit_tests.cpp
                         t_model_frac_done.cpp
                         t_path_exists.cpp
                         t_file_is_empty.cpp
+                        t_zip_and_delete.cpp
 )
 
 # Link the test executable to the control code
@@ -39,3 +40,4 @@ add_test( NAME FreadLastLineTest COMMAND unit_tests "Fread Last Line" )
 add_test( NAME ModelFracDoneTest COMMAND unit_tests "Model Frac Done" )
 add_test( NAME PathExistsTest COMMAND unit_tests "Path Exists" )
 add_test( NAME FileIsEmptyTest COMMAND unit_tests "File Is Empty" )
+add_test( NAME ZipAndDeleteTest COMMAND unit_tests "Zip And Delete" )

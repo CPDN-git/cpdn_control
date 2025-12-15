@@ -29,6 +29,7 @@
                 {"Model Frac Done",     t_model_frac_done},
                 {"Path Exists",         t_path_exists},
                 {"File Is Empty",       t_file_is_empty},
+                {"Zip And Delete",      t_zip_and_delete},
                 // Add new test functions here! Remember previous trailing comma!
     };
 

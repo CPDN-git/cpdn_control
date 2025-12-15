@@ -23,7 +23,6 @@
 
 #include "cpdn_zip.h"
 #include "cpdn_control.h"
-#include "cpdn_main.h"
 #include "lib/utils.h"
 #include "api/trickle_handler.h"
 

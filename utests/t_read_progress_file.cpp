@@ -6,7 +6,6 @@
 #include <fstream>
 
 #include "../src/cpdn_control.h"
-#include "../src/cpdn_main.h"
 #include "unit_tests.h"
 
 

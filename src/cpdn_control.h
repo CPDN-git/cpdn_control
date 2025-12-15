@@ -10,6 +10,7 @@
 #include <string>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 
 /**
@@ -55,3 +56,4 @@ void read_progress_file(std::string_view, TaskState&);
 void update_progress_file(std::string_view, const TaskState&);
 int copy_and_unzip(const std::string&, const std::string&, const std::string&, const std::string&);
 bool process_env_overrides(const std::filesystem::path&);
+int zip_and_delete(const std::string&, const std::vector<std::filesystem::path>&);

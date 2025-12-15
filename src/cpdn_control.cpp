@@ -705,3 +705,41 @@ int copy_and_unzip(const std::string& zipfile, const std::string& destination, c
     return retval;
 }
 
+
+/**
+ * @brief Zips the upload files and deletes the original files upon success.
+ * 
+ * @param upload_file The path to the output zip file.
+ * @param zfl A vector of file paths to be zipped.
+ * @return int Returns 0 on success, non-zero on failure.
+ */
+int zip_and_delete(const std::string& upload_file, const std::vector<std::filesystem::path>& zfl) {
+
+   // Time the compression for diagnostics
+   auto start = chrono::high_resolution_clock::now();
+
+   auto outcome = cpdn_zip(upload_file, zfl);
+   int retval = outcome ? 0 : 1;
+
+   auto stop = chrono::high_resolution_clock::now();
+   auto duration = chrono::duration_cast<chrono::milliseconds>(stop - start);
+   std::cerr << "Time taken to compress upload file: " << duration.count() << " ms\n";
+
+   if (retval) {
+      std::cerr << ".. compressing upload file failed" << std::endl;
+      boinc_end_critical_section();
+      return retval;
+   }
+   else {
+      // Files have been successfully zipped, they can now be deleted
+      for (auto j = 0; j < (int) zfl.size(); ++j) {
+         // Delete the zipped file
+         try {
+            fs::remove(zfl[j]);
+         } catch (const fs::filesystem_error& e) {
+            std::cerr << "Error deleting file: " << zfl[j] << ", error: " << e.what() << '\n';
+         }
+      }
+   }
+   return retval;
+}

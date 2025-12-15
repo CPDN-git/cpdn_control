@@ -197,7 +197,7 @@ int main(int argc, char** argv)
     if (config.standalone) {
       std::cerr << "Running in standalone mode" << '\n';
 
-      // Set the project path assuming usual boinc dir structure as we can't get it from BOINC.
+      // Reset the project path assuming usual boinc dir structure as we can't get it from BOINC.
       config.project_dir = slot_path + std::string("/../../projects/");
 
       // In standalone get the app version from the command line
@@ -549,9 +549,7 @@ int main(int argc, char** argv)
     int total_length_of_simulation = (int) (num_days * 86400);
     std::cerr << "Total_length_of_simulation: " << total_length_of_simulation << '\n';
 
-    // Get result_base_name to construct upload file names using 
-    // the first upload as an example and then stripping off '_0.zip'
-    // In standalone mode, construct result_base_name in a reasonable way.
+    // Get result_base_name to construct upload file names for both standalone and under BOINC.
 
     std::string result_base_name = get_result_base_name(config, app_name, start_date, batchid, wuid);
     std::cerr << "result_base_name: " << result_base_name << '\n';
@@ -675,7 +673,7 @@ int main(int argc, char** argv)
              //std::cerr << "last_upload: " << task.last_upload << '\n';
 
              // Upload a new upload file if the end of an upload_interval has been reached
-             if((( task.current_iter - task.last_upload ) >= (upload_interval * timestep)) && (task.current_iter < total_length_of_simulation)) {
+             if (( ( task.current_iter - task.last_upload ) >= (upload_interval * timestep)) && (task.current_iter < total_length_of_simulation)) {
                 // Create an intermediate results zip file
                 zfl.clear();
 
@@ -705,45 +703,20 @@ int main(int argc, char** argv)
                    }
                 }
 
-                // If running under a BOINC client
-                if (!config.standalone) {
+                std::string upload_file = config.project_dir + result_base_name + "_" + std::to_string(task.upload_file_number) + ".zip";
+                std::cerr << "Compressing upload file: " << upload_file << '\n';
 
-                   if (zfl.size() > 0)
-                   {
-                      // Create the zipped upload file from the list of files added to zfl
-                      std::string upload_file = config.project_dir + result_base_name + "_" + std::to_string(task.upload_file_number) + ".zip";
+                // Create the zipped upload file from the list of files added to zfl
+                if (zfl.size() > 0) {
+                  retval = zip_and_delete(upload_file, zfl);
 
-                      std::cerr << "Compressing upload file: " << upload_file << '\n';
-
-                      // Time the compression for diagnostics
-                      auto start = chrono::high_resolution_clock::now();
-                      auto outcome = cpdn_zip(upload_file, zfl);
-                      auto stop = chrono::high_resolution_clock::now();
-                      auto duration = chrono::duration_cast<chrono::milliseconds>(stop - start);
-                      std::cerr << "Time taken to compress upload file: " << duration.count() << " ms\n";
-
-                      retval = outcome ? 0 : 1;
-
-                      if (retval) {
-                         std::cerr << ".. compressing upload file failed" << std::endl;
-                         boinc_end_critical_section();
-                         return retval;
-                      }
-                      else {
-                         // Files have been successfully zipped, they can now be deleted
-                         for (auto j = 0; j < (int) zfl.size(); ++j) {
-                            // Delete the zipped file
-                            try {
-                                fs::remove(zfl[j]);
-                            } catch (const fs::filesystem_error& e) {
-                                std::cerr << "Error deleting file: " << zfl[j] << ", error: " << e.what() << '\n';
-                            }
-                         }
-                      }
+                  // If running under a BOINC client
+                  if (!config.standalone) {
 
                       // Upload the file. In BOINC the upload file is the logical name, not the physical name
                       std::string upload_file_name = "upload_file_" + std::to_string(task.upload_file_number) + ".zip";
                       std::cerr << "Uploading the intermediate file: " << upload_file_name << '\n';
+
                       std::this_thread::sleep_until(chrono::system_clock::now() + chrono::seconds(20));
                       retval = boinc_upload_file(upload_file_name);
                       if (retval) {
@@ -758,42 +731,7 @@ int main(int argc, char** argv)
                    }
                    task.last_upload = task.current_iter; 
                 }
-
-                // Else running in standalone
-                else {
-                   std::string upload_file_name = app_name + "_" + unique_member_id + "_" + start_date + "_" + \
-                                                  std::to_string((int)num_days) + "_" + batchid + "_" + wuid + "_" + \
-                                                  std::to_string(task.upload_file_number) + ".zip";
-                   std::cerr << "The current upload_file_name is: " << upload_file_name << '\n';
-
-                   // Create the zipped upload file from the list of files added to zfl
-                   std::string upload_file = config.project_dir + upload_file_name;
-
-                   if (zfl.size() > 0){
-                      if (!cpdn_zip(upload_file, zfl)) {
-                         retval = 1;
-                      }
-
-                      if (retval) {
-                         std::cerr << "..Creating the zipped upload file failed" << std::endl;
-                         boinc_end_critical_section();
-                         return retval;
-                      }
-                      else {
-                         // Files have been successfully zipped, they can now be deleted
-                         for (auto j = 0; j < (int) zfl.size(); ++j) {
-                            // Delete the zipped file
-                            try {
-                                fs::remove(zfl[j]);
-                            } catch (const fs::filesystem_error& e) {
-                                std::cerr << "Error deleting file: " << zfl[j] << ", error: " << e.what() << '\n';
-                            }
-                         }
-                      }
-                   }
-                   task.last_upload = task.current_iter;
-
-                }
+                task.last_upload = task.current_iter;
 
                 // *****  Normal end of critical section  *****
                 boinc_end_critical_section();

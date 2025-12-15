@@ -27,7 +27,7 @@
 #include "api/trickle_handler.h"
 
 // these includes will disappear when the code moves to Model derived classes
-#include "models/openifs/oifs_utils.h" // for get_second_part, oifs_*() functions.
+#include "models/openifs/oifs_utils.h" // for oifs_get_filename_part, oifs_*() functions.
 
 
 namespace chrono = std::chrono;
@@ -43,6 +43,50 @@ namespace     fs = std::filesystem;
 // Constants
 constexpr std::string_view  MODEL_CONFIG_FILE = "model_config.xml";
 
+
+// --------------- Functions ----------------
+
+/**
+ * @brief Construct the result base name for result files.
+ *        When running under BOINC, this comes from the resolved part
+ *        of the first upload file. When running standalone, we make
+ *        up a reasonable name based on the workunit parameters.
+ * @return Result base name string (without path or .zip)
+ */
+std::string get_result_base_name(BoincConfig& config,
+                                 const std::string& app_name,
+                                 const std::string& start_date,
+                                 const std::string& batchid,
+                                 const std::string& wuid)
+{
+    std::string base_name;
+
+    if (!config.standalone) {
+       std::string resolved_name;
+       int retval = boinc_resolve_filename_s("upload_file_0.zip", resolved_name);
+       if (retval) {
+          std::cerr << "..boinc_resolve_filename failed" << std::endl;
+          return base_name;
+       }
+
+       base_name = fs::path(resolved_name).stem(); // returns filename without path nor '.zip'
+       if ( base_name.length() > 2 ){
+          base_name.erase( base_name.length() - 2 );     // remove the '_0'
+       }
+       if (base_name.compare("upload_file") == 0) {
+          std::cerr << "..Failed to get result name" << std::endl;
+          return base_name;
+       }
+    }
+    else {
+      base_name = app_name + "_" + start_date + "_" + batchid + "_" + wuid;
+    }
+    return base_name;
+}
+
+
+
+//----------------------------- MAIN PROGRAM ---------------------------------
 
 
 /**
@@ -60,7 +104,6 @@ int main(int argc, char** argv)
        std::cerr << "..BOINC initialisation failed" << "\n";
        return retval;
     }
-    if ( config.standalone ) std::cerr << "Running in standalone mode" << '\n';
 
     // Set the task related paths
     // GC. TODO. make these fs::path variables.
@@ -148,42 +191,24 @@ int main(int argc, char** argv)
       }
     }
 
-    std::cerr << "\nCPDN task controller version: " << CODE_VERSION << '\n' // CODE_VERSION is a macro set at compile time
-              << "wu_name: " << config.wu_name << '\n'
-              << "project_dir: " << config.project_dir << '\n'
-              << "version: " << config.version << '\n';
-
     const std::string namelist="fort.4";    // namelist file. will come from XML input later.
-
     double num_days = atof(fclen.c_str());   // number of simulation days; fclen should come from fort.4, not the command line.
 
-    if (!config.standalone) {
+    if (config.standalone) {
+      std::cerr << "Running in standalone mode" << '\n';
 
-      // Get the app version and re-parse to add a dot
-      // GC. This assumes version is X.Y, X.YY or XX.YY format, will get it wrong if not.
-      auto vlen = config.version.length();
-      if ( vlen == 2 ) {
-         config.version.insert(1, ".");
-      }
-      else if (vlen > 2 ) {
-         config.version.insert(vlen-2, ".");
-      }
-
-      std::cerr << "app name: " << app_name << '\n'
-                << "version: " << config.version << '\n';
-    }
-    // Running in standalone
-    else {
-
-      // Set the project path. Assume usual boinc dir structure.
+      // Set the project path assuming usual boinc dir structure as we can't get it from BOINC.
       config.project_dir = slot_path + std::string("/../../projects/");
-      std::cerr << "Project directory is: " << config.project_dir << '\n';
 
       // In standalone get the app version from the command line
       config.version = argv[9];
-      std::cerr << "app name: " << app_name << '\n'
-                << "(argv9) app_version: " << argv[9] << '\n'; 
     }
+   
+    std::cerr << "\nCPDN task controller version: " << CODE_VERSION << '\n' // CODE_VERSION is a macro set at compile time
+              << "wu_name: " << config.wu_name << '\n'
+              << "project_dir: " << config.project_dir << '\n'
+              << "app name: " << app_name << '\n'
+              << "version: " << config.version << '\n';
 
     boinc_begin_critical_section();
 
@@ -526,28 +551,10 @@ int main(int argc, char** argv)
 
     // Get result_base_name to construct upload file names using 
     // the first upload as an example and then stripping off '_0.zip'
+    // In standalone mode, construct result_base_name in a reasonable way.
 
-    std::string result_base_name;
-
-    if (!config.standalone) {
-       std::string resolved_name;
-       retval = boinc_resolve_filename_s("upload_file_0.zip", resolved_name);
-       if (retval) {
-          std::cerr << "..boinc_resolve_filename failed" << std::endl;
-          return 1;
-       }
-
-       result_base_name = fs::path(resolved_name).stem(); // returns filename without path nor '.zip'
-       if ( result_base_name.length() > 2 ){
-          result_base_name.erase( result_base_name.length() - 2 );     // remove the '_0'
-       }
-
-       std::cerr << "result_base_name: " << result_base_name << '\n';
-       if (result_base_name.compare("upload_file") == 0) {
-          std::cerr << "..Failed to get result name" << std::endl;
-          return 1;
-       }
-    }
+    std::string result_base_name = get_result_base_name(config, app_name, start_date, batchid, wuid);
+    std::cerr << "result_base_name: " << result_base_name << '\n';
 
     // Create the trickle handler (only trickle if not in standalone mode)
     TrickleHandler trickler(config.wu_name, result_base_name, slot_path);
@@ -645,7 +652,7 @@ int main(int argc, char** argv)
 
           if (std::stoi(iter) != std::stoi(task.last_iter)) {
              // Construct file name of the ICM result file
-             second_part = get_second_part(task.last_iter, exptid);
+             second_part = oifs_get_filename_part(task.last_iter, exptid);
 
              // Move the ICMGG, ICMSH & ICMUA result files to the task folder in the project directory
              // GC. Why do this every timestep? This should be done at same frequency as NFRPOS.
@@ -684,7 +691,7 @@ int main(int argc, char** argv)
                    //std::cerr << "i: " << (std::to_string(i)) << '\n';
 
                    // Construct file name of the ICM result file
-                   second_part = get_second_part(std::to_string(i), exptid);
+                   second_part = oifs_get_filename_part(std::to_string(i), exptid);
 
                    // Add ICM result files to zip to be uploaded
                    std::vector<std::string> icm = {"ICMGG", "ICMSH", "ICMUA"};
@@ -872,7 +879,7 @@ int main(int argc, char** argv)
     task.model_completed = 1;
 
     // Handle the last ICM files
-    second_part = get_second_part(task.last_iter, exptid);
+    second_part = oifs_get_filename_part(task.last_iter, exptid);
 
     // Move the ICMGG, ICMSH and ICMUA model output files to the task folder in the project directory
     std::vector<std::string> icm = {"ICMGG", "ICMSH", "ICMUA"};

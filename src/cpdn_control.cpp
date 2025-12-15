@@ -61,6 +61,16 @@ int init_boinc(BoincConfig& config) {
     config.project_dir += "/";  // Add trailing slash for consistent path handling
     config.version = std::to_string(dataBOINC.app_version);
 
+    // Re-parse app version to add a dot
+    // This assumes version is X.Y, X.YY or XX.YY format, will get it wrong if not.
+    auto vlen = config.version.length();
+    if ( vlen == 2 ) {
+       config.version.insert(1, ".");
+    }
+    else if (vlen > 2 ) {
+       config.version.insert(vlen-2, ".");
+    }
+
     // Set BOINC optional values
     BOINC_OPTIONS options;
     boinc_options_defaults(options);
@@ -71,6 +81,8 @@ int init_boinc(BoincConfig& config) {
     //          If this is set true, the client will kill all our child processes on exit (supposedly).
     //          It also appears to execute suspend/resume on child processes, which we do here.
     //          If I disable this, then we should make sure all descendants are killed on exit.
+    // Dec/2025. Testing shows that even with this option commented out we still get the memory corruption.
+    //           TODO: try explicity setting the option to false?  Need to run a address sanitizer build as a batch to track this down.
     //options.multi_process = true;           // if your app uses multiple processes, do this before creating any threads or processes, or storing the PID
     options.check_heartbeat = true;         // controller monitors 'heartbeat' messages from the client.
     options.handle_process_control = true;  // controller will handle all suspend/quit/resume messages from the boinc client.

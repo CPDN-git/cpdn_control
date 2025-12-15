@@ -610,7 +610,7 @@ int move_result_file(const std::string& slot_path, const std::string& temp_path,
     std::string result_file = slot_path + "/" + result;
     std::string temp_file = temp_path + "/" + result;
 
-    if(file_exists(result_file)) {
+    if(path_exists(result_file)) {
        std::cerr << "Moving result file: " <<  fs::path(result_file).filename() << " to projects directory.\n";
        retval = boinc_copy( result_file.c_str(), temp_file.c_str() );
 
@@ -641,7 +641,7 @@ int copy_and_unzip(const std::string& zipfile, const std::string& destination, c
     int retval = 0;
 
     // Check for the existence of the zip file
-    if( !file_exists(zipfile) ) {
+    if( !path_exists(zipfile) ) {
        std::cerr << "..The " << type << " zip file does not exist: " << zipfile << std::endl;
        return 1;        // should terminate, the model won't run.
     }
@@ -659,7 +659,7 @@ int copy_and_unzip(const std::string& zipfile, const std::string& destination, c
     // If it doesn't, the real zip file is likely already in the working directory from a previous run.
     if ( !source.empty() ) {
        // Copy the 'jf_' file to the working directory and rename
-       if ( file_exists(source) ) {
+       if ( path_exists(source) ) {
           std::cerr << "Copying the " << type << " file from: " << source << " to: " << destination << '\n';
           try {
               fs::copy_file(source, destination,  fs::copy_options::overwrite_existing);
@@ -677,7 +677,7 @@ int copy_and_unzip(const std::string& zipfile, const std::string& destination, c
 
     // If 'source' is empty, the 'jf_' link wasn't there so we assume the real zip file is already in the working directory.
     // We could assume that the real zip file has already been unzipped, but to be safe unzip it if found.
-    if (file_exists(destination) ) {
+    if (path_exists(destination) ) {
        std::cerr << "Unzipping the " << type << " zip file: " << destination << '\n';
        if (!cpdn_unzip(destination, unzip_path)) {
          std::cerr << "..Unzipping the " << type << " file failed" << std::endl;

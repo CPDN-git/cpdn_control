@@ -80,7 +80,7 @@ int main(int argc, char** argv)
     // about the model. It's required to initialize the correct model class later on.
 
     // Check for existence of config.xml in current directory (task) and fail if not found.
-    if( !file_exists(MODEL_CONFIG_FILE) ) {
+    if( !path_exists(MODEL_CONFIG_FILE) ) {
         std::cerr << "..The model config.xml file does not exist in the current directory: " << MODEL_CONFIG_FILE << std::endl;
         //GC. Testing only; return 1;        // should terminate, the model won't run.
     }
@@ -191,7 +191,7 @@ int main(int argc, char** argv)
     // BOINC measures the disk usage on the slots directory so we must move all results out of this folder
     std::string upload_dir = config.project_dir + app_name + "_" + wuid;
     std::cerr << "Location of temp folder: " << upload_dir << '\n';
-    if ( !file_exists(upload_dir) ) {
+    if ( !path_exists(upload_dir) ) {
       if (mkdir(upload_dir.c_str(),S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) != 0) {
          std::cerr << "..mkdir for temp folder for results failed" << std::endl;
       }
@@ -246,7 +246,7 @@ int main(int argc, char** argv)
     int restart_interval = 0;
 
     // Check for the existence of the namelist
-    if( !file_exists(namelist_file) ) {
+    if( !path_exists(namelist_file) ) {
        std::cerr << "..The namelist file does not exist: " << namelist_file << std::endl;
        return 1;        // should terminate, the model won't run.
     }
@@ -385,7 +385,7 @@ int main(int argc, char** argv)
     std::string ifsdata_destination = ifsdata_folder + "/" + ifsdata_file + ".zip";
     
     // Check if ifsdata folder does not already exists or is empty
-    if ( !file_exists(ifsdata_folder) ) {
+    if ( !path_exists(ifsdata_folder) ) {
        if (mkdir(ifsdata_folder.c_str(),S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) != 0) {
           std::cerr << "..mkdir for ifsdata folder failed" << std::endl;
           return 1;        // should terminate, the model won't run.
@@ -407,7 +407,7 @@ int main(int argc, char** argv)
     std::string climate_data_destination = climate_data_path + "/" + climate_data_file + ".zip";
     
     // Check if climate_data folder does not already exists or is empty
-    if ( !file_exists(climate_data_path) ) {
+    if ( !path_exists(climate_data_path) ) {
        if (mkdir(climate_data_path.c_str(),S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) != 0) {
           std::cerr << "..mkdir for the climate data folder failed" << std::endl;
           return 1;
@@ -432,19 +432,19 @@ int main(int argc, char** argv)
     std::cerr << "Checking for rcf file and progress file: " << progress_file << '\n';
 
     // Handle the cases of the various states of the rcf file and progress file
-    if ( !file_exists(progress_file) && !file_exists(rcf_file) ) {
+    if ( !path_exists(progress_file) && !path_exists(rcf_file) ) {
        // If both progress file and rcf file do not exist, then model has not run.
        // Do nothing as the task state variables are already initialized to zero values above.
        std::cerr << "-- Starting new model run --\n";
     }
-    else if ( file_exists(progress_file) && file_is_empty(progress_file) ) {
+    else if ( path_exists(progress_file) && file_is_empty(progress_file) ) {
        // If progress file exists and is empty, an error has occurred, then kill model run
        print_last_lines("NODE.001_01", 70);
        print_last_lines("ifs.stat",8);
        std::cerr << "..progress file exists, but is empty => problem with model, quitting run" << '\n';
        return 1;
     }
-    else if ( file_exists(progress_file) && !file_exists(rcf_file) ) {
+    else if ( path_exists(progress_file) && !path_exists(rcf_file) ) {
        read_progress_file(progress_file, task);
        // If last_iter less than the restart interval, then model is at beginning and rcf has yet to be produced then continue
        if (std::stoi(task.last_iter) >= restart_interval) {
@@ -455,7 +455,7 @@ int main(int argc, char** argv)
           return 1;
        }
     }
-    else if ( !file_exists(progress_file) && file_exists(rcf_file) ) {
+    else if ( !path_exists(progress_file) && path_exists(rcf_file) ) {
        // If rcf file exists and progress file does not exist, an error has occurred, then kill model run
        // TODO: we should be able to bootstrap the progress file from the rcf file here?
        print_last_lines("NODE.001_01", 70);
@@ -463,14 +463,14 @@ int main(int argc, char** argv)
        std::cerr << "..rcf file exists, but progress file does not exist => problem with model, quitting run" << '\n';
        return 1;
     }
-    else if ( (file_exists(progress_file) && !file_is_empty(progress_file)) && file_exists(rcf_file) ) {
+    else if ( (path_exists(progress_file) && !file_is_empty(progress_file)) && path_exists(rcf_file) ) {
        // If progress file exists and is not empty and rcf file exists, then read rcf file and progress file
        std::ifstream rcf_file_stream;
        std::string ctime_value;
        std::string cstep_value;
 
        // Read the rcf file
-       if( file_exists( rcf_file ) ) {
+       if( path_exists( rcf_file ) ) {
          if( !(rcf_file_stream.is_open()) ) {
             rcf_file_stream.open( rcf_file );
          }
@@ -563,13 +563,13 @@ int main(int argc, char** argv)
              test_proc_exe /= "oifs_43r3_test.exe";
     std::string exe_cmd{};
 
-    if ( file_exists(single_proc_exe.string()) ) {
+    if ( path_exists(single_proc_exe.string()) ) {
        exe_cmd = single_proc_exe.string();
     }
-    else if ( file_exists(multi_proc_exe.string()) ) {
+    else if ( path_exists(multi_proc_exe.string()) ) {
        exe_cmd = multi_proc_exe.string();
     }
-    else if ( file_exists(test_proc_exe.string()) ) {
+    else if ( path_exists(test_proc_exe.string()) ) {
        exe_cmd = test_proc_exe.string();
     }
     if (exe_cmd.empty()) {
@@ -626,7 +626,7 @@ int main(int argc, char** argv)
        if(count==7) {
 
           iter = task.last_iter;
-          if ( file_exists(ifs_stat) ) {
+          if ( path_exists(ifs_stat) ) {
 
              // Read completed step from last line of ifs.stat file.
              // Note the first line from the model has a step count of '....  CNT3      -999 ....'
@@ -691,7 +691,7 @@ int main(int argc, char** argv)
                    for (const auto& part : icm) {
                       fs::path  fpath = upload_dir;
                                 fpath /= part + second_part;
-                      if (file_exists(fpath.string())) {
+                      if (path_exists(fpath.string())) {
                          std::cerr << "Adding to the zip: " << fpath << '\n';
                          zfl.push_back(fpath);
                       }
@@ -845,7 +845,7 @@ int main(int argc, char** argv)
 
     // To check whether model completed successfully, look for 'CNT0' in 3rd column of ifs.stat
     // This will always be the last line of a successful model forecast.
-    if (file_exists(ifs_stat))
+    if (path_exists(ifs_stat))
     {
        std::string ifs_word="";
        fread_last_line(ifs_stat, stat_lastline);

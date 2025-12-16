@@ -1,0 +1,92 @@
+<!--
+  Template XML file for defining a model in the XML-based model control system.
+  Fill in the details as appropriate for each specific model.
+
+    Glenn Carver, CPDN, 2025.
+
+  *** STILL UNDER DEVELOPMENT ***
+-->
+
+<!-- Could have multiple model sections for each model? 
+     Though probably better to have a master XML file that refers
+     to separate XML files; one per model?
+-->
+
+<!--  NOTE! Only include fields in here which are absolutely needed by the controller
+         and the model api; don't include every single detail of the models.
+-->
+
+<!--  CPDN oifs_workgen uses a model_config XML file to describe the model.
+      Use the same tags here as far as possible for consistency
+-->
+<model>
+    <!-- Model description -->
+    <vendor>ECMWF</name>
+    <name>OpenIFS</name>
+    <version>43r3</version>
+    <description>OpenIFS is a physics based forecast model, derived from the ECMWF operational forecast model.</description>
+    <!--  type can be : NWP, climate, or AI etc -->
+    <type>NWP</type>
+
+    <!-- Grid definition -->
+    <grid>
+    <!--  domain can be either global or regional (for limited area models) -->
+        <domain>global</domain>
+        <!-- this tag is used by CPDN, consistent with their database -->
+        <region_id>15</region_id>
+        <horizontal>
+            <!-- horizontal could be: spectral, finite-difference, finite-element etc -->
+            <grid_type>spectral</type>
+            <grid_suffix>l_2</grid_type> 
+            <grid_name>cubic octahedral</grid_name>
+            <resolution>319</resolution>
+            <!-- could have nlons/nlons_eq for Gaussian grids to specify npoints at equator,
+                 otherwise for fixed grids just used nlats/nlons. Specifying both is an error.
+            -->
+            <nlons_eq>320</nlons_eq>
+            <nlats>160</nlats_eq>
+        </horizontal>
+        <vertical>
+            <grid_type>hybrid sigma-pressure</type>
+            <levels>91</levels>
+        </vertical>
+    </grid>
+
+    <!--  Run environment; executable and environment variables-->
+    <env_vars>
+        <env name="OIFS_DUMMY_ACTION" default="abort"/>
+        <env name="OMP_NUM_THREADS"   default="1"/>   <!-- can be overwritten by controller -->
+        <env name="OMP_SCHEDULE"      default="STATIC"/>
+        <env name="OMP_STACKSIZE"     default="128M"/>
+        <env name="DR_HOOK"           default="1" />
+        <env name="DR_HOOK_HEAPCHECK" default="no" />
+        <env name="DR_HOOK_STACKCHECK" default="no" />
+        <env name="EC_MEMINFO"        default="0" />
+        <env name="EC_PROFILE_HEAP"   default="0" />
+        <env name="EC_PROFILE_MEM"    default="0" />
+        <env name="GRIB_SAMPLES_PATH" default="eccodes/ifs_samples/grib1_mlgrib2" />
+        <env name="GRIB_DEFINITION_PATH" default="eccodes/definitions" />
+    </env_vars>
+
+    <executable>oifs_43r3_test.exe</executable>
+    <command_options></command_line_options>
+
+    <!-- Input files needed by the model -->
+
+    <!-- This is typically the model input namelist file, but could be some other format -->
+    <!-- There maybe multiple namelist files (e.g. for the OpenIFS wave model),
+         but this specifies the main model namelist the control code needs to read to
+         get the run parameters from (this may not be possible with all models though)-->
+    <parameter_input_file type="namelist" default="fort.4" />
+    <parameter_input_file type="namelist" default="wam_namelist" />
+
+    <!-- List of ancilliary input data files -->
+    <!-- I may not need this section for the code. -->
+    <ancil_files>
+        <file name="ICMSH" type="GRIB">/path/to/input/file1</file>
+        <file name="ICMGG" type="GRIB">/path/to/input/file2</file>
+        <file name="cdwavein" type="GRIB">/path/to/input/file3</file>
+        <file name="sfcwindin" type="GRIB">/path/to/input/file4</file>
+    </ancil_files>  
+
+</model>

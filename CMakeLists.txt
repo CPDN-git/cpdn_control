@@ -135,7 +135,7 @@ target_compile_options(test_model PRIVATE -g -Wall)
 enable_testing()
 
 # Include the unit tests
-add_subdirectory(utests)
+add_subdirectory(tests/unit)
 
 # Include the functional tests
-add_subdirectory(ftests)
+add_subdirectory(tests/functional)

@@ -4,7 +4,7 @@ Unit tests for CPDN control code
 
 Glenn Carver, CPDN, 2025.
 
-To run all the unit tests, in the top directory (not in utests subdir),
+To run all the unit tests, in the top directory (not in tests/unit subdir),
 do the following steps:
 
 1. mkdir build
@@ -16,6 +16,5 @@ do the following steps:
 To run a single test, call the unit_tests executable with the name of
 the test as written in the code
 e.g.
-    build/utests/unit_tests "Read RCF File"
-
+    build/tests/unit/unit_tests "Read RCF File"
 

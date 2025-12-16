@@ -63,12 +63,12 @@ jobs:
           cmake --build .
 
       - name: Run Unit Tests with CTest
-        # CTest will run all tests registered via add_test() in the build directory. The -V flag (Verbose) is useful, it prints test output to the CI log.
+        # CTest runs all tests registered via add_test() in the build directory. -V flag (Verbose) prints test output to the CI log.
         run: |
           cd build
-          ctest --output-on-failure -V
+          ctest --output-on-failure -V -E functional
 
-  build_and_test:
+  functional_tests:
     strategy:
       matrix:
         os: [ ubuntu-22.04, ubuntu-latest ]
@@ -97,10 +97,15 @@ jobs:
         run:  cd zip && mkdir -p build && cd build && cmake -DCMAKE_INSTALL_PREFIX=../install .. && make && make install
 
       - name: Build the CPDN control executable
-        run:  mkdir build && cd build && cmake .. -DBOINC_DIR=./boinc-install && make && cp cpdn_control_1.0.0_x86_64-pc-linux-gnu ..
-
-      - name: Build the test model -- uses Makefile for now
-        run:  BOINC_DIR=./boinc-install make 
+        run: |
+          mkdir build
+          cd build
+          cmake .. \
+            -DBOINC_INCLUDE_DIR="../boinc-install/include" \
+            -DBOINC_LIB_DIR="../boinc-install/lib" \
+            -DCPDNZIP_INCLUDE_DIR="../zip/install/include" \
+            -DCPDNZIP_LIB_DIR="../zip/install/lib"
+          cmake --build .
 
       - name: Upload built executable
         if: ${{ success() }}
@@ -108,7 +113,7 @@ jobs:
         with:
           overwrite: true
           name: Build-executable-${{ matrix.os }}
-          path: cpdn_control_1.0.0_x86_64-pc-linux-gnu
+          path: build/cpdn_control_1.0.0_x86_64-pc-linux-gnu
 
       - name: Upload logs on fail
         if: ${{ failure() }}
@@ -118,31 +123,7 @@ jobs:
           name: Build-fail-log-${{ matrix.os }}
           path: ${{ runner.temp }}/build_log
 
-      - name: Set up test environment
-        run: cd test && chmod 744 setup_test.py && ./setup_test.py
-
-      - name: Copy CPDN controller exe
-        run: cp cpdn_control_1.0.0_x86_64-pc-linux-gnu test/projects/
-
-      - name: List contents of the root folder
-        run: ls -lt >> stdout_and_stderr
-
-      - name: List contents of projects folder
-        run: cd test/projects/ && ls -lt >> ../stdout_and_stderr
-
-      - name: Copy test_model to slot
-        run: cp test_model.exe test/slots/0/oifs_43r3_test.exe
-
-      - name: List contents of slots folder
-        run: cd test/slots/0 && ls -lt >> ../stdout_and_stderr
-
-      - name: Run test model
-        run: cd test/slots/0 && ../../projects/cpdn_control_1.0.0_x86_64-pc-linux-gnu yyyymmddhh 0000 NNNN d000 0 1 oifs_43r3 1 1.00 0 && cat stderr.txt >> ../stdout_and_stderr
-
-      - name: Upload test log
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
-        with:
-          overwrite: true
-          name: Test-fail-log-${{ matrix.os }}
-          path: stdout_and_stderr
+      - name: Run functional tests with CTest
+        run: |
+          cd build
+          ctest --output-on-failure -V -L functional

@@ -7,6 +7,9 @@ zip/install
 test/projects
 test/slots
 
+# Python caches
+ftests/__pycache__
+
 # Prerequisites
 *.d
 

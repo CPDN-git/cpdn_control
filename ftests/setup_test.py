@@ -9,36 +9,61 @@
 if __name__ == "__main__":
 
     import os, secrets, zipfile, shutil
+    import sys, json
+    from pathlib import Path
+
+    def write_file(path: Path, content: str):
+        path.write_text(content)
+
+    def zip_single_file(src: Path, dst: Path | None = None, arcname: str | None = None):
+        """Zip one file into dst (defaults to src+'.zip')."""
+        dst = dst or src.with_name(src.name + ".zip")
+        with zipfile.ZipFile(dst, "w") as zf:
+            zf.write(src, arcname=arcname or src.name)
+
+    def ensure_dir(path: Path):
+        path.mkdir(exist_ok=True)
+
+    if len(sys.argv) < 2:
+        print("Usage: setup_test.py <config.json>")
+        sys.exit(1)
+    
+    # Load the test configuration file.
+    # A small json file with the test parameters.
+    with open(sys.argv[1]) as f:
+        config = json.load(f)
+    print(f"[setup] Loaded config from {sys.argv[1]}: {config.get('test_name', '<unnamed>')}")
+
+    forecast_length = config["forecast_length"]
+    experiment_id = config["experiment_id"]
+    unique_member_id = config["unique_member_id"]
+    batch_id = config["batch_id"]
+    upload_interval = config["upload_interval"]
+    timestep = float(config["timestep"])
+    nfrres = config["nfrres"]
+    nfrpos = config["nfrpos"]
 
     # Make sure we're in the 'test' directory, if not then exit with error
-    current_path = os.getcwd()
-    if not current_path.endswith("test"):
-      print("Error: test_setup.py must be run from within the 'test' directory")
-      exit(1)
+    current_path = Path.cwd()
+    print(f"[setup] Running in directory: {current_path}")
 
-    if not os.path.isdir("projects"):
-      os.mkdir("projects")
+    projects_dir = current_path / "projects"
+    ensure_dir(projects_dir)
+    print(f"[setup] Ensured projects dir: {projects_dir}")
 
-    if not os.path.isdir("slots"):
-      os.mkdir("slots")
-      os.chdir("slots")
-      if not os.path.isdir("0"):
-        os.mkdir("0")
-      os.chdir("../")
-
-    os.chdir("projects")
+    slots_dir = current_path / "slots"
+    ensure_dir(slots_dir)
+    slot0_dir = slots_dir / "0"
+    ensure_dir(slot0_dir)
+    print(f"[setup] Ensured slot dir: {slot0_dir}")
 
     # Produce fake oifs_43r3_app file in projects directory
-    oifs_app = "oifs_43r3_app_1.00_x86_64-pc-linux-gnu"
+    oifs_app = projects_dir / "oifs_43r3_app_1.00_x86_64-pc-linux-gnu"
     with open(oifs_app, 'a') as oifs_app_file:
       oifs_app_file.write(secrets.token_hex(4000) + '\n')
-    zip_file = zipfile.ZipFile(oifs_app+".zip",'w')
-    zip_file.write(oifs_app)
-    zip_file.close()
+    zip_single_file(oifs_app)
     os.remove(oifs_app)   # remove unzipped version
-
-    # Now prepare task files in the slot directory
-    os.chdir("../slots/0")
+    print(f"[setup] Created fake app package: {oifs_app.name}.zip")
 
     # Create the init_data.xml, needed by BOINC
     init_data_string = "   <app_init_data>\n" +\
@@ -49,9 +74,9 @@ if __name__ == "__main__":
                        "     <hostid>0</hostid>\n" +\
                        "     <app_name>oifs_43r3</app_name>\n" +\
                        "     <project_preferences></project_preferences>\n" +\
-                       "     <project_dir>"+current_path+"/projects</project_dir>\n" +\
-                       "     <boinc_dir>"+current_path+"</boinc_dir>\n" +\
-                       "     <wu_name>oifs_43r3_NNNN_yyyymmddhh_1_d000_0</wu_name>\n" +\
+                       f"     <project_dir>{projects_dir}</project_dir>\n" +\
+                       f"     <boinc_dir>{current_path}</boinc_dir>\n" +\
+                       f"     <wu_name>oifs_43r3_{unique_member_id}_yyyymmddhh_1_{batch_id}_0</wu_name>\n" +\
                        "     <shm_key>0</shm_key>\n" +\
                        "     <slot>0</slot>\n" +\
                        "     <wu_cpu_time>0.000000</wu_cpu_time>\n" +\
@@ -74,9 +99,9 @@ if __name__ == "__main__":
                        "     </global_preferences>\n" +\
                        "   </app_init_data>\n"
 
-    init_data_file=open("init_data.xml","w")
-    init_data_file.write(init_data_string)
-    init_data_file.close()
+    init_data_path = slot0_dir / "init_data.xml"
+    write_file(init_data_path, init_data_string)
+    print(f"[setup] Wrote {init_data_path.name}")
 
 
     # Create the fake model namelist file, fort.4.
@@ -85,48 +110,47 @@ if __name__ == "__main__":
     # TODO: Should not have TSTEP as well as UTSTEP here, use the namelist variable always!
 
     # Explanation of variable values in fort.4:
-    # EXPTID = NNNN : Dummy experiment ID
+    # Values below are populated from the test config JSON:
+    # EXPTID = Dummy experiment ID
     # UNIQUE_MEMBER_ID = 1353 : Dummy workunit id
     # HORIZ_RESOLUTION = 159 : Horizontal resolution l159
     # VERT_RESOLUTION = 91 : Vertical resolution 91 levels
     # GRID_TYPE = l_2 : Reduced Gaussian grid type l_2
-    # UPLOAD_INTERVAL = 12 : Upload interval in model steps (12 model time steps of 1 hour i.e. 2 uploads per 24 hours)
-    # UTSTEP = 3600.0 : Model time step in seconds (1 hour)
-    # CUSTOP = 24 : Total number of model time steps to run (24 time steps = 1 days)
-    # CNMEXP = 'NNNN' : Dummy experiment ID
-    # NFRRES = 24 : Frequency of restart file output in model time steps (every 24 time steps = daily restarts)
-    # NFRPOS = 6 : Frequency of post-processed output in model time steps (every 6 time steps = every 6 hrs)
+    # UPLOAD_INTERVAL = Upload interval in model steps
+    # UTSTEP = Model time step in seconds
+    # CUSTOP = Total number of model time steps to run
+    # CNMEXP = Dummy experiment ID
+    # NFRRES = Frequency of restart file output in model time steps
+    # NFRPOS = Frequency of post-processed output in model time steps
 
     fort_file_string = "!WU_TEMPLATE_VERSION=43r3-seasonal-20250801\n"+\
-                         "!EXPTID=EXPT\n"+\
-                         "!UNIQUE_MEMBER_ID=NNNN\n"+\
+                         f"!EXPTID={experiment_id}\n"+\
+                         f"!UNIQUE_MEMBER_ID={unique_member_id}\n"+\
                          "!IC_ANCIL_FILE=ic_ancil_0\n" +\
                          "!IFSDATA_FILE=ifsdata_0\n" +\
                          "!CLIMATE_DATA_FILE=clim_data_0\n" +\
                          "!HORIZ_RESOLUTION=159\n" +\
                          "!VERT_RESOLUTION=91\n" +\
                          "!GRID_TYPE=l_2\n" +\
-                         "!UPLOAD_INTERVAL=12\n" +\
+                         f"!UPLOAD_INTERVAL={upload_interval}\n" +\
                          "\n\n"+\
                          "&NAMARG\n"+\
-                         " UTSTEP=3600.0,\n" +\
-                         " CUSTOP=24,\n" +\
-                         " CNMEXP='EXPT',\n" +\
+                         f" UTSTEP={timestep:.1f},\n" +\
+                         f" CUSTOP={forecast_length},\n" +\
+                         f" CNMEXP='{experiment_id}',\n" +\
                          "/\n"+\
                          "&NAMRES\n"+\
-                         " NFRRES=12,\n"+\
+                         f" NFRRES={nfrres},\n"+\
                          "/\n"+\
                          "&NAMCT0\n"+\
-                         " NFRPOS=6,\n" +\
+                         f" NFRPOS={nfrpos},\n" +\
                          "/\n"
 
-    fort_file=open("fort.4","w")
-    fort_file.write(fort_file_string)
-    fort_file.close()
-    zip_file = zipfile.ZipFile('./jf_namelist','w')
-    zip_file.write('fort.4')
-    zip_file.close()
-    os.remove('fort.4')   # remove unzipped version
+    fort4_path = slot0_dir / "fort.4"
+    write_file(fort4_path, fort_file_string)
+    zip_single_file(fort4_path, slot0_dir / "jf_namelist", arcname="fort.4")
+    os.remove(fort4_path)   # remove unzipped version
+    print(f"[setup] Wrote fort.4 and jf_namelist")
 
     # The OpenIFS BOINC implementation uses mapped logical filenames to
     # identify the various input files.  Here we create the files with
@@ -137,48 +161,50 @@ if __name__ == "__main__":
 
     # Create logical namelist file
     namelist_string = ">jf_namelist<\n"
-    namelist_file=open("oifs_43r3_NNNN_yyyymmddhh_1_d000_0.zip","w")
-    namelist_file.write(namelist_string)
-    namelist_file.close()
+    namelist_path = slot0_dir / f"oifs_43r3_{unique_member_id}_yyyymmddhh_1_{batch_id}_0.zip"
+    write_file(namelist_path, namelist_string)
+    print(f"[setup] Wrote logical namelist {namelist_path.name}")
 
     # Create ic_ancil file
     ic_ancil_string = ">jf_ic_ancil<\n"
-    ic_ancil_file=open("ic_ancil_0.zip","w")
-    ic_ancil_file.write(ic_ancil_string)
-    ic_ancil_file.close()
+    write_file(slot0_dir / "ic_ancil_0.zip", ic_ancil_string)
+    print("[setup] Wrote ic_ancil_0.zip")
 
     # Produce jf_ic_ancil file
-    with open('jf_ic_ancil', 'a') as jf_ic_ancil_file:
+    jf_ic_ancil_path = slot0_dir / 'jf_ic_ancil'
+    with open(jf_ic_ancil_path, 'a') as jf_ic_ancil_file:
       jf_ic_ancil_file.write(secrets.token_hex(4000) + '\n')
-    zip_file = zipfile.ZipFile('./jf_ic_ancil.zip','w')
-    zip_file.write('jf_ic_ancil')
-    zip_file.close()
-    shutil.move('./jf_ic_ancil.zip','./jf_ic_ancil')
+    jf_ic_ancil_zip = slot0_dir / 'jf_ic_ancil.zip'
+    zip_single_file(jf_ic_ancil_path, jf_ic_ancil_zip, arcname='jf_ic_ancil')
+    shutil.move(jf_ic_ancil_zip, jf_ic_ancil_path)
+    print("[setup] Created jf_ic_ancil logical file")
 
     # Create ifsdata file
     ifsdata_string = ">jf_ifsdata<\n"
-    ifsdata_file=open("ifsdata_0.zip","w")
-    ifsdata_file.write(ifsdata_string)
-    ifsdata_file.close()
+    write_file(slot0_dir / "ifsdata_0.zip", ifsdata_string)
+    print("[setup] Wrote ifsdata_0.zip")
 
     # Produce jf_ifsdata file
-    with open('jf_ifsdata', 'a') as jf_ifsdata_file:
+    jf_ifsdata_path = slot0_dir / 'jf_ifsdata'
+    with open(jf_ifsdata_path, 'a') as jf_ifsdata_file:
       jf_ifsdata_file.write(secrets.token_hex(4000) + '\n')
-    zip_file = zipfile.ZipFile('./jf_ifsdata.zip','w')
-    zip_file.write('jf_ifsdata')
-    zip_file.close()
-    shutil.move('./jf_ifsdata.zip','./jf_ifsdata')
+    jf_ifsdata_zip = slot0_dir / 'jf_ifsdata.zip'
+    zip_single_file(jf_ifsdata_path, jf_ifsdata_zip, arcname='jf_ifsdata')
+    shutil.move(jf_ifsdata_zip, jf_ifsdata_path)
+    print("[setup] Created jf_ifsdata logical file")
 
     # Create clim_data file
     clim_data_string = ">jf_clim_data<\n"
-    clim_data_file=open("clim_data_0.zip","w")
-    clim_data_file.write(clim_data_string)
-    clim_data_file.close()
+    write_file(slot0_dir / "clim_data_0.zip", clim_data_string)
+    print("[setup] Wrote clim_data_0.zip")
 
     # Produce jf_clim_data file
-    with open('jf_clim_data', 'a') as jf_clim_data_file:
+    jf_clim_data_path = slot0_dir / 'jf_clim_data'
+    with open(jf_clim_data_path, 'a') as jf_clim_data_file:
       jf_clim_data_file.write(secrets.token_hex(4000) + '\n')
-    zip_file = zipfile.ZipFile('./jf_clim_data.zip','w')
-    zip_file.write('jf_clim_data')
-    zip_file.close()
-    shutil.move('./jf_clim_data.zip','./jf_clim_data')
+    jf_clim_data_zip = slot0_dir / 'jf_clim_data.zip'
+    zip_single_file(jf_clim_data_path, jf_clim_data_zip, arcname='jf_clim_data')
+    shutil.move(jf_clim_data_zip, jf_clim_data_path)
+    print("[setup] Created jf_clim_data logical file")
+
+    print("[setup] Test fixture generation complete")

@@ -134,5 +134,8 @@ target_compile_options(test_model PRIVATE -g -Wall)
 #  Enable CTest support for the project
 enable_testing()
 
-# Include the 'tests' subdirectory to process its CMakeLists.txt
+# Include the unit tests
 add_subdirectory(utests)
+
+# Include the functional tests
+add_subdirectory(ftests)

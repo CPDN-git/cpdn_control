@@ -11,7 +11,8 @@ from pathlib import Path
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run functional test workunit.")
-    parser.add_argument("config", type=Path, help="Path to test config JSON")
+
+    parser.add_argument("--config", dest="config_flag", type=Path, help="Path to test config JSON")
     parser.add_argument(
         "--build-dir",
         type=Path,
@@ -81,7 +82,10 @@ def maybe_symlink(target: Path, link_path: Path):
 
 def main():
     args = parse_args()
-    config = load_config(args.config)
+    config_path = args.config_flag or args.config
+    if not config_path:
+        raise SystemExit("Error: config path is required (pass positional or --config)")
+    config = load_config(config_path)
 
     workdir = Path.cwd()
     projects_dir = workdir / "projects"

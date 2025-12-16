@@ -66,7 +66,7 @@ jobs:
         # CTest runs all tests registered via add_test() in the build directory. -V flag (Verbose) prints test output to the CI log.
         run: |
           cd build
-          ctest --output-on-failure -V -E functional
+          ctest --output-on-failure -V -LE functional
 
   functional_tests:
     strategy:

@@ -25,6 +25,7 @@ cmake_minimum_required(VERSION 3.16)
 project(cpdn_control VERSION 1.0.0  DESCRIPTION "CPDN BOINC task controller"  LANGUAGES C CXX)
 
 # Require C++17 standard
+# This will apply to ALL targets
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
@@ -120,6 +121,12 @@ add_cpdn_executable(${RELEASE_TARGET_NAME} ./src/cpdn_main.cpp ${RELEASE_OUTPUT_
 add_cpdn_executable(${DEBUG_TARGET_NAME} ./src/cpdn_main.cpp ${DEBUG_OUTPUT_NAME}
                     "${DEBUG_COMPILE_OPTIONS}" 
                     "${DEBUG_LINK_OPTIONS}")
+
+# Test model executable - standalone program for simulating the atmospheric model
+add_executable(test_model ./models/test/test_model.cpp)
+
+# Compile options for test_model (debug symbols and warnings)
+target_compile_options(test_model PRIVATE -g -Wall)
 
 
 #------- UNIT TESTS CONFIGURATION

@@ -31,16 +31,40 @@ struct TaskState {
     double fraction_done = 0.0;     // Fraction of model run completed (0.0-1.0)
 };
 
+
+/**
+ * @struct TaskConfig
+ * @brief Encapsulates all CPDN specific task-related configuration parameters.
+ *        Variables extracted from command line arguments.
+ */
+struct TaskConfig {
+    std::string start_date;         // Simulation start date
+    std::string unique_member_id;   // Unique member ID (umid)
+    std::string batchid;            // Batch ID
+    std::string wuid;               // Workunit ID
+    std::string exptid;             // Experiment ID for the model run
+    std::string fclen;              // Forecast length in days
+};
+
+
 /**
  * @struct BoincConfig
  * @brief Encapsulates BOINC configuration parameters for the task.
  *        Variables extracted from BOINC APP_INIT_DATA structure after boinc initialization.
+ *        See boinc code lib/app_ipc.h for more details.
  */
 struct BoincConfig {
-    std::string wu_name;           // Workunit name
-    std::string project_dir;       // Project directory path
-    std::string version;           // Application version
-    bool standalone = false;            // Standalone mode flag
+    std::string app_version;        // Application version
+    std::string app_name;           // Application name
+    std::string project_dir;        // Project directory path
+    std::string wu_name;            // Workunit name
+    std::string result_name;        // Result name
+    int         ncpus;              // Multicore apps only. CPDN only use CPU based tasks.
+    std::string boinc_dir;          // BOINC data/main directory (not currently used).
+    std::vector<std::string> app_files; // List of files in the app version (not currently used)
+
+    std::string slot_path;         // Slot directory path; APP_INIT_DATA only gives slot number.
+    bool standalone = false;       // Standalone mode flag
 };
 
 

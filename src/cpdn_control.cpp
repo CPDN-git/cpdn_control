@@ -44,7 +44,7 @@ namespace     fs = std::filesystem;
 
 
 /**
- * @brief Initialise BOINC and set the options
+ * @brief Initialise BOINC data structure and set the options
  */
 int init_boinc(BoincConfig& config) {
 
@@ -52,24 +52,42 @@ int init_boinc(BoincConfig& config) {
     boinc_init();
     boinc_parse_init_data_file();
 
-    // Get BOINC user preferences
+    // Get BOINC task and app data
+    // For more info on this structure see boinc/lib/app_ipc.h
     APP_INIT_DATA dataBOINC;
+
     boinc_get_init_data(dataBOINC);
     
-    config.wu_name = dataBOINC.wu_name;
+    config.app_version = std::to_string(dataBOINC.app_version);
+    config.app_name    = dataBOINC.app_name;
     config.project_dir = dataBOINC.project_dir;
     config.project_dir += "/";  // Add trailing slash for consistent path handling
-    config.version = std::to_string(dataBOINC.app_version);
+    config.boinc_dir   = dataBOINC.boinc_dir;
+    config.boinc_dir += "/";
+    config.wu_name     = dataBOINC.wu_name;
+    config.result_name = dataBOINC.result_name;
+    if ( dataBOINC.ncpus < 1.0 ) {
+        config.ncpus = 1; // only gpu tasks may have ncpus < 1.0 which CPDN do not use.
+    } else {
+        config.ncpus = int(dataBOINC.ncpus);
+    } 
 
     // Re-parse app version to add a dot
     // This assumes version is X.Y, X.YY or XX.YY format, will get it wrong if not.
-    auto vlen = config.version.length();
+    auto vlen = config.app_version.length();
     if ( vlen == 2 ) {
-       config.version.insert(1, ".");
+       config.app_version.insert(1, ".");
     }
     else if (vlen > 2 ) {
-       config.version.insert(vlen-2, ".");
+       config.app_version.insert(vlen-2, ".");
     }
+
+    // Check whether BOINC is running in standalone mode
+    config.standalone = boinc_is_standalone() == 1;
+
+    // Set the task related paths. 
+    // The APP_INIT_DATA structure only has the slot number.
+    config.slot_path = fs::current_path();
 
     // Set BOINC optional values
     BOINC_OPTIONS options;
@@ -90,9 +108,6 @@ int init_boinc(BoincConfig& config) {
                                             // and will respond to suspend and resume messages by suspending and resuming
     options.send_status_msgs = false;       // If set, the program will report its CPU time and fraction done to the client. 
                                             // Set in worker programs.
-
-    // Check whether BOINC is running in standalone mode
-    config.standalone = boinc_is_standalone() == 1;
     
     return boinc_init_options(&options);
 }
@@ -148,7 +163,6 @@ bool process_env_overrides(const fs::path& override_envs)
             }
         }
     }
-
     return success;
 }
 

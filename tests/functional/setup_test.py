@@ -22,6 +22,11 @@ if __name__ == "__main__":
             zf.write(src, arcname=arcname or src.name)
 
     def ensure_dir(path: Path):
+        if path.exists() or path.is_symlink():
+            if path.is_dir() and not path.is_symlink():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
         path.mkdir(exist_ok=True)
 
     if len(sys.argv) < 2:
@@ -57,13 +62,14 @@ if __name__ == "__main__":
     ensure_dir(slot0_dir)
     print(f"[setup] Ensured slot dir: {slot0_dir}")
 
-    # Produce fake oifs_43r3_app file in projects directory
-    oifs_app = projects_dir / "oifs_43r3_app_1.00_x86_64-pc-linux-gnu"
-    with open(oifs_app, 'a') as oifs_app_file:
-      oifs_app_file.write(secrets.token_hex(4000) + '\n')
-    zip_single_file(oifs_app)
-    os.remove(oifs_app)   # remove unzipped version
-    print(f"[setup] Created fake app package: {oifs_app.name}.zip")
+    # Produce fake test_app file in projects directory
+    # Fake because we put the test_model exe directly in the slot
+    test_app = projects_dir / "test_model_app_1.00_x86_64-pc-linux-gnu"
+    with open(test_app, 'a') as test_app_file:
+      test_app_file.write(secrets.token_hex(4000) + '\n')
+    zip_single_file(test_app)
+    os.remove(test_app)   # remove unzipped version
+    print(f"[setup] Created fake app package: {test_app.name}.zip")
 
     # Create the init_data.xml, needed by BOINC
     init_data_string = "   <app_init_data>\n" +\
@@ -72,7 +78,7 @@ if __name__ == "__main__":
                        "     <release>1</release>\n" +\
                        "     <app_version>100</app_version>\n" +\
                        "     <hostid>0</hostid>\n" +\
-                       "     <app_name>oifs_43r3</app_name>\n" +\
+                       "     <app_name>test_model</app_name>\n" +\
                        "     <project_preferences></project_preferences>\n" +\
                        f"     <project_dir>{projects_dir}</project_dir>\n" +\
                        f"     <boinc_dir>{current_path}</boinc_dir>\n" +\
@@ -161,7 +167,7 @@ if __name__ == "__main__":
 
     # Create logical namelist file
     namelist_string = ">jf_namelist<\n"
-    namelist_path = slot0_dir / f"oifs_43r3_{unique_member_id}_yyyymmddhh_1_{batch_id}_0.zip"
+    namelist_path = slot0_dir / f"test_model_{unique_member_id}_yyyymmddhh_1_{batch_id}_0.zip"
     write_file(namelist_path, namelist_string)
     print(f"[setup] Wrote logical namelist {namelist_path.name}")
 

@@ -8,7 +8,13 @@
 #  'ctest -LE functional' will exclude these tests from any other tests.
 #
 
-set(BOINC_LIB_DIR "${CMAKE_SOURCE_DIR}/../boinc-8.0.2-x86_64/lib")
+if (NOT DEFINED BOINC_LIB_DIR)
+    if (DEFINED BOINC_DIR)
+        set(BOINC_LIB_DIR "${BOINC_DIR}/lib")
+    else()
+        message(FATAL_ERROR "BOINC_LIB_DIR is not set. Configure from the repo root so BOINC_DIR/BOINC_LIB_DIR are available.")
+    endif()
+endif()
 
 function(add_functional_test TEST_NAME FIXTURE_REL)
     # Working directory per test
@@ -55,6 +61,3 @@ function(add_functional_test TEST_NAME FIXTURE_REL)
 endfunction()
 
 add_functional_test(FTest1 fixtures/ftest1.json)
-
-# Placeholder teardown (kept commented to allow inspection of artifacts)
-# add_test(NAME FTest1_Teardown ... )

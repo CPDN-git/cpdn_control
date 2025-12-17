@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -37,7 +38,7 @@ def parse_args():
     )
     parser.add_argument(
         "--app-name",
-        default="oifs_43r3",
+        default="test_model",
         help="Application name passed to the controller",
     )
     parser.add_argument(
@@ -62,8 +63,8 @@ def copy_binary(src: Path, dst: Path, label: str):
 
 
 def ensure_forecast_zip(slot0_dir: Path, unique_member_id: str, batch_id: str, forecast_length: int):
-    base_zip = slot0_dir / f"oifs_43r3_{unique_member_id}_yyyymmddhh_1_{batch_id}_0.zip"
-    target_zip = slot0_dir / f"oifs_43r3_{unique_member_id}_yyyymmddhh_{forecast_length}_{batch_id}_0.zip"
+    base_zip = slot0_dir / f"test_model_{unique_member_id}_yyyymmddhh_1_{batch_id}_0.zip"
+    target_zip = slot0_dir / f"test_model_{unique_member_id}_yyyymmddhh_{forecast_length}_{batch_id}_0.zip"
     if target_zip.exists():
         print(f"[run] Forecast zip already present: {target_zip.name}")
         return
@@ -76,15 +77,32 @@ def ensure_forecast_zip(slot0_dir: Path, unique_member_id: str, batch_id: str, f
 def maybe_symlink(target: Path, link_path: Path):
     if link_path.exists() or link_path.is_symlink():
         link_path.unlink()
-    link_path.symlink_to(target.name)
-    print(f"[run] Linked {link_path.name} -> {target.name}")
+    if link_path.name != target.name:
+        link_path.symlink_to(target.name)
+        print(f"[run] Linked {link_path.name} -> {target.name}")
+
+def dump_slot_stderr(slot0_dir: Path) -> None:
+    stderr_path = slot0_dir / "stderr.txt"
+    print(f"[run] --- Begin {stderr_path} ---")
+    if not stderr_path.exists():
+        print("[run] (stderr.txt not found)")
+        print(f"[run] --- End {stderr_path} ---")
+        return
+    try:
+        content = stderr_path.read_text(encoding="utf-8", errors="replace")
+        sys.stdout.write(content)
+        if content and not content.endswith("\n"):
+            sys.stdout.write("\n")
+    except OSError as exc:
+        print(f"[run] Failed to read {stderr_path}: {exc}", file=sys.stderr)
+    print(f"[run] --- End {stderr_path} ---")
 
 
 def main():
     args = parse_args()
     config_path = args.config_flag or args.config
     if not config_path:
-        raise SystemExit("Error: config path is required (pass positional or --config)")
+        raise SystemExit("Error: config path is required (pass --config)")
     config = load_config(config_path)
 
     workdir = Path.cwd()
@@ -100,13 +118,14 @@ def main():
     model_dst = slot0_dir / args.model_binary
     copy_binary(model_src, model_dst, "model")
 
-    maybe_symlink(model_dst, slot0_dir / "oifs_43r3_test.exe")
+    #maybe_symlink(model_dst, slot0_dir / "test_model")
 
     forecast_length = int(config["forecast_length"])
     experiment_id = config["experiment_id"]
     unique_member_id = config["unique_member_id"]
     batch_id = config["batch_id"]
 
+    # create a copy for the correct forecast length.
     ensure_forecast_zip(slot0_dir, unique_member_id, batch_id, forecast_length)
 
     env = os.environ.copy()
@@ -127,7 +146,18 @@ def main():
         "0",
     ]
     print(f"[run] Launching controller: {' '.join(controller_cmd)}")
-    subprocess.run(controller_cmd, cwd=slot0_dir, check=True, env=env)
+    try:
+        result = subprocess.run(controller_cmd, cwd=slot0_dir, env=env)
+    except OSError as exc:
+        dump_slot_stderr(slot0_dir)
+        print(f"[run] Failed to launch controller: {exc}", file=sys.stderr)
+        raise SystemExit(127)
+    else:
+        dump_slot_stderr(slot0_dir)
+
+    if result.returncode != 0:
+        print(f"[run] Controller failed with exit code {result.returncode}", file=sys.stderr)
+        raise SystemExit(result.returncode)
     print("[run] Controller run completed")
 
 

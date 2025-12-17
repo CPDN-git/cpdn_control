@@ -138,7 +138,7 @@ In the top level directory:
 2. cd build
 3. cmake ..
 4. cmake --build . --verbose (omit --verbose if not interested in compile commands)
-5. ctest -V    (run unit tests, -V is verbose, optional)
+5. ctest -V    (see below for more details)
 
 This creates 3 executables in the build directory:
 ```
@@ -187,3 +187,76 @@ The command line parameters are:
 9 : app version id (only used in standalone mode)
 ```
 
+## Testing
+
+The project uses **CTest** (via CMake) for both unit tests and functional tests. After configuring and building, you can run tests from inside the `build/` directory, or from the repo root by using `ctest --test-dir build`.
+
+### Unit testing
+
+Unit tests are built as a single executable (`unit_tests`) and registered with CTest as multiple tests.
+The unit tests test individual code functions in the code to ensure the correct and expected behaviour
+is maintained (regression testing).
+
+Build and run all unit tests:
+```
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build
+```
+
+Run all tests with verbose output (useful for debugging failures):
+```
+ctest --test-dir build -V
+```
+
+Show output only when a test fails (often a good default in CI):
+```
+ctest --test-dir build --output-on-failure
+```
+
+Run a single CTest test by name (example):
+```
+ctest --test-dir build -R RCFTest -V
+```
+
+Run **unit tests only** (exclude functional tests, which are labeled `functional`):
+```
+ctest --test-dir build -LE functional
+```
+
+Alternatively, run the unit test executable directly (useful when iterating on one case):
+```
+build/tests/unit/unit_tests "Read RCF File"
+```
+
+### Functional testing
+
+Functional tests exercise the application end-to-end using the `test_model` program, which mimics the behaviour of the OpenIFS model from the controller’s point of view.
+
+Functional tests live under `tests/functional/` and are driven by JSON fixture files in `tests/functional/fixtures/`. Each logical functional test is split into three CTest tests:
+
+- `<TestName>_Setup` (create a BOINC-like work directory layout and inputs)
+- `<TestName>` (run the controller against the prepared work directory)
+- `<TestName>_Validate` (check outputs)
+
+Run **only** the functional test suite:
+```
+ctest --test-dir build -L functional -V
+```
+
+Run everything except functional tests:
+```
+ctest --test-dir build -LE functional
+```
+
+Run just one functional scenario (example, all three steps):
+```
+ctest --test-dir build -R '^FTest1(_Setup|_Validate)?$' -V
+```
+
+Run a single phase of a functional test (examples):
+```
+ctest --test-dir build -R '^FTest1_Setup$' -V
+ctest --test-dir build -R '^FTest1$' -V
+ctest --test-dir build -R '^FTest1_Validate$' -V
+```

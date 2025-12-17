@@ -71,7 +71,7 @@ set(LOCAL_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/api
 )
 
-#--------------------------- Model sources -----------------------------------
+#--------------------------- Model control sources -----------------------------------
 
 add_subdirectory(models)
 

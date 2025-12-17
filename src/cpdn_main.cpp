@@ -24,7 +24,11 @@
 #include "cpdn_zip.h"
 #include "cpdn_control.h"
 #include "lib/utils.h"
+
 #include "api/trickle_handler.h"
+#include "api/model_control.h"
+
+#include "models/test/test_control.h"
 
 // these includes will disappear when the code moves to Model derived classes
 #include "models/openifs/oifs_utils.h" // for oifs_get_filename_part, oifs_*() functions.
@@ -47,21 +51,72 @@ constexpr std::string_view  MODEL_CONFIG_FILE = "model_config.xml";
 // --------------- Functions ----------------
 
 /**
+ * @brief Factory function to create ModelControl instances based on model name.
+ *        Note that we specify the *model* name here and not the app name.
+ * @param modelName The name of the model.
+ * @return A unique pointer to the created ModelControl instance.
+*/
+std::unique_ptr<ModelControl> create_model_control(const std::string& model_name) {
+    // Example model mappings:
+    //if (model_name == "oifs_43r3") return std::make_unique<OpenIFSControl>();
+    //if (model_name == "hadam4")    return std::make_unique<Hadam4Control>();
+    //if (model_ame == "hadsm4")    return std::make_unique<Wah2Control>();
+
+    if (model_name == "test_model")  return std::make_unique<TestControl>();
+
+    throw std::runtime_error("Unknown model: " + model_name);
+}
+
+
+/**
+ * @brief Parse and validate the --nthreads argument from app_config.xml.
+ * 
+ * @param app_config_nthreads The string value of the nthreads argument.
+ * @param nthreads Altered number of threads as a string.
+ * @returns True if the nthreads argument was valid and changed, false otherwise.
+ */
+bool get_app_config_nthreads(const std::string& app_config_nthreads, std::string& nthreads) {
+
+   if ( app_config_nthreads.empty() ) {
+      std::cerr << "Warning. --nthreads argument present but has no value! Ignoring.\n";
+   }
+   else {
+      try {
+         int max_threads = 8;      // GC. This is the best maximum as parallel efficiency markedly drops after this many threads, even at T319.
+         int min_threads = 1;      // minimum number of threads.
+         int ithreads = -1;
+
+         ithreads = std::stoi(app_config_nthreads);
+         if ( ithreads > max_threads ) {
+            std::cerr << "Warning. --nthreads value is too high. Setting to max number of threads : " << max_threads << '\n';
+            nthreads = std::to_string(max_threads);
+         }
+         else if ( ithreads < min_threads ) {
+            std::cerr << "Warning. --nthreads is too low for this configuration. Minimum #threads is 2. Resetting.\n";
+            nthreads = std::to_string(min_threads);
+         }
+         return true;
+      }
+      catch (...) {
+         std::cerr << "Warning. --nthreads argument must be a valid integer! Ignoring.\n";
+      }
+   }
+   return false;
+}
+
+
+/**
  * @brief Construct the result base name for result files.
  *        When running under BOINC, this comes from the resolved part
  *        of the first upload file. When running standalone, we make
  *        up a reasonable name based on the workunit parameters.
  * @return Result base name string (without path or .zip)
  */
-std::string get_result_base_name(BoincConfig& config,
-                                 const std::string& app_name,
-                                 const std::string& start_date,
-                                 const std::string& batchid,
-                                 const std::string& wuid)
+std::string get_result_base_name(const BoincConfig& bconfig, const TaskConfig& tconfig)
 {
     std::string base_name;
 
-    if (!config.standalone) {
+    if (!bconfig.standalone) {
        std::string resolved_name;
        int retval = boinc_resolve_filename_s("upload_file_0.zip", resolved_name);
        if (retval) {
@@ -79,13 +134,15 @@ std::string get_result_base_name(BoincConfig& config,
        }
     }
     else {
-      base_name = app_name + "_" + start_date + "_" + batchid + "_" + wuid;
+      base_name = bconfig.app_name + "_" + tconfig.start_date + "_" + tconfig.batchid + "_" + tconfig.wuid;
     }
     return base_name;
 }
 
 
 
+
+//----------------------------------------------------------------------------
 //----------------------------- MAIN PROGRAM ---------------------------------
 
 
@@ -94,27 +151,26 @@ std::string get_result_base_name(BoincConfig& config,
  */
 int main(int argc, char** argv)
 {
-    BoincConfig config;
+    BoincConfig bconfig;      // BOINC settings from init_data.xml.
+    TaskConfig  tconfig;      // CPDN task settings from command line.
     int retval=0;
+
+    // ------------- Initialisation of task -----------------
 
     // Initialise BOINC to get the project directory, workunit name and app version
     // Note this redirects stderr output to stderr.txt in slot dir.
-    retval = init_boinc(config);
+    retval = init_boinc(bconfig);
     if (retval) {
        std::cerr << "..BOINC initialisation failed" << "\n";
        return retval;
     }
-
-    // Set the task related paths
-    // GC. TODO. make these fs::path variables.
-    std::string slot_path = fs::current_path();
-    if (slot_path.empty()) {
+   if (bconfig.slot_path.empty()) {
       std::cerr << "..Error. Can't determine slot path: current_path() returned empty" << std::endl;
       return 1;
     }
-    std::cerr << "Working slot directory is: "<< slot_path << '\n';
-    
-    std::cerr << "Project directory is: " << config.project_dir << '\n';
+    std::cerr << "Working slot directory is: "<< bconfig.slot_path << '\n';
+    std::cerr << "Project directory is: " << bconfig.project_dir << '\n';
+    std::cerr << "Running in standalone mode" << '\n';
 
     // Say who we are.
     banner("CPDN task controller", CODE_VERSION);    //  will come from XML input later.
@@ -122,14 +178,20 @@ int main(int argc, char** argv)
     // TODO. Read in the model config.xml.  The XML file contains all the information
     // about the model. It's required to initialize the correct model class later on.
 
-    // Check for existence of config.xml in current directory (task) and fail if not found.
+    // Check for existence of model_config.xml in current directory (task) and fail if not found.
     if( !path_exists(MODEL_CONFIG_FILE) ) {
         std::cerr << "..The model config.xml file does not exist in the current directory: " << MODEL_CONFIG_FILE << std::endl;
         //GC. Testing only; return 1;        // should terminate, the model won't run.
     }
 
+    // Create model control instance.
+    auto model = create_model_control(bconfig.app_name);
+
     // Argument processing; at least 9 args always.
     // TODO: THIS NEEDS TO BE HANDLED BY THE SPECIFIC MODEL CLASS
+    //
+    // TODO2: app_name & nthreads should not be command line args, they come from BOINC init_data.xml.
+
     if (argc < 9) {
         std::cerr << "CPDN Controller error: Not enough command line arguments provided.\n"
                   << "Usage: " << argv[0] << " <start_date> <exptid> <unique_member_id> <batchid> <wuid> <fclen> <app_name> <nthreads> [app_version]\n";
@@ -147,74 +209,57 @@ int main(int argc, char** argv)
 
     // Read the exptid, umid, batchid, wuid, fclen, app_name, number of threads from the command line
     // argv[9] if present, is assigned below
-    std::string start_date = argv[1]; // simulation start date
-    std::string exptid = argv[2];     // OpenIFS experiment id
-    std::string unique_member_id = argv[3];  // umid
-    std::string batchid = argv[4];    // batch id
-    std::string wuid = argv[5];       // workunit id
-    std::string fclen = argv[6];      // number of simulation days
-    std::string app_name = argv[7];   // CPDN app name
+    tconfig.start_date = argv[1]; // simulation start date
+    tconfig.exptid = argv[2];     // OpenIFS experiment id
+    tconfig.unique_member_id = argv[3];  // umid
+    tconfig.batchid = argv[4];    // batch id
+    tconfig.wuid = argv[5];       // workunit id
+    tconfig.fclen = argv[6];      // number of simulation days
+    // TODO. GC. Remove the app_name from the command line as it's in the init_data.xml.
+    // if arg[7] is not the same as bconfig.app_name print error and return 1.
+      if ( std::string(argv[7]) != bconfig.app_name ) {
+         std::cerr << "..Error. app_name from command line does not match BOINC app_name\n";
+         return 1;
+      }
+
+    // TODO. GC. Remove nthreads from the command line as we can get it from bconfig.ncpus.
     std::string nthreads = argv[8];   // number of OPENMP threads.
-    std::string app_config_nthreads;  // blank initially.
+    if ( nthreads.empty() ) {
+       nthreads = "1";   // default to 1 thread if not specified.
+    }
+    if ( nthreads != std::to_string(bconfig.ncpus) ) {
+       std::cerr << "Warning. Number of threads from command line (" << nthreads
+                 << ") does not match BOINC ncpus (" << bconfig.ncpus << "). Using command line value.\n";
+    }
 
-    // Check for optional '--nthreads <value>' at end of arg list, optionally set by app_config.xml on user's machine.
+    // Check for optional '--nthreads <value>' at end of arg list optionally set by app_config.xml on user's machine.
     if ( std::string(argv[argc - 2]) == "--nthreads" ) {
-      app_config_nthreads = argv[argc-1];
-
-      if ( app_config_nthreads.empty() ) {
-         std::cerr << "Warning. --nthreads argument present but has no value! Ignoring.\n";
-      }
-      else {
-         try {
-            int max_nthreads = 8;      // GC. This is the best maximum as T319 parallel efficiency markedly drops after this many threads.
-            int min_nthreads = 2;
-            int i_nthreads = -1;
-
-            i_nthreads = std::stoi(app_config_nthreads);
-            if ( i_nthreads > max_nthreads ) {
-               std::cerr << "Warning. --nthreads value is too high. Setting to max number of threads : " << max_nthreads << '\n';
-               i_nthreads = max_nthreads;
-            }
-            else if ( i_nthreads < min_nthreads ) {
-               std::cerr << "Warning. --nthreads is too low for this configuration. Minimum #threads is 2. Resetting.\n";
-               i_nthreads = min_nthreads;
-            }
-            else {
-               //*****************************************************
-               // Uncomment this line to enable the --nthreads argument
-               //nthreads = i_nthreads
-            }
-         }
-         catch (...) {
-            std::cerr << "Warning. --nthreads argument must be a valid integer! Ignoring.\n";
-         }
-      }
+      std::string app_config_nthreads = argv[argc-1];
+      get_app_config_nthreads(app_config_nthreads, nthreads);
     }
 
     const std::string namelist="fort.4";    // namelist file. will come from XML input later.
-    double num_days = atof(fclen.c_str());   // number of simulation days; fclen should come from fort.4, not the command line.
+    double num_days = atof(tconfig.fclen.c_str());   // number of simulation days; fclen should come from fort.4, not the command line.
 
-    if (config.standalone) {
-      std::cerr << "Running in standalone mode" << '\n';
-
+    if (bconfig.standalone) {
       // Reset the project path assuming usual boinc dir structure as we can't get it from BOINC.
-      config.project_dir = slot_path + std::string("/../../projects/");
+      bconfig.project_dir = bconfig.slot_path + std::string("/../../projects/");
 
       // In standalone get the app version from the command line
-      config.version = argv[9];
+      bconfig.app_version = argv[9];
     }
    
     std::cerr << "\nCPDN task controller version: " << CODE_VERSION << '\n' // CODE_VERSION is a macro set at compile time
-              << "wu_name: " << config.wu_name << '\n'
-              << "project_dir: " << config.project_dir << '\n'
-              << "app name: " << app_name << '\n'
-              << "version: " << config.version << '\n';
+              << "wu_name: " << bconfig.wu_name << '\n'
+              << "project_dir: " << bconfig.project_dir << '\n'
+              << "app name: " << bconfig.app_name << '\n'
+              << "version: " << bconfig.app_version << '\n';
 
     boinc_begin_critical_section();
 
     // Create temp upload folder for moving the results to and uploading the results from.
     // BOINC measures the disk usage on the slots directory so we must move all results out of this folder
-    std::string upload_dir = config.project_dir + app_name + "_" + wuid;
+    std::string upload_dir = bconfig.project_dir + bconfig.app_name + "_" + tconfig.wuid;
     std::cerr << "Location of temp folder: " << upload_dir << '\n';
     if ( !path_exists(upload_dir) ) {
       if (mkdir(upload_dir.c_str(),S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) != 0) {
@@ -223,7 +268,7 @@ int main(int argc, char** argv)
     }
 
     //  Unpack application into slot
-    retval = move_and_unzip_app_file(app_name, config.version, config.project_dir, slot_path);
+    retval = move_and_unzip_app_file(bconfig.app_name, bconfig.app_version, bconfig.project_dir, bconfig.slot_path);
     if (retval) {
       std::cerr << "..move_and_unzip_app_file failed" << "\n";
       return retval;
@@ -233,27 +278,26 @@ int main(int argc, char** argv)
     // GC. Note, this is not the 'model fort.4' namelist file being referred to here. Needs renaming to avoid confusion.
     // This should really be part of a general piece of code to process the model ancil files. Needs refactoring later.
     
-   fs::path namelist_zip_path = slot_path;
-   namelist_zip_path /= std::string(app_name) + "_" +
-                       unique_member_id + "_" +
-                       start_date + "_" +
+   fs::path namelist_zip_path = bconfig.slot_path;
+   namelist_zip_path /= std::string(bconfig.app_name) + "_" +
+                       tconfig.unique_member_id + "_" +
+                       tconfig.start_date + "_" +
                        std::to_string((int)num_days) + "_" +
-                       batchid + "_" +
-                       wuid + ".zip";
+                       tconfig.batchid + "_" +
+                       tconfig.wuid + ".zip";
    std::string namelist_zip = namelist_zip_path.string();      // nb this is a const string.
 
 	// Copy the namelist_zip to the slot directory and unzip
-    if ( copy_and_unzip(namelist_zip, namelist_zip, slot_path, "namelist_zip") ) {
+    if ( copy_and_unzip(namelist_zip, namelist_zip, bconfig.slot_path, "namelist_zip") ) {
        std::cerr << "..Copying and unzipping the namelist_zip failed: " << namelist_zip << std::endl;
        return 1;        // should terminate, the model won't run.
 	}
-
 
     // Parse the fort.4 namelist for the filenames and variables
     std::string ifsdata_file;
     std::string ic_ancil_file;
     std::string climate_data_file;
-    std::string namelist_file = slot_path + "/" + namelist;
+    std::string namelist_file = bconfig.slot_path + "/" + namelist;
     std::string namelist_line;
     std::string horiz_resolution;
     std::string vert_resolution;
@@ -341,24 +385,12 @@ int main(int argc, char** argv)
 
     // Check for any empty variables in case parsing failed.
     // These might cause the task to fail later, or they might be deliberate for testing.
-    if ( ifsdata_file.empty() ) {
-      std::cerr << ".. Warning. Unable to parse ifs_data_file from namelist.\n";
-    }
-    if ( ic_ancil_file.empty() ) {
-      std::cerr << ".. Warning. Unable to parse ic_ancil_file from namelist.\n";
-    }
-    if ( climate_data_file.empty() ) {
-      std::cerr << ".. Warning. Unable to parse climate_data_file from namelist.\n";
-    }
-    if ( horiz_resolution.empty() ) {
-      std::cerr << ".. Warning. Unable to parse horiz_resolution from namelist.\n";
-    }
-    if ( vert_resolution.empty() ) {
-      std::cerr << ".. Warning. Unable to parse vert_resolution from namelist.\n";
-    }
-    if ( grid_type.empty() ) {
-      std::cerr << ".. Warning. Unable to parse grid_type from namelist.\n";
-    }
+    if ( ifsdata_file.empty() )      std::cerr << ".. Warning. Unable to parse ifs_data_file from namelist.\n";
+    if ( ic_ancil_file.empty() )     std::cerr << ".. Warning. Unable to parse ic_ancil_file from namelist.\n";
+    if ( climate_data_file.empty() ) std::cerr << ".. Warning. Unable to parse climate_data_file from namelist.\n";
+    if ( horiz_resolution.empty() )  std::cerr << ".. Warning. Unable to parse horiz_resolution from namelist.\n";
+    if ( vert_resolution.empty() )   std::cerr << ".. Warning. Unable to parse vert_resolution from namelist.\n";
+    if ( grid_type.empty() )         std::cerr << ".. Warning. Unable to parse grid_type from namelist.\n";
 
     std::cerr << "Values read from model namelist are: \n"
                << " ifsdata_file: " << ifsdata_file << '\n'
@@ -395,18 +427,18 @@ int main(int argc, char** argv)
     //    Unpack the task's input files into the slot directory
 
     // Process the ic_ancil_file:
-    std::string ic_ancil_zip = slot_path + "/" + ic_ancil_file + ".zip";
+    std::string ic_ancil_zip = bconfig.slot_path + "/" + ic_ancil_file + ".zip";
 
 	// Copy the ic_ancil_zip to the slot directory and unzip
-    if ( copy_and_unzip(ic_ancil_zip, ic_ancil_zip, slot_path, "ic_ancil_zip") ) {
+    if ( copy_and_unzip(ic_ancil_zip, ic_ancil_zip, bconfig.slot_path, "ic_ancil_zip") ) {
        std::cerr << "..Copying and unzipping the ic_ancil_zip failed: " << ic_ancil_zip << std::endl;
        return 1;        // should terminate, the model won't run.
 	}
 
     // Process the ifsdata_file:
     // Make the ifsdata directory and set the required paths
-    std::string ifsdata_folder = slot_path + "/ifsdata";
-    std::string ifsdata_zip    = slot_path + "/" + ifsdata_file + ".zip";
+    std::string ifsdata_folder = bconfig.slot_path + "/ifsdata";
+    std::string ifsdata_zip    = bconfig.slot_path + "/" + ifsdata_file + ".zip";
     std::string ifsdata_destination = ifsdata_folder + "/" + ifsdata_file + ".zip";
     
     // Check if ifsdata folder does not already exists or is empty
@@ -427,8 +459,8 @@ int main(int argc, char** argv)
 
     // Process the climate_data_file:
     // Make the climate data directory and set the required paths
-    std::string climate_data_path = slot_path + "/" + horiz_resolution + grid_type;
-    std::string climate_data_zip = slot_path + "/" + climate_data_file + ".zip";
+    std::string climate_data_path = bconfig.slot_path + "/" + horiz_resolution + grid_type;
+    std::string climate_data_zip = bconfig.slot_path + "/" + climate_data_file + ".zip";
     std::string climate_data_destination = climate_data_path + "/" + climate_data_file + ".zip";
     
     // Check if climate_data folder does not already exists or is empty
@@ -448,8 +480,8 @@ int main(int argc, char** argv)
     //-------------------------------------------------------------------------------------------------------
 
     // Define the name and location of the progress file and the rcf file
-    std::string progress_file = slot_path + "/progress_file";
-    std::string rcf_file = slot_path + "/rcf";
+    std::string progress_file = bconfig.slot_path + "/progress_file";
+    std::string rcf_file = bconfig.slot_path + "/rcf";
 
     TaskState task;  // Initialize task state with default values
 
@@ -551,21 +583,21 @@ int main(int argc, char** argv)
 
     // Get result_base_name to construct upload file names for both standalone and under BOINC.
 
-    std::string result_base_name = get_result_base_name(config, app_name, start_date, batchid, wuid);
+    std::string result_base_name = get_result_base_name(bconfig, tconfig);
     std::cerr << "result_base_name: " << result_base_name << '\n';
 
     // Create the trickle handler (only trickle if not in standalone mode)
-    TrickleHandler trickler(config.wu_name, result_base_name, slot_path);
+    TrickleHandler trickler(bconfig.wu_name, result_base_name, bconfig.slot_path);
 
     // Determine which OpenIFS executable to run.
     // GC. This should be an input parameter on the command line.
 
-    fs::path single_proc_exe = slot_path;
+    fs::path single_proc_exe = bconfig.slot_path;
              single_proc_exe /= "oifs_43r3_model.exe";
-    fs::path multi_proc_exe  = slot_path;
+    fs::path multi_proc_exe  = bconfig.slot_path;
              multi_proc_exe /= "oifs_43r3_omp_model.exe";
-    fs::path test_proc_exe   = slot_path;
-             test_proc_exe /= "oifs_43r3_test.exe";
+    fs::path test_proc_exe   = bconfig.slot_path;
+             test_proc_exe /= "test_model";
     std::string exe_cmd{};
 
     if ( path_exists(single_proc_exe.string()) ) {
@@ -592,7 +624,7 @@ int main(int argc, char** argv)
 
     // Start the OpenIFS job
     std::cerr << "Launching OpenIFS executable: " << exe_cmd << std::endl;
-    long model_process = launch_process(config.project_dir, slot_path, exe_cmd, nthreads, exptid, app_name);
+    long model_process = launch_process(bconfig.project_dir, bconfig.slot_path, exe_cmd, nthreads, tconfig.exptid, bconfig.app_name);
     if (model_process > 0) task.process_status = 0;     //GC TODO. Need to handle when model_process =-1, i.e. launch failed (see code in launch_process_oifs)
 
 
@@ -612,7 +644,7 @@ int main(int argc, char** argv)
     // Periodically check the process status and the BOINC client status
     std::string stat_lastline;
     std::string second_part;
-    std::string ifs_stat = slot_path + "/ifs.stat";     // GC. TODO: should be std::filesystem path.
+    std::string ifs_stat = bconfig.slot_path + "/ifs.stat";     // GC. TODO: should be std::filesystem path.
 
     std::vector<fs::path> zfl;
 
@@ -650,14 +682,14 @@ int main(int argc, char** argv)
 
           if (std::stoi(iter) != std::stoi(task.last_iter)) {
              // Construct file name of the ICM result file
-             second_part = oifs_get_filename_part(task.last_iter, exptid);
+             second_part = oifs_get_filename_part(task.last_iter, tconfig.exptid);
 
              // Move the ICMGG, ICMSH & ICMUA result files to the task folder in the project directory
              // GC. Why do this every timestep? This should be done at same frequency as NFRPOS.
              std::vector<std::string> icm = {"ICMGG", "ICMSH", "ICMUA"};
              for (const auto& part : icm) {
                std::string result = part + second_part;
-               retval = move_result_file(slot_path, upload_dir, result);
+               retval = move_result_file(bconfig.slot_path, upload_dir, result);
                if (retval) {
                   std::cerr << "..Copying " << part << " result file to the temp folder in the projects directory failed" << "\n";
                   return retval;
@@ -689,7 +721,7 @@ int main(int argc, char** argv)
                    //std::cerr << "i: " << (std::to_string(i)) << '\n';
 
                    // Construct file name of the ICM result file
-                   second_part = oifs_get_filename_part(std::to_string(i), exptid);
+                   second_part = oifs_get_filename_part(std::to_string(i), tconfig.exptid);
 
                    // Add ICM result files to zip to be uploaded
                    std::vector<std::string> icm = {"ICMGG", "ICMSH", "ICMUA"};
@@ -703,7 +735,7 @@ int main(int argc, char** argv)
                    }
                 }
 
-                std::string upload_file = config.project_dir + result_base_name + "_" + std::to_string(task.upload_file_number) + ".zip";
+                std::string upload_file = bconfig.project_dir + result_base_name + "_" + std::to_string(task.upload_file_number) + ".zip";
                 std::cerr << "Compressing upload file: " << upload_file << '\n';
 
                 // Create the zipped upload file from the list of files added to zfl
@@ -711,7 +743,7 @@ int main(int argc, char** argv)
                   auto zret = zip_and_delete(upload_file, zfl);
 
                   // If running under a BOINC client
-                  if (!config.standalone && zret == 0) {
+                  if (!bconfig.standalone && zret == 0) {
 
                       // Upload the file. In BOINC the upload file is the logical name, not the physical name
                       std::string upload_file_name = "upload_file_" + std::to_string(task.upload_file_number) + ".zip";
@@ -761,7 +793,7 @@ int main(int argc, char** argv)
       // Calculate the fraction done
       task.fraction_done = model_frac_done( std::stof(iter), total_nsteps, std::stoi(nthreads) );
 
-      if (!config.standalone) {
+      if (!bconfig.standalone) {
          // If the current iteration is at a restart iteration
          double restart_cpu_time = 0;
          if ( !(std::stoi(iter)%restart_interval)) {
@@ -818,13 +850,13 @@ int main(int argc, char** argv)
     task.model_completed = 1;
 
     // Handle the last ICM files
-    second_part = oifs_get_filename_part(task.last_iter, exptid);
+    second_part = oifs_get_filename_part(task.last_iter, tconfig.exptid);
 
     // Move the ICMGG, ICMSH and ICMUA model output files to the task folder in the project directory
     std::vector<std::string> icm = {"ICMGG", "ICMSH", "ICMUA"};
     for (const auto& part : icm) {
        std::string result = part + second_part;
-       retval = move_result_file(slot_path, upload_dir, result);
+       retval = move_result_file(bconfig.slot_path, upload_dir, result);
        if (retval) {
           std::cerr << "..Copying " << part << " result file to the temp folder in the projects directory failed" << "\n";
           return retval;
@@ -836,9 +868,9 @@ int main(int argc, char** argv)
     //-----------------------------Create the final results zip file-----------------------------------------
 
     zfl.clear();
-    std::string node_file = slot_path + "/NODE.001_01";
+    std::string node_file = bconfig.slot_path + "/NODE.001_01";
     zfl.push_back(node_file);
-    std::string ifsstat_file = slot_path + "/ifs.stat";
+    std::string ifsstat_file = bconfig.slot_path + "/ifs.stat";
     zfl.push_back(ifsstat_file);
     std::cerr << "Adding to the zip: " << node_file << '\n';
     std::cerr << "Adding to the zip: " << ifsstat_file << '\n';
@@ -864,13 +896,13 @@ int main(int argc, char** argv)
       closedir(dirp);
     }
 
-   std::string upload_file = config.project_dir + result_base_name + "_" + std::to_string(task.upload_file_number) + ".zip";
+   std::string upload_file = bconfig.project_dir + result_base_name + "_" + std::to_string(task.upload_file_number) + ".zip";
    std::cerr << "Compressing final upload file: " << upload_file << '\n';
 
    if (zfl.size() > 0) {
       auto zret = zip_and_delete(upload_file, zfl);
 
-      if (!config.standalone && zret==0) {
+      if (!bconfig.standalone && zret==0) {
 
           std::string upload_file_name = "upload_file_" + std::to_string(task.upload_file_number) + ".zip";
           std::cerr << "Uploading the final file: " << upload_file_name << '\n';

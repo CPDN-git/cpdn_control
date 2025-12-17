@@ -76,6 +76,4 @@ private:
     fs::path parameter_input_file;  // Usually this will be a fortran namelist file. e.g. "fort.4" for OpenIFS.
                                     // It is NOT intended for input data.
 
-    // environment variables are stored in a map in derived classes as needed.
-
 };

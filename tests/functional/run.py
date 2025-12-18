@@ -36,11 +36,6 @@ def parse_args():
         default=None,
         help="Path to BOINC lib directory to prepend to LD_LIBRARY_PATH",
     )
-    parser.add_argument(
-        "--app-version",
-        default="1.00",
-        help="Application version passed to the controller",
-    )
     return parser.parse_args()
 
 
@@ -135,9 +130,6 @@ def main():
         batch_id,
         "0",
         str(forecast_length),
-        "1",
-        args.app_version,
-        "0",
     ]
     print(f"[run] Launching controller: {' '.join(controller_cmd)}")
     try:

@@ -23,6 +23,13 @@
  */
 bool oifs_setenvs(const std::string& slot_path, const std::string& nthreads) {
 
+    // check nthreads is valid integer
+    std::string nthreads_copy = nthreads;  // check_stoi modifies the string
+    if (!check_stoi(nthreads_copy)) {
+        std::cerr << "..oifs_setenvs: Invalid value of 'nthreads': " << nthreads << '\n';
+        return false;
+    }
+
     // Ordered list of environment variables to set.
     // vector of pairs is more efficient than map for single use & small number of items.
     // Use emplace_back to avoid unnecessary copies, rather than push_back.

@@ -52,18 +52,19 @@ constexpr std::string_view  MODEL_CONFIG_FILE = "model_config.xml";
 // --------------- Functions ----------------
 
 /**
- * @brief Factory function to create ModelControl instances based on model name.
- *        Note that we specify the *model* name here and not the app name.
+ * @brief Factory function to create ModelControl instance based on model name.
+ *        Note that we specify the *model* name here and not the app name thought they may be the same.
  * @param modelName The name of the model.
  * @return A unique pointer to the created ModelControl instance.
 */
 std::unique_ptr<ModelControl> create_model_control(const std::string& model_name) {
+
     // Example model mappings:
-    //if (model_name == "oifs_43r3") return std::make_unique<OpenIFSControl>();
-    //if (model_name == "hadam4")    return std::make_unique<Hadam4Control>();
-    //if (model_ame == "hadsm4")    return std::make_unique<Wah2Control>();
+    //if (model_name == "hadam4")   return std::make_unique<Hadam4Control>();
+    //if (model_ame == "hadsm4")    return std::make_unique<Hadsm4Control>();
 
     if (model_name == "test_model")  return std::make_unique<TestControl>();
+    //if (model_name == "oifs_43r3") return std::make_unique<OpenIFSControl>();
 
     throw std::runtime_error("Unknown model: " + model_name);
 }
@@ -141,6 +142,33 @@ std::string get_result_base_name(const BoincConfig& bconfig, const TaskConfig& t
 }
 
 
+/**
+ * @brief Process command line arguments to populate TaskConfig.
+ * @param argc Argument count.
+ * @param argv Argument vector.
+ * @param tconfig TaskConfig structure to populate.
+ * @return 0 on success, non-zero on failure.
+ */
+int process_args(int argc, char** argv, TaskConfig& tconfig)
+{
+    if (argc < 7) {
+        std::cerr << "CPDN Controller error: Not enough command line arguments provided.\n"
+                  << "Usage: " << argv[0] << " <start_date> <exptid> <unique_member_id> <batchid> <wuid> <fclen> [app_version]\n";
+        return 1;
+    }
+
+    // Read the exptid, umid, batchid, wuid, fclen from the command line
+    tconfig.start_date = argv[1]; // simulation start date
+    tconfig.exptid = argv[2];     // OpenIFS experiment id
+    tconfig.unique_member_id = argv[3];  // umid
+    tconfig.batchid = argv[4];    // batch id
+    tconfig.wuid = argv[5];       // workunit id
+    tconfig.fclen = argv[6];      // number of simulation days
+
+    return 0;
+}
+
+
 
 
 //----------------------------------------------------------------------------
@@ -175,6 +203,8 @@ int main(int argc, char** argv)
 
     // Say who we are.
     banner(bconfig.app_name, bconfig.app_version, CODE_VERSION);
+    std::cerr << "Workunit name: " << bconfig.wu_name << '\n'
+              << "CPDN project directory: " << bconfig.project_dir << '\n';
 
     // ---------------- Task configuration -----------------
 
@@ -190,30 +220,14 @@ int main(int argc, char** argv)
     // Create model control instance.
     auto model_ctrl = create_model_control(bconfig.app_name);
 
-    // Argument processing; at least 9 args always.
-    //
+    // --------------- Argument processing -----------------
+
     // app_name & nthreads have been removed from command line args, they now come from BOINC init_data.xml.
-
-    if (argc < 7) {
-        std::cerr << "CPDN Controller error: Not enough command line arguments provided.\n"
-                  << "Usage: " << argv[0] << " <start_date> <exptid> <unique_member_id> <batchid> <wuid> <fclen> [app_version]\n";
-        return 1;
+    retval = process_args(argc, argv, tconfig);
+    if (retval) {
+        std::cerr << "..Error processing command line arguments" << std::endl;
+        return retval;
     }
-    std::cerr << "(argv0) " << argv[0] << '\n'
-              << "(argv1) start_date: " << argv[1] << '\n'
-              << "(argv2) exptid: " << argv[2] << '\n'
-              << "(argv3) unique_member_id: " << argv[3] << '\n'
-              << "(argv4) batchid: " << argv[4] << '\n'
-              << "(argv5) wuid: " << argv[5] << '\n'
-              << "(argv6) fclen: " << argv[6] << std::endl;
-
-    // Read the exptid, umid, batchid, wuid, fclen, app_name, number of threads from the command line
-    tconfig.start_date = argv[1]; // simulation start date
-    tconfig.exptid = argv[2];     // OpenIFS experiment id
-    tconfig.unique_member_id = argv[3];  // umid
-    tconfig.batchid = argv[4];    // batch id
-    tconfig.wuid = argv[5];       // workunit id
-    tconfig.fclen = argv[6];      // number of simulation days
 
     // Check for optional '--nthreads <value>' at end of arg list optionally set by app_config.xml on user's machine.
     // TODO: look at removing string copy of nthreads and use int bconfig.ncpus throughout code. DRY.
@@ -228,12 +242,8 @@ int main(int argc, char** argv)
 
     const std::string namelist="fort.4";    // namelist file. will come from XML input later.
     double num_days = atof(tconfig.fclen.c_str());   // number of simulation days; fclen should come from fort.4, not the command line.
-   
-    std::cerr << "\nCPDN task controller version: " << CODE_VERSION << '\n' // CODE_VERSION is a macro set at compile time
-              << "wu_name: " << bconfig.wu_name << '\n'
-              << "project_dir: " << bconfig.project_dir << '\n'
-              << "app name: " << bconfig.app_name << '\n'
-              << "version: " << bconfig.app_version << '\n';
+
+    // --------------- Prepare the task environment -----------------
 
     boinc_begin_critical_section();
 
@@ -244,6 +254,7 @@ int main(int argc, char** argv)
     if ( !path_exists(upload_dir) ) {
       if (mkdir(upload_dir.c_str(),S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) != 0) {
          std::cerr << "..mkdir for temp folder for results failed" << std::endl;
+         return 1;        // should terminate, the model won't run.
       }
     }
 

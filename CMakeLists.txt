@@ -126,7 +126,7 @@ add_subdirectory(models)
 add_library(cpdn_control 
         ./src/cpdn_control.cpp
         ./lib/utils.cpp
-        ./lib/cpdn_linux_cpu_time.cpp
+        ./lib/cpdn_cpu_time.cpp
         ./api/trickle_handler.cpp
 )
 

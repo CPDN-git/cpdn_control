@@ -2,6 +2,7 @@
 // Reimplementation of the BOINC linux_cpu_time function using modern C++.
 // This version checks the clock resolution to ensure accurate CPU time calculation,
 // unlike the original BOINC implementation which used a hardcoded value.
+//  This code is cross-platform and works on Linux, macOS, and Windows (with help from Codex)
 //
 //   Glenn Carver, CPDN, 2025.
 
@@ -21,7 +22,8 @@
 
 
 // Define the function outside of a class for direct replacement of the original
-double cpdn_linux_cpu_time(long pid) {
+double cpdn_cpu_time(long pid) {
+
 #if defined(__APPLE__)
     // Use proc_pid_rusage to obtain CPU times (nanoseconds) for the given pid.
     rusage_info_v2 ri{};
@@ -30,6 +32,7 @@ double cpdn_linux_cpu_time(long pid) {
     }
     constexpr double NS_PER_SEC = 1'000'000'000.0;
     return (static_cast<double>(ri.ri_user_time) + static_cast<double>(ri.ri_system_time)) / NS_PER_SEC;
+
 #elif defined(_WIN32)
     HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_QUERY_INFORMATION, FALSE, static_cast<DWORD>(pid));
     if (!process) {
@@ -53,6 +56,8 @@ double cpdn_linux_cpu_time(long pid) {
     // FILETIME units are 100-ns.
     constexpr double HNS_PER_SEC = 10'000'000.0;
     return (static_cast<double>(k.QuadPart) + static_cast<double>(u.QuadPart)) / HNS_PER_SEC;
+
+// Linux
 #else
     std::ifstream file;
     std::string line;

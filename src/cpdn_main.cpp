@@ -24,6 +24,7 @@
 #include "cpdn_zip.h"
 #include "cpdn_control.h"
 #include "lib/utils.h"
+#include "lib/cpdn_cpu_time.h"
 
 #include "api/trickle_handler.h"
 #include "api/model_control.h"
@@ -765,8 +766,8 @@ int main(int argc, char** argv)
        }
 
        // Calculate current_cpu_time, only update if cpu_time returns a value
-       if (cpu_time(model_process)) {
-          task.current_cpu_time = task.last_cpu_time + cpu_time(model_process);
+       if (cpdn_cpu_time(model_process)) {
+          task.current_cpu_time = task.last_cpu_time + cpdn_cpu_time(model_process);
        }
 
       // Calculate the fraction done

@@ -20,7 +20,7 @@
 #endif
 
 #include "unit_tests.h"
-#include "../lib/cpdn_linux_cpu_time.h"
+#include "../lib/cpdn_cpu_time.h"
 
 #if defined(__linux__)
 // --- BOINC Implementation (Linux only)
@@ -65,7 +65,7 @@ int t_cputime_comparison()
         }
     }
     
-    auto cpdn_time_after  = cpdn_linux_cpu_time(current_pid);
+    auto cpdn_time_after  = cpdn_cpu_time(current_pid);
 
     std::cout << "--------------------------------" <<
                  "\nCPDN CPU Time (seconds): " << cpdn_time_after <<

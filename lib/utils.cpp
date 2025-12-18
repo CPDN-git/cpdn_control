@@ -21,7 +21,7 @@
 #endif
 #include <sys/stat.h>  // for chmod
 
-#include "cpdn_linux_cpu_time.h"
+#include "cpdn_cpu_time.h"
 
 namespace  fs = std::filesystem;
 
@@ -228,12 +228,6 @@ int print_last_lines(const std::string& filename, const int maxlines)
    }
 
    return count;
-}
-
-
-// Calculate the cpu_time
-double cpu_time(long handleProcess) {
-    return cpdn_linux_cpu_time(handleProcess);       // platform-specific implementation lives in cpdn_linux_cpu_time.cpp
 }
 
 

@@ -19,7 +19,7 @@ function(add_cpdn_executable target_name target_src output_name compile_opts lin
     
     if(compile_opts)
         set(_cpdn_compile_opts ${compile_opts})
-        if(APPLE)
+        if(APPLE OR WIN32)
             list(REMOVE_ITEM _cpdn_compile_opts "-pthread")
         endif()
         if(_cpdn_compile_opts)
@@ -29,7 +29,7 @@ function(add_cpdn_executable target_name target_src output_name compile_opts lin
     
     if(link_opts)
         set(_cpdn_link_opts ${link_opts})
-        if(APPLE)
+        if(APPLE OR WIN32)
             list(REMOVE_ITEM _cpdn_link_opts "-pthread")
         endif()
         if(_cpdn_link_opts)

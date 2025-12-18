@@ -9,11 +9,51 @@
 #include <fstream>
 #include <string>
 #include <sstream>
-#include <unistd.h> // Required for sysconf(_SC_CLK_TCK)
+#include <cstdint>
+
+#if defined(__APPLE__)
+  #include <libproc.h>
+#elif defined(_WIN32)
+  #include <windows.h>
+#else
+  #include <unistd.h> // Required for sysconf(_SC_CLK_TCK)
+#endif
 
 
 // Define the function outside of a class for direct replacement of the original
 double cpdn_linux_cpu_time(long pid) {
+#if defined(__APPLE__)
+    // Use proc_pid_rusage to obtain CPU times (nanoseconds) for the given pid.
+    rusage_info_v2 ri{};
+    if (proc_pid_rusage(static_cast<int>(pid), RUSAGE_INFO_V2, reinterpret_cast<rusage_info_t*>(&ri)) != 0) {
+        return 0.0;
+    }
+    constexpr double NS_PER_SEC = 1'000'000'000.0;
+    return (static_cast<double>(ri.ri_user_time) + static_cast<double>(ri.ri_system_time)) / NS_PER_SEC;
+#elif defined(_WIN32)
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_QUERY_INFORMATION, FALSE, static_cast<DWORD>(pid));
+    if (!process) {
+        return 0.0;
+    }
+
+    FILETIME create_time{}, exit_time{}, kernel_time{}, user_time{};
+    if (!GetProcessTimes(process, &create_time, &exit_time, &kernel_time, &user_time)) {
+        CloseHandle(process);
+        return 0.0;
+    }
+
+    ULARGE_INTEGER k{}, u{};
+    k.HighPart = kernel_time.dwHighDateTime;
+    k.LowPart  = kernel_time.dwLowDateTime;
+    u.HighPart = user_time.dwHighDateTime;
+    u.LowPart  = user_time.dwLowDateTime;
+
+    CloseHandle(process);
+
+    // FILETIME units are 100-ns.
+    constexpr double HNS_PER_SEC = 10'000'000.0;
+    return (static_cast<double>(k.QuadPart) + static_cast<double>(u.QuadPart)) / HNS_PER_SEC;
+#else
     std::ifstream file;
     std::string line;
     std::string file_path = "/proc/" + std::to_string(pid) + "/stat";
@@ -57,7 +97,8 @@ double cpdn_linux_cpu_time(long pid) {
 
     // Calculate total CPU time in seconds
     unsigned long total_ticks = utime + stime;
-    double total_cpu_time = (double)total_ticks / ticks_per_second;
+    double total_cpu_time = static_cast<double>(total_ticks) / ticks_per_second;
 
     return total_cpu_time;
+#endif
 }

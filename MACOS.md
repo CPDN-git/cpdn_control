@@ -10,8 +10,7 @@ Target: Apple Silicon (arm64), macOS 13+. Goal: keep code unchanged for now; thi
   - Ensure a single platform triplet is reused everywhere (CMake cache `PLATFORM`). Use `arm64-apple-darwin` for Apple Silicon when generating binary names and fixture assets.
 
 - CPU time helpers
-  - `lib/cpdn_linux_cpu_time.cpp` and related unit test rely on `/proc/<pid>/stat` (Linux-only). Add a macOS implementation using `getrusage`/`proc_pid_rusage`, and gate/adjust the unit test to exercise the mac path.
-  - `cpu_time` in `lib/utils.cpp` includes a BOINC call on Apple but does not include BOINC headers; either include the header or rework to use the portable path above.
+  - Implemented macOS CPU time path using `proc_pid_rusage`; unit test now exercises non-Linux paths without `/proc` dependency. `cpu_time` uses the platform-aware helper.
 
 - Process/exec and limits
   - In `launch_process` (`src/cpdn_control.cpp`), the stack limit is skipped on Apple. Confirm desired behavior; consider setting a sane macOS-specific stack size instead of skipping.
@@ -20,8 +19,7 @@ Target: Apple Silicon (arm64), macOS 13+. Goal: keep code unchanged for now; thi
   - Zip naming in `move_and_unzip_app_file` assumes Linux strings except for a mac branch; align with the CMake-derived platform triplet and include Apple Silicon (`arm64`) naming.
 
 - Tests and runners
-  - Functional tests set `LD_LIBRARY_PATH`; add `DYLD_LIBRARY_PATH` for macOS.
-  - Test fixtures and `run.py` hard-code Linux binary names (`…x86_64-pc-linux-gnu(-debug)`). Parameterize by `PLATFORM`/arch when copying binaries and creating fake app packages.
+  - Functional tests now set `DYLD_LIBRARY_PATH` and pass `CPDN_PLATFORM`; Python harnesses pick platform-aware binary names and app packages.
 
 - CI
   - Add a macOS GitHub Actions job once BOINC/mac artifacts are available; reuse the shared `PLATFORM` triplet and avoid `-static` on macOS.

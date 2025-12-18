@@ -52,12 +52,26 @@ function(add_functional_test TEST_NAME FIXTURE_REL)
     )
 
     # Dependencies, env, labels
+    if (WIN32)
+        set(_cpdn_path_sep "\\;")
+    else()
+        set(_cpdn_path_sep ":")
+    endif()
+    set(_cpdn_env_vars
+        "LD_LIBRARY_PATH=${BOINC_LIB_DIR}:$ENV{LD_LIBRARY_PATH}"
+        "DYLD_LIBRARY_PATH=${BOINC_LIB_DIR}:$ENV{DYLD_LIBRARY_PATH}"
+        "PATH=${BOINC_LIB_DIR}${_cpdn_path_sep}$ENV{PATH}"
+        "CPDN_PLATFORM=${PLATFORM}"
+    )
+
     set_tests_properties(${TEST_NAME} PROPERTIES
         DEPENDS ${TEST_NAME}_Setup
-        ENVIRONMENT "LD_LIBRARY_PATH=${BOINC_LIB_DIR}:$ENV{LD_LIBRARY_PATH}")
+        ENVIRONMENT "${_cpdn_env_vars}")
     set_tests_properties(${TEST_NAME}_Validate PROPERTIES
         DEPENDS ${TEST_NAME})
-    set_tests_properties(${TEST_NAME} ${TEST_NAME}_Setup ${TEST_NAME}_Validate PROPERTIES LABELS "functional")
+    set_tests_properties(${TEST_NAME} ${TEST_NAME}_Setup ${TEST_NAME}_Validate PROPERTIES
+        ENVIRONMENT "${_cpdn_env_vars}"
+        LABELS "functional")
 endfunction()
 
 add_functional_test(FTest1 fixtures/ftest1.json)

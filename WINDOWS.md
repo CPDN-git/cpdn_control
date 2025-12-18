@@ -8,10 +8,11 @@ Target: Windows 10+, focus on MSVC/Visual Studio (x86_64). Code is unchanged; th
 
 - Platform strings/binaries
   - Use the shared `PLATFORM` triplet; for MSVC builds expect `x86_64-pc-windows-msvc`. Align any generated artifact names or fixtures with this when adding Windows support to tests.
+  - Builds must be 64-bit; 32-bit Windows is not supported (CMake enforces this).
 
 - POSIX-only APIs
-  - `/proc`, `fork/exec`, `waitpid`, `kill`, `signal`, `chmod`, `setenv`, and many `<unistd.h>` usages are Unix-only. Implement Windows equivalents (process launch/monitoring, CPU time, permissions) or introduce abstraction layers before enabling runtime on Windows.
-  - `cpdn_linux_cpu_time` and its unit test are Linux-specific; add a Windows implementation (e.g., `GetProcessTimes`) and gate/adjust the test.
+  - `/proc`, `fork/exec`, `waitpid`, `kill`, `signal`, `chmod`, `setenv`, and many `<unistd.h>` usages are Unix-only. Windows implementations still needed for process launch/monitoring and permissions; introduce abstraction layers before enabling runtime on Windows.
+  - `cpdn_linux_cpu_time` now has a Windows implementation using `GetProcessTimes`; the CPU time unit test no longer depends on `/proc` and will sanity-check the Windows path.
 
 - Paths and permissions
   - `std::filesystem` is fine, but explicit permission calls (`chmod`, `set_exec_perms`) need Windows-aware handling (e.g., `_chmod` or skipping).
@@ -21,8 +22,7 @@ Target: Windows 10+, focus on MSVC/Visual Studio (x86_64). Code is unchanged; th
   - `-pthread`, `-static`, `-fsanitize` are removed in CMake for Windows, but verify any future flags remain compiler-appropriate (`/W` etc.).
 
 - Functional tests
-  - Python harness assumes Linux naming and uses `LD_LIBRARY_PATH`; add `PATH` handling for `.dll` discovery and Windows-safe path joining. Parameterize binary names with `PLATFORM`.
-  - File linking/symlinks in tests may need adjustments or developer mode; avoid symlinks where possible.
+  - Functional harness now parameterizes binary names with `CPDN_PLATFORM` and prepends BOINC lib dir to `PATH` for `.dll` discovery. Symlinks are still avoided.
 
 - CI
   - Add a Windows GitHub Actions job once BOINC Windows artifacts exist; ensure `ctest` uses appropriate env (`PATH` with BOINC DLLs). Avoid static linking unless confirmed available.

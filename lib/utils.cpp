@@ -233,18 +233,7 @@ int print_last_lines(const std::string& filename, const int maxlines)
 
 // Calculate the cpu_time
 double cpu_time(long handleProcess) {
-    #ifdef __APPLE_CC__
-       double x;
-       int retval = boinc_calling_thread_cpu_time(x);
-       return x;
-    // Placeholder for Windows
-    //#elif defined(_WIN32) || defined(_WIN64)
-    //   double x;
-    //   int retval = boinc_process_cpu_time(GetCurrentProcess(), x);
-    //   return x;
-    #else
-       return cpdn_linux_cpu_time(handleProcess);       // recoded version of boinc linux_cpu_time().
-    #endif
+    return cpdn_linux_cpu_time(handleProcess);       // platform-specific implementation lives in cpdn_linux_cpu_time.cpp
 }
 
 

@@ -12,12 +12,18 @@
 #include <sstream>
 #include <chrono>
 #include <thread>
-#include <unistd.h> // For getpid(), sysconf(_SC_CLK_TCK)
+#if defined(_WIN32)
+  #include <process.h>
+  #define getpid _getpid
+#else
+  #include <unistd.h> // For getpid(), sysconf(_SC_CLK_TCK)
+#endif
 
 #include "unit_tests.h"
 #include "../lib/cpdn_linux_cpu_time.h"
 
-// --- BOINC Implementation
+#if defined(__linux__)
+// --- BOINC Implementation (Linux only)
 double boinc_cpu_time(int pid) { 
     FILE* file;
     char file_name[24];
@@ -35,6 +41,7 @@ double boinc_cpu_time(int pid) {
     // Note: The original BOINC code used / 100 which is a hardcoded clock tick approximation.
     return (double)(utime + stime) / 100;
 }
+#endif
 
 
 int t_cputime_comparison()
@@ -58,25 +65,33 @@ int t_cputime_comparison()
         }
     }
     
-    auto cpdn_time  = cpdn_linux_cpu_time(current_pid);
-    auto boinc_time = boinc_cpu_time(current_pid);
-    auto delta      = cpdn_time - boinc_time;
-    
+    auto cpdn_time_after  = cpdn_linux_cpu_time(current_pid);
+
     std::cout << "--------------------------------" <<
-                 "\nCPDN CPU Time (seconds): " << cpdn_time <<
-                 "\nBOINC CPU Time (seconds): " << boinc_time <<
-                 "\nSystem clock resolution (ticks/sec): " << sysconf(_SC_CLK_TCK) <<
-                 "\nDifference (CPDN - BOINC): " << delta << std::endl;
-    
-    std::cout << "--------------------------------" << std::endl;
-    
-    // Simple check to ensure they are close (allowing for the difference in clock resolution)
-    if (std::abs(delta) < 0.01) {
-        std::cout << "RESULT: Implementations agree within 10 milliseconds." << std::endl;
-        SUCCESS; return EXIT_SUCCESS;
-    } else {
-        std::cout << "RESULT: Implementations show a noticeable difference. Check clock resolution." << std::endl;
-        // In a real test, you might return 1 here if you expected them to be closer.
-        FAIL; return EXIT_FAILURE; 
-    }
+                 "\nCPDN CPU Time (seconds): " << cpdn_time_after <<
+                 "\nElapsed busy-wait (seconds): " << test_time <<
+                 std::endl;
+
+    #if defined(__linux__)
+        auto boinc_time = boinc_cpu_time(current_pid);
+        auto delta      = cpdn_time_after - boinc_time;
+        std::cout << "BOINC CPU Time (seconds): " << boinc_time <<
+                     "\nDifference (CPDN - BOINC): " << delta << std::endl;
+        if (std::abs(delta) < 0.01) {
+            std::cout << "RESULT: Implementations agree within 10 milliseconds." << std::endl;
+            SUCCESS; return EXIT_SUCCESS;
+        } else {
+            std::cout << "RESULT: Implementations show a noticeable difference. Check clock resolution." << std::endl;
+            FAIL; return EXIT_FAILURE; 
+        }
+    #else
+        // On non-Linux platforms, just ensure CPU time increased during the busy wait.
+        if (cpdn_time_after > 0.0) {
+            std::cout << "RESULT: CPU time measured successfully on this platform." << std::endl;
+            SUCCESS; return EXIT_SUCCESS;
+        } else {
+            std::cout << "RESULT: CPU time measurement failed on this platform." << std::endl;
+            FAIL; return EXIT_FAILURE; 
+        }
+    #endif
 }

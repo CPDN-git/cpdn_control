@@ -4,10 +4,29 @@
 import argparse
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+
+def detect_platform() -> str:
+    env_platform = os.environ.get("CPDN_PLATFORM")
+    if env_platform:
+        return env_platform
+
+    system = platform.system()
+    machine = platform.machine().lower()
+
+    if system == "Darwin":
+        arch = "arm64" if "arm" in machine else "x86_64"
+        return f"{arch}-apple-darwin"
+    if system == "Windows":
+        return "x86_64-pc-windows-msvc"
+    # Default to Linux-style naming
+    arch = "aarch64" if "aarch64" in machine or "arm64" in machine else "x86_64"
+    return f"{arch}-pc-linux-gnu"
 
 
 def parse_args():
@@ -22,13 +41,13 @@ def parse_args():
     )
     parser.add_argument(
         "--controller-binary",
-        default="cpdn_control_1.0.0_x86_64-pc-linux-gnu-debug",
-        help="Controller executable name in the build directory",
+        default=None,
+        help="Controller executable name in the build directory (platform defaults applied if omitted)",
     )
     parser.add_argument(
         "--model-binary",
-        default="test_model",
-        help="Test model executable name in the build directory",
+        default=None,
+        help="Test model executable name in the build directory (platform defaults applied if omitted)",
     )
     parser.add_argument(
         "--boinc-lib-dir",
@@ -90,6 +109,7 @@ def dump_slot_stderr(slot0_dir: Path) -> None:
 
 def main():
     args = parse_args()
+    platform_triplet = detect_platform()
     config_path = args.config_flag or args.config
     if not config_path:
         raise SystemExit("Error: config path is required (pass --config)")
@@ -100,12 +120,27 @@ def main():
     slot0_dir = workdir / "slots" / "0"
     print(f"[run] Working directory: {workdir}")
 
-    controller_src = args.build_dir / args.controller_binary
-    controller_dst = projects_dir / args.controller_binary
+    default_controller = f"cpdn_control_1.0.0_{platform_triplet}-debug"
+    default_model = "test_model"
+
+    controller_name = args.controller_binary or default_controller
+    model_name = args.model_binary or default_model
+
+    # Append .exe on Windows if no extension was provided and the file is missing
+    def with_exe(name: str) -> str:
+        if platform_triplet.endswith("windows-msvc") and not name.lower().endswith(".exe"):
+            return name + ".exe"
+        return name
+
+    controller_name = with_exe(controller_name)
+    model_name = with_exe(model_name)
+
+    controller_src = args.build_dir / controller_name
+    controller_dst = projects_dir / controller_name
     copy_binary(controller_src, controller_dst, "controller")
 
-    model_src = args.build_dir / args.model_binary
-    model_dst = slot0_dir / args.model_binary
+    model_src = args.build_dir / model_name
+    model_dst = slot0_dir / model_name
     copy_binary(model_src, model_dst, "model")
 
     #maybe_symlink(model_dst, slot0_dir / "test_model")
@@ -119,8 +154,15 @@ def main():
     ensure_forecast_zip(slot0_dir, unique_member_id, batch_id, forecast_length)
 
     env = os.environ.copy()
+    env["CPDN_PLATFORM"] = platform_triplet
     if args.boinc_lib_dir:
-        env["LD_LIBRARY_PATH"] = f"{args.boinc_lib_dir}:{env.get('LD_LIBRARY_PATH', '')}".rstrip(":")
+        lib_dir = str(args.boinc_lib_dir)
+        if platform_triplet.endswith("windows-msvc"):
+            env["PATH"] = f"{lib_dir}{os.pathsep}{env.get('PATH', '')}".rstrip(os.pathsep)
+        else:
+            env["LD_LIBRARY_PATH"] = f"{lib_dir}:{env.get('LD_LIBRARY_PATH', '')}".rstrip(":")
+            if platform_triplet.endswith("apple-darwin"):
+                env["DYLD_LIBRARY_PATH"] = f"{lib_dir}:{env.get('DYLD_LIBRARY_PATH', '')}".rstrip(":")
 
     controller_cmd = [
         str(controller_dst),

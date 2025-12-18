@@ -8,9 +8,25 @@
 
 if __name__ == "__main__":
 
-    import os, secrets, zipfile, shutil
+    import os, secrets, zipfile, shutil, platform
     import sys, json
     from pathlib import Path
+
+    def detect_platform() -> str:
+        env_platform = os.environ.get("CPDN_PLATFORM")
+        if env_platform:
+            return env_platform
+
+        system = platform.system()
+        machine = platform.machine().lower()
+
+        if system == "Darwin":
+            arch = "arm64" if "arm" in machine else "x86_64"
+            return f"{arch}-apple-darwin"
+        if system == "Windows":
+            return "x86_64-pc-windows-msvc"
+        arch = "aarch64" if "aarch64" in machine or "arm64" in machine else "x86_64"
+        return f"{arch}-pc-linux-gnu"
 
     def write_file(path: Path, content: str):
         path.write_text(content)
@@ -51,6 +67,8 @@ if __name__ == "__main__":
     current_path = Path.cwd()
     print(f"[setup] Running in directory: {current_path}")
 
+    platform_triplet = detect_platform()
+
     projects_dir = current_path / "projects"
     ensure_dir(projects_dir)
     print(f"[setup] Ensured projects dir: {projects_dir}")
@@ -63,7 +81,7 @@ if __name__ == "__main__":
 
     # Produce fake test_app file in projects directory
     # Fake because we put the test_model exe directly in the slot
-    test_app = projects_dir / "test_model_app_1.00_x86_64-pc-linux-gnu"
+    test_app = projects_dir / f"test_model_app_1.00_{platform_triplet}"
     with open(test_app, 'a') as test_app_file:
       test_app_file.write(secrets.token_hex(4000) + '\n')
     zip_single_file(test_app)

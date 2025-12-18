@@ -29,6 +29,11 @@ project(cpdn_control VERSION 1.0.0  DESCRIPTION "CPDN BOINC task controller"  LA
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+# Enforce 64-bit builds on Windows.
+if (WIN32 AND CMAKE_SIZEOF_VOID_P LESS 8)
+    message(FATAL_ERROR "32-bit Windows builds are not supported. Please use a 64-bit generator/toolchain.")
+endif()
+
 # Configuration
 # Derive a sensible default platform triplet but allow overrides.
 if (NOT DEFINED PLATFORM)

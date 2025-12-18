@@ -169,7 +169,7 @@ download directory on the client. This is the responsibility of the controller c
 
 The command to run the control in standalone mode with OpenIFS on Linux is:
 ```
-    ./oifs_43r3_1.00_x86_64-pc-linux-gnu 2000010100 gw3a 0001 1 00001 1 oifs_43r3 1.00
+    ./oifs_43r3_1.00_x86_64-pc-linux-gnu 2000010100 gw3a 0001 1 00001 1
 ```
 
 ### Command line parameters
@@ -183,9 +183,8 @@ The command line parameters are:
 5 : workunit id, 
 6 : forecast length (days: FCLEN), 
 7 : app name, 
-8 : nthreads, 
-9 : app version id (only used in standalone mode)
 ```
+Other information about the workunit comes from the BOINC supplied init_data.xml file.
 
 ## Testing
 

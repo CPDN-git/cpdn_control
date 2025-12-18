@@ -86,6 +86,8 @@ int main()
 
     while (timestep <= custop) {
 
+       std::cerr << "Timestep starting: " << timestep << std::endl;
+       
        // Write restarts, only need to create the rcf file for the controller
  
        if ( ( timestep % nfrres ) == 0 && timestep > 0 )

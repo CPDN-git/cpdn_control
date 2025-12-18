@@ -12,9 +12,13 @@ function(configure_boinc boinc_dir)
         CACHE PATH "Path to BOINC libraries."
     )
 
-    # Prefer the static BOINC libraries to satisfy the fully-static link.
+    # Prefer static libraries on Linux; allow shared on macOS where static may be unavailable.
     set(_BOINC_OLD_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
-    set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+    if(APPLE)
+        set(CMAKE_FIND_LIBRARY_SUFFIXES ".dylib" ".a")
+    else()
+        set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+    endif()
     find_library(BOINC_LIB NAMES ${BOINC_LIB_NAME} HINTS ${BOINC_LIB_DIR})
     find_library(BOINC_API NAMES ${BOINC_API_NAME} HINTS ${BOINC_LIB_DIR})
     set(CMAKE_FIND_LIBRARY_SUFFIXES ${_BOINC_OLD_SUFFIXES})

@@ -48,7 +48,6 @@ if __name__ == "__main__":
     nfrres = config["nfrres"]
     nfrpos = config["nfrpos"]
 
-    # Make sure we're in the 'test' directory, if not then exit with error
     current_path = Path.cwd()
     print(f"[setup] Running in directory: {current_path}")
 
@@ -80,9 +79,9 @@ if __name__ == "__main__":
                        "     <hostid>0</hostid>\n" +\
                        "     <app_name>test_model</app_name>\n" +\
                        "     <project_preferences></project_preferences>\n" +\
-                       f"     <project_dir>{projects_dir}</project_dir>\n" +\
-                       f"     <boinc_dir>{current_path}</boinc_dir>\n" +\
-                       f"     <wu_name>oifs_43r3_{unique_member_id}_yyyymmddhh_1_{batch_id}_0</wu_name>\n" +\
+                       f"    <project_dir>{projects_dir}</project_dir>\n" +\
+                       f"    <boinc_dir>{current_path}</boinc_dir>\n" +\
+                       f"    <wu_name>test_model_{unique_member_id}_yyyymmddhh_1_{batch_id}_0</wu_name>\n" +\
                        "     <shm_key>0</shm_key>\n" +\
                        "     <slot>0</slot>\n" +\
                        "     <wu_cpu_time>0.000000</wu_cpu_time>\n" +\

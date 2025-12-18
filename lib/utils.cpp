@@ -430,9 +430,10 @@ bool check_stoi(std::string& cin) {
 /**
  * @brief Prints a banner to stderr at start of controller with model name and version.
  */
-void banner(const std::string& model_name, const std::string& model_version)                                                                                                      
+void banner(const std::string& model_name, const std::string& model_version, const std::string& code_version)
 {
     fprintf(stderr, "\n\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
-    fprintf(stderr, "|  CPDN task controller starting: Model %s, Version %s \n", model_name.c_str(), model_version.c_str());
+    fprintf(stderr, "|  CPDN task controller starting: version %s \n", code_version.c_str());
+    fprintf(stderr, "|  Model name: %s. Model version: %s \n", model_name.c_str(), model_version.c_str());
     fprintf(stderr, "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n");
 } 

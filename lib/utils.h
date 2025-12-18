@@ -20,4 +20,4 @@ std::string getDateTime();
 std::vector<std::string> get_out_files(const std::string&);
 void sleep_seconds(double seconds);
 bool check_stoi(std::string& cin);
-void banner(const std::string& model_name, const std::string& model_version);
+void banner(const std::string& model_name, const std::string& model_version, const std::string& code_version);

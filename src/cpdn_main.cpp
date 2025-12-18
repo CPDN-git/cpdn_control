@@ -155,7 +155,7 @@ int main(int argc, char** argv)
     TaskConfig  tconfig;      // CPDN task settings from command line.
     int retval=0;
 
-    // ------------- Initialisation of task -----------------
+    // ------------- BOINC Initialisation -----------------
 
     // Initialise BOINC to get the project directory, workunit name and app version
     // Note this redirects stderr output to stderr.txt in slot dir.
@@ -173,7 +173,9 @@ int main(int argc, char** argv)
     std::cerr << "Running in standalone mode" << '\n';
 
     // Say who we are.
-    banner("CPDN task controller", CODE_VERSION);    //  will come from XML input later.
+    banner(bconfig.app_name, bconfig.app_version, CODE_VERSION);
+
+    // ---------------- Task configuration -----------------
 
     // TODO. Read in the model config.xml.  The XML file contains all the information
     // about the model. It's required to initialize the correct model class later on.
@@ -188,9 +190,7 @@ int main(int argc, char** argv)
     auto model_ctrl = create_model_control(bconfig.app_name);
 
     // Argument processing; at least 9 args always.
-    // TODO: THIS NEEDS TO BE HANDLED BY THE SPECIFIC MODEL CLASS
     //
-    //------------------------------------------------------------------------------------------------
     // app_name & nthreads have been removed from command line args, they now come from BOINC init_data.xml.
 
     if (argc < 7) {
@@ -207,7 +207,6 @@ int main(int argc, char** argv)
               << "(argv6) fclen: " << argv[6] << std::endl;
 
     // Read the exptid, umid, batchid, wuid, fclen, app_name, number of threads from the command line
-    // argv[9] if present, is assigned below
     tconfig.start_date = argv[1]; // simulation start date
     tconfig.exptid = argv[2];     // OpenIFS experiment id
     tconfig.unique_member_id = argv[3];  // umid
@@ -216,8 +215,9 @@ int main(int argc, char** argv)
     tconfig.fclen = argv[6];      // number of simulation days
 
     // Check for optional '--nthreads <value>' at end of arg list optionally set by app_config.xml on user's machine.
-    // TODO. this need tidying up; have int ncpus and string 'nthreads'. use one or other.
-    std::string nthreads;
+    // TODO: look at removing string copy of nthreads and use int bconfig.ncpus throughout code. DRY.
+
+    std::string nthreads = std::to_string(bconfig.ncpus);   // default number of threads from BOINC init_data.xml
     if ( std::string(argv[argc - 2]) == "--nthreads" ) {
       std::string app_config_nthreads = argv[argc-1];
       get_app_config_nthreads(app_config_nthreads, nthreads);
@@ -227,14 +227,6 @@ int main(int argc, char** argv)
 
     const std::string namelist="fort.4";    // namelist file. will come from XML input later.
     double num_days = atof(tconfig.fclen.c_str());   // number of simulation days; fclen should come from fort.4, not the command line.
-
-    if (bconfig.standalone) {
-      // Reset the project path assuming usual boinc dir structure as we can't get it from BOINC.
-      bconfig.project_dir = bconfig.slot_path + std::string("/../../projects/");
-
-      // In standalone get the app version from the command line
-      bconfig.app_version = argv[9];
-    }
    
     std::cerr << "\nCPDN task controller version: " << CODE_VERSION << '\n' // CODE_VERSION is a macro set at compile time
               << "wu_name: " << bconfig.wu_name << '\n'
@@ -577,7 +569,7 @@ int main(int argc, char** argv)
     TrickleHandler trickler(bconfig.wu_name, result_base_name, bconfig.slot_path);
 
     // Determine which OpenIFS executable to run.
-    // GC. This should be an input parameter on the command line.
+    // GC. This should be an input parameter on the command line or the init_data.xml (or model_config.xml) later on.
 
     fs::path single_proc_exe = bconfig.slot_path;
              single_proc_exe /= "oifs_43r3_model.exe";
@@ -597,20 +589,20 @@ int main(int argc, char** argv)
        exe_cmd = test_proc_exe.string();
     }
     if (exe_cmd.empty()) {
-       std::cerr << "..No OpenIFS executable found, ending task." << std::endl;
+       std::cerr << "..No model executable found, ending task." << std::endl;
        return 1;
     }
 
     // Bug workaround. The current cpdn_unzip function does not preserve executable permissions on Linux.
-    // Manually set the permissions on the OpenIFS executable before running.
+    // Manually set the permissions on the model executable before running.
 
     if ( !set_exec_perms(exe_cmd) ) {
-       std::cerr << "..Cannot start model. Setting execute permission for OpenIFS executable failed: " << exe_cmd << std::endl;
+       std::cerr << "..Cannot start model. Setting execute permission for model executable failed: " << exe_cmd << std::endl;
        return 1;
     }
 
-    // Start the OpenIFS job
-    std::cerr << "Launching OpenIFS executable: " << exe_cmd << std::endl;
+    // Start the model process
+    std::cerr << "Launching model executable: " << exe_cmd << std::endl;
     long model_process = launch_process(bconfig.project_dir, bconfig.slot_path, exe_cmd, nthreads, tconfig.exptid, bconfig.app_name);
     if (model_process > 0) task.process_status = 0;     //GC TODO. Need to handle when model_process =-1, i.e. launch failed (see code in launch_process_oifs)
 

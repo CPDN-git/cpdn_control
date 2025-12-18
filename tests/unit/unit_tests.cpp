@@ -30,6 +30,8 @@
                 {"Path Exists",         t_path_exists},
                 {"File Is Empty",       t_file_is_empty},
                 {"Zip And Delete",      t_zip_and_delete},
+                {"Set Env Var",         t_set_env_var},
+                {"Get Out Files",       t_get_out_files},
                 // Add new test functions here! Remember previous trailing comma!
     };
 

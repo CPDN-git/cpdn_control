@@ -21,3 +21,5 @@ int t_model_frac_done();
 int t_path_exists();
 int t_file_is_empty();
 int t_zip_and_delete();
+int t_set_env_var();
+int t_get_out_files();

@@ -185,16 +185,17 @@ int main(int argc, char** argv)
     }
 
     // Create model control instance.
-    auto model = create_model_control(bconfig.app_name);
+    auto model_ctrl = create_model_control(bconfig.app_name);
 
     // Argument processing; at least 9 args always.
     // TODO: THIS NEEDS TO BE HANDLED BY THE SPECIFIC MODEL CLASS
     //
-    // TODO2: app_name & nthreads should not be command line args, they come from BOINC init_data.xml.
+    //------------------------------------------------------------------------------------------------
+    // app_name & nthreads have been removed from command line args, they now come from BOINC init_data.xml.
 
-    if (argc < 9) {
+    if (argc < 7) {
         std::cerr << "CPDN Controller error: Not enough command line arguments provided.\n"
-                  << "Usage: " << argv[0] << " <start_date> <exptid> <unique_member_id> <batchid> <wuid> <fclen> <app_name> <nthreads> [app_version]\n";
+                  << "Usage: " << argv[0] << " <start_date> <exptid> <unique_member_id> <batchid> <wuid> <fclen> [app_version]\n";
         return 1;
     }
     std::cerr << "(argv0) " << argv[0] << '\n'
@@ -203,9 +204,7 @@ int main(int argc, char** argv)
               << "(argv3) unique_member_id: " << argv[3] << '\n'
               << "(argv4) batchid: " << argv[4] << '\n'
               << "(argv5) wuid: " << argv[5] << '\n'
-              << "(argv6) fclen: " << argv[6] << '\n'
-              << "(argv7) app_name: " << argv[7] << '\n'
-              << "(argv8) nthreads: " << argv[8] << std::endl;
+              << "(argv6) fclen: " << argv[6] << std::endl;
 
     // Read the exptid, umid, batchid, wuid, fclen, app_name, number of threads from the command line
     // argv[9] if present, is assigned below
@@ -215,27 +214,15 @@ int main(int argc, char** argv)
     tconfig.batchid = argv[4];    // batch id
     tconfig.wuid = argv[5];       // workunit id
     tconfig.fclen = argv[6];      // number of simulation days
-    // TODO. GC. Remove the app_name from the command line as it's in the init_data.xml.
-    // if arg[7] is not the same as bconfig.app_name print error and return 1.
-      if ( std::string(argv[7]) != bconfig.app_name ) {
-         std::cerr << "..Error. app_name from command line does not match BOINC app_name\n";
-         return 1;
-      }
-
-    // TODO. GC. Remove nthreads from the command line as we can get it from bconfig.ncpus.
-    std::string nthreads = argv[8];   // number of OPENMP threads.
-    if ( nthreads.empty() ) {
-       nthreads = "1";   // default to 1 thread if not specified.
-    }
-    if ( nthreads != std::to_string(bconfig.ncpus) ) {
-       std::cerr << "Warning. Number of threads from command line (" << nthreads
-                 << ") does not match BOINC ncpus (" << bconfig.ncpus << "). Using command line value.\n";
-    }
 
     // Check for optional '--nthreads <value>' at end of arg list optionally set by app_config.xml on user's machine.
+    // TODO. this need tidying up; have int ncpus and string 'nthreads'. use one or other.
+    std::string nthreads;
     if ( std::string(argv[argc - 2]) == "--nthreads" ) {
       std::string app_config_nthreads = argv[argc-1];
       get_app_config_nthreads(app_config_nthreads, nthreads);
+      bconfig.ncpus = std::stoi(nthreads);
+      std::cerr << "Using --nthreads from app_config.xml: " << nthreads << '\n';
     }
 
     const std::string namelist="fort.4";    // namelist file. will come from XML input later.

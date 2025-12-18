@@ -37,11 +37,6 @@ def parse_args():
         help="Path to BOINC lib directory to prepend to LD_LIBRARY_PATH",
     )
     parser.add_argument(
-        "--app-name",
-        default="test_model",
-        help="Application name passed to the controller",
-    )
-    parser.add_argument(
         "--app-version",
         default="1.00",
         help="Application version passed to the controller",
@@ -140,7 +135,6 @@ def main():
         batch_id,
         "0",
         str(forecast_length),
-        args.app_name,
         "1",
         args.app_version,
         "0",

@@ -66,6 +66,7 @@ int init_boinc(BoincConfig& config) {
     config.boinc_dir += "/";
     config.wu_name     = dataBOINC.wu_name;
     config.result_name = dataBOINC.result_name;
+    // convert ncpus from double to int.
     if ( dataBOINC.ncpus < 1.0 ) {
         config.ncpus = 1; // only gpu tasks may have ncpus < 1.0 which CPDN do not use.
     } else {
@@ -367,8 +368,8 @@ long launch_process(const std::string& project_path, const std::string& slot_pat
 
            // Set the environment variables for the executable.
            if ( !oifs_setenvs(slot_path, nthreads) ) {
-             std::cerr << "..Setting the OpenIFS environmental variables failed" << std::endl;
-             exit(1);   // Can't continue child process so exit to end child process.
+             std::cerr << "..Setting the environmental variables failed" << std::endl;
+             exit(1);   // Can't continue so exit to end child process.
           }
 
           // --------------------------------------

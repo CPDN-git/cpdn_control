@@ -569,7 +569,7 @@ int main(int argc, char** argv)
        return 1;
     }
 
-    int total_length_of_simulation = (int) (num_days * 86400);
+    auto total_length_of_simulation = (int) (num_days * 86400);
     std::cerr << "Total_length_of_simulation: " << total_length_of_simulation << '\n';
 
     // Get result_base_name to construct upload file names for both standalone and under BOINC.

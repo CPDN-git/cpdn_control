@@ -78,7 +78,8 @@ double cpdn_cpu_time(long pid) {
     }
     std::stringstream ss(line);
     std::string       temp_field;
-    unsigned long     utime = 0, stime = 0;
+    unsigned long     utime = 0;
+    unsigned long     stime = 0;
     
     // The first field is PID, which we don't need to read.
     // The second field is the command name, which can contain spaces, making parsing difficult.
@@ -102,7 +103,7 @@ double cpdn_cpu_time(long pid) {
 
     // Calculate total CPU time in seconds
     unsigned long total_ticks = utime + stime;
-    double total_cpu_time = static_cast<double>(total_ticks) / ticks_per_second;
+    double total_cpu_time = static_cast<double>(total_ticks) / static_cast<double>(ticks_per_second);
 
     return total_cpu_time;
 #endif

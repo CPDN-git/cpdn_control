@@ -582,11 +582,9 @@ double model_frac_done(double step, double total_steps, int nthreads ) {
    static int     stepm1 = -1;
    static double  heartbeat = 0.0;
    static bool    debug = false;
-   double         frac_done, frac_per_step;
-   double         heartbeat_inc;
 
-   frac_done     = step / total_steps;	// this increments slowly, as a model step is ~30sec->2mins cpu
-   frac_per_step = 1.0 / total_steps;
+   double frac_done     = step / total_steps;	// this increments slowly, as a model step is ~30sec->2mins cpu
+   double frac_per_step = 1.0 / total_steps;
    
    if (debug) {
       fprintf( stderr,"get_frac_done: step = %.0f\n", step);
@@ -603,7 +601,7 @@ double model_frac_done(double step, double total_steps, int nthreads ) {
    //
    // If we want more accuracy could use the ratio of the model timestep to 1h (T159 tstep) to 
    // provide a 'slowdown' factor for higher resolutions.
-   heartbeat_inc = (frac_per_step / (70.0 / (double)nthreads) );
+   double heartbeat_inc = (frac_per_step / (70.0 / static_cast<double>(nthreads)) );
 
    if ( (int) step > stepm1 ) {
       heartbeat = 0.0;

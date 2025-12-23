@@ -24,8 +24,9 @@
 bool oifs_setenvs(const std::string& slot_path, const std::string& nthreads) {
 
     // check nthreads is valid integer
-    std::string nthreads_copy = nthreads;  // check_stoi modifies the string
-    if (!check_stoi(nthreads_copy)) {
+    // check_stoi modifies the string
+    if ( std::string nthreads_copy = nthreads;
+         !check_stoi(nthreads_copy) ) {
         std::cerr << "..oifs_setenvs: Invalid value of 'nthreads': " << nthreads << '\n';
         return false;
     }

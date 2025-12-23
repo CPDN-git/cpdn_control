@@ -98,8 +98,8 @@ bool parse_key_value(const std::string& line, std::string& key, std::string& val
     }
 
     // Strip 'export' keyword if present
-    const std::string export_prefix = "export ";
-    if (working_line.rfind(export_prefix, 0) == 0) {
+    if ( const std::string export_prefix = "export "; 
+        working_line.rfind(export_prefix, 0) == 0) {
         working_line.erase(0, export_prefix.length());
     }
 
@@ -207,10 +207,9 @@ bool read_delimited_line(std::string file_line, const std::string& delimiter, co
 int print_last_lines(const std::string& filename, const int maxlines)
 {
    int     count = 0;
-   std::string  lines[maxlines];
-   std::ifstream filein(filename);
+   std::string  lines[maxlines];        // TODO; use vector or std::array here.
 
-   if ( filein.is_open() ) {
+   if ( std::ifstream filein(filename);  filein.is_open() ) {
       while ( getline(filein, lines[count%maxlines]) )
          count++;
    }
@@ -266,8 +265,8 @@ bool fread_last_line(const std::string& fname, std::string& logline) {
     // Detect file truncation: if our last offset is beyond the current file size,
     // the file has been truncated (e.g., due to model restart). Reset to beginning.
     logfile.seekg(0, std::ios::end);
-    std::streamoff file_size = logfile.tellg();
-    if (last_offset > file_size) {
+    
+    if ( std::streamoff file_size = logfile.tellg(); last_offset > file_size) {
         last_offset = 0;
         last_line.clear();
     }

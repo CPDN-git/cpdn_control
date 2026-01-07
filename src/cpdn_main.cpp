@@ -49,11 +49,13 @@ namespace     fs = std::filesystem;
 constexpr std::string_view  MODEL_CONFIG_FILE = "model_config.xml";
 
 
+// ------------------------------------------
 // --------------- Functions ----------------
 
 /**
  * @brief Factory function to create ModelControl instance based on model name.
- *        Note that we specify the *model* name here and not the app name thought they may be the same.
+ *        Note that we specify the *model* name here and not the app name though they may be the same.
+ * 
  * @param modelName The name of the model.
  * @return A unique pointer to the created ModelControl instance.
 */
@@ -182,6 +184,21 @@ static void banner(const std::string& model_name, const std::string& model_versi
 
 
 
+/**
+ * @brief Cleanup and finish the task. 
+ *        End the task by calling boinc_finish and returning the same exit code.
+ *        boinc_finish exits under BOINC, but return is kept for dummy libraries.
+ */
+static int task_finish(int exit_code)
+{
+    // Add in any task cleanup code here as needed.
+
+    boinc_finish(exit_code);     // boinc_finish exits, no further code executed after this call (unless a dummy library is used).
+    return exit_code;
+}
+
+
+
 
 //----------------------------------------------------------------------------
 //----------------------------- MAIN PROGRAM ---------------------------------
@@ -205,9 +222,9 @@ int main(int argc, char** argv)
        std::cerr << "..BOINC initialisation failed" << "\n";
        return retval;
     }
-   if (bconfig.slot_path.empty()) {
+    if (bconfig.slot_path.empty()) {
       std::cerr << "..Error. Can't determine slot path: current_path() returned empty" << std::endl;
-      return 1;
+      return task_finish(1);
     }
     std::cerr << "Working slot directory is: "<< bconfig.slot_path << '\n';
     std::cerr << "Project directory is: " << bconfig.project_dir << '\n';
@@ -224,7 +241,7 @@ int main(int argc, char** argv)
     // about the model. It's required to initialize the correct model class later on.
 
     // Check for existence of model_config.xml in current directory (task) and fail if not found.
-    if( !path_exists(MODEL_CONFIG_FILE) ) {
+    if ( !path_exists(MODEL_CONFIG_FILE) ) {
         std::cerr << "..The model config.xml file does not exist in the current directory: " << MODEL_CONFIG_FILE << std::endl;
         //GC. Testing only; return 1;        // should terminate, the model won't run.
     }
@@ -238,7 +255,7 @@ int main(int argc, char** argv)
     retval = process_args(argc, argv, tconfig);
     if (retval) {
         std::cerr << "..Error processing command line arguments" << std::endl;
-        return retval;
+        return task_finish(retval);
     }
 
     // Check for optional '--nthreads <value>' at end of arg list optionally set by app_config.xml on user's machine.
@@ -266,8 +283,8 @@ int main(int argc, char** argv)
     if ( !path_exists(upload_dir) ) {
       if (mkdir(upload_dir.c_str(),S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) != 0) {
          std::cerr << "..mkdir for temp folder for results failed" << std::endl;
-         boinc_finish(1);
-         return 1;        // should terminate, the model won't run.
+         boinc_end_critical_section();
+         return task_finish(1);        // should terminate, the model won't run.
       }
     }
 
@@ -275,29 +292,29 @@ int main(int argc, char** argv)
     retval = move_and_unzip_app_file(bconfig.app_name, bconfig.app_version, bconfig.project_dir, bconfig.slot_path);
     if (retval) {
       std::cerr << "..move_and_unzip_app_file failed" << "\n";
-      boinc_finish(retval);
-      return retval;
+      boinc_end_critical_section();
+      return task_finish(retval);
     }
 
     //------------------------------------------Process the namelist-----------------------------------------
     // GC. Note, this is not the 'model fort.4' namelist file being referred to here. Needs renaming to avoid confusion.
     // This should really be part of a general piece of code to process the model ancil files. Needs refactoring later.
     
-   fs::path namelist_zip_path = bconfig.slot_path;
-   namelist_zip_path /= std::string(bconfig.app_name) + "_" +
+    fs::path namelist_zip_path = bconfig.slot_path;
+    namelist_zip_path /= std::string(bconfig.app_name) + "_" +
                        tconfig.unique_member_id + "_" +
                        tconfig.start_date + "_" +
                        std::to_string((int)num_days) + "_" +
                        tconfig.batchid + "_" +
                        tconfig.wuid + ".zip";
-   std::string namelist_zip = namelist_zip_path.string();      // nb this is a const string.
+    std::string namelist_zip = namelist_zip_path.string();      // nb this is a const string.
 
-	// Copy the namelist_zip to the slot directory and unzip
+	 // Copy the namelist_zip to the slot directory and unzip
     if ( copy_and_unzip(namelist_zip, namelist_zip, bconfig.slot_path, "namelist_zip") ) {
        std::cerr << "..Copying and unzipping the namelist_zip failed: " << namelist_zip << std::endl;
-       boinc_finish(1);
-       return 1;        // should terminate, the model won't run.
-	}
+       boinc_end_critical_section();
+       return task_finish(1);        // should terminate, the model won't run.
+	 }
 
     // Parse the fort.4 namelist for the filenames and variables
     std::string ifsdata_file;
@@ -321,8 +338,8 @@ int main(int argc, char** argv)
     // Check for the existence of the namelist
     if( !path_exists(namelist_file) ) {
        std::cerr << "..The namelist file does not exist: " << namelist_file << std::endl;
-       boinc_finish(1);
-       return 1;        // should terminate, the model won't run.
+       boinc_end_critical_section();
+       return task_finish(1);        // should terminate, the model won't run.
     }
 
     // Read the model's controlling namelist file
@@ -332,8 +349,8 @@ int main(int argc, char** argv)
     }
     if ( !namelist_filestream.is_open() ) {
        std::cerr << "..Error opening namelist file: " << namelist_file << std::endl;
-       boinc_finish(1);   // TODO: all exits from main program should go via a single cleanup function.
-       return 1;
+       boinc_end_critical_section();
+       return task_finish(1);
     }
 
     std::string parsed_key;
@@ -456,12 +473,12 @@ int main(int argc, char** argv)
     // Process the ic_ancil_file:
     std::string ic_ancil_zip = bconfig.slot_path + "/" + ic_ancil_file + ".zip";
 
-	// Copy the ic_ancil_zip to the slot directory and unzip
+	 // Copy the ic_ancil_zip to the slot directory and unzip
     if ( copy_and_unzip(ic_ancil_zip, ic_ancil_zip, bconfig.slot_path, "ic_ancil_zip") ) {
        std::cerr << "..Copying and unzipping the ic_ancil_zip failed: " << ic_ancil_zip << std::endl;
-       boinc_finish(1);
-       return 1;        // should terminate, the model won't run.
-	}
+       boinc_end_critical_section();
+       return task_finish(1);        // should terminate, the model won't run.
+	 }
 
     // Process the ifsdata_file:
     // Make the ifsdata directory and set the required paths
@@ -473,8 +490,8 @@ int main(int argc, char** argv)
     if ( !path_exists(ifsdata_folder) ) {
        if (mkdir(ifsdata_folder.c_str(),S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) != 0) {
           std::cerr << "..mkdir for ifsdata folder failed" << std::endl;
-          boinc_finish(1);
-          return 1;        // should terminate, the model won't run.
+          boinc_end_critical_section();
+          return task_finish(1);        // should terminate, the model won't run.
        }
     }
     
@@ -483,8 +500,8 @@ int main(int argc, char** argv)
     std::string ifsdata_check = ifsdata_folder + "/";
     if ( copy_and_unzip(ifsdata_zip, ifsdata_destination, ifsdata_check, "ifsdata_zip") ) {
        std::cerr << "..Copying and unzipping the ifsdata_zip failed: " << ifsdata_zip << std::endl;
-       boinc_finish(1);
-       return 1;        // should terminate, the model won't run.
+       boinc_end_critical_section();
+       return task_finish(1);        // should terminate, the model won't run.
     }
 
     // Process the climate_data_file:
@@ -497,16 +514,16 @@ int main(int argc, char** argv)
     if ( !path_exists(climate_data_path) ) {
        if (mkdir(climate_data_path.c_str(),S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) != 0) {
           std::cerr << "..mkdir for the climate data folder failed" << std::endl;
-          boinc_finish(1);
-          return 1;
+          boinc_end_critical_section();
+          return task_finish(1);
        }
     }               
        
     // Copy the climate_data_zip to the slot directory and unzip
     if ( copy_and_unzip(climate_data_zip, climate_data_destination, climate_data_path, "climate_data_zip") ) {
        std::cerr << "..Copying and unzipping the climate_data_zip failed: " << climate_data_zip << std::endl;
-       boinc_finish(1);
-       return 1;        // should terminate, the model won't run.
+       boinc_end_critical_section();
+       return task_finish(1);        // should terminate, the model won't run.
     }
 
     //-------------------------------------------------------------------------------------------------------
@@ -531,7 +548,7 @@ int main(int argc, char** argv)
        print_last_lines("NODE.001_01", 70);
        print_last_lines("ifs.stat",8);
        std::cerr << "..progress file exists, but is empty => problem with model, quitting run" << '\n';
-       return 1;
+       return task_finish(1);
     }
     else if ( path_exists(progress_file) && !path_exists(rcf_file) ) {
        read_progress_file(progress_file, task);
@@ -541,7 +558,7 @@ int main(int argc, char** argv)
           print_last_lines("NODE.001_01", 70);
           print_last_lines("ifs.stat",8);
           std::cerr << "..progress file exists, but rcf file does not exist => problem with model, quitting run" << '\n';
-          return 1;
+          return task_finish(1);
        }
     }
     else if ( !path_exists(progress_file) && path_exists(rcf_file) ) {
@@ -550,7 +567,7 @@ int main(int argc, char** argv)
        print_last_lines("NODE.001_01", 70);
        print_last_lines("ifs.stat",8);
        std::cerr << "..rcf file exists, but progress file does not exist => problem with model, quitting run" << '\n';
-       return 1;
+       return task_finish(1);
     }
     else if ( (path_exists(progress_file) && !file_is_empty(progress_file)) && path_exists(rcf_file) ) {
        // If progress file exists and is not empty and rcf file exists, then read rcf file and progress file
@@ -572,7 +589,7 @@ int main(int argc, char** argv)
                print_last_lines("NODE.001_01", 70);
                print_last_lines("ifs.stat",8);
                std::cerr << "..Reading the rcf file failed" << '\n';
-	            return 1;
+	            return task_finish(1);
             }
          }
        }
@@ -583,7 +600,7 @@ int main(int argc, char** argv)
        // Check if the CSTEP variable from rcf is greater than the last_iter, if so then quit model run
        if ( stoi(cstep_value) > stoi(task.last_iter) ) {
           std::cerr << "..CSTEP variable from rcf is greater than last_iter from progress file, error has occurred, quitting model run" << '\n';
-          return 1;
+          return task_finish(1);
        }
 
        // Adjust last_iter to the step of the previous model restart dump step.
@@ -607,7 +624,7 @@ int main(int argc, char** argv)
     // Check if upload_interval x timestep equal to zero
     if (upload_interval * timestep == 0) {
        std::cerr << "..upload_interval x timestep equals zero" << std::endl;
-       return 1;
+       return task_finish(1);
     }
 
     auto total_length_of_simulation = (int) (num_days * 86400);
@@ -643,7 +660,7 @@ int main(int argc, char** argv)
     }
     if (exe_cmd.empty()) {
        std::cerr << "..No model executable found, ending task." << std::endl;
-       return 1;
+       return task_finish(1);
     }
 
     // Bug workaround. The current cpdn_unzip function does not preserve executable permissions on Linux.
@@ -651,7 +668,7 @@ int main(int argc, char** argv)
 
     if ( !set_exec_perms(exe_cmd) ) {
        std::cerr << "..Cannot start model. Setting execute permission for model executable failed: " << exe_cmd << std::endl;
-       return 1;
+       return task_finish(1);
     }
 
     // Start the model process
@@ -724,7 +741,7 @@ int main(int argc, char** argv)
                retval = move_result_file(bconfig.slot_path, upload_dir, result);
                if (retval) {
                   std::cerr << "..Copying " << part << " result file to the temp folder in the projects directory failed" << "\n";
-                  return retval;
+                  return task_finish(retval);
                }
              }
 
@@ -786,7 +803,7 @@ int main(int argc, char** argv)
                       if (retval) {
                          std::cerr << "..boinc_upload_file failed for file: " << upload_file_name << std::endl;
                          boinc_end_critical_section();
-                         return retval;
+                         return task_finish(retval);
                       }
                       retval = boinc_upload_status(upload_file_name);
                       if (!retval) {
@@ -869,13 +886,13 @@ int main(int argc, char** argv)
          print_last_lines("waminfo",17);          // wave model restart control
          print_last_lines(progress_file,10);      // model progress file
          std::cerr << "..Failed, model did not complete successfully" << std::endl;
-         return 1;
+         return task_finish(1);
        }
     }
     // ifs.stat has not been produced, then model did not start
     else {
        std::cerr << "..Failed, model did not start" << std::endl;
-       return 1;	    
+       return task_finish(1);	    
     }
 
     // Update model_completed
@@ -891,7 +908,7 @@ int main(int argc, char** argv)
        retval = move_result_file(bconfig.slot_path, upload_dir, result);
        if (retval) {
           std::cerr << "..Copying " << part << " result file to the temp folder in the projects directory failed" << "\n";
-          return retval;
+          return task_finish(retval);
        }
     }
 
@@ -928,10 +945,10 @@ int main(int argc, char** argv)
       closedir(dirp);
     }
 
-   std::string upload_file = bconfig.project_dir + result_base_name + "_" + std::to_string(task.upload_file_number) + ".zip";
-   std::cerr << "Compressing final upload file: " << upload_file << '\n';
+    std::string upload_file = bconfig.project_dir + result_base_name + "_" + std::to_string(task.upload_file_number) + ".zip";
+    std::cerr << "Compressing final upload file: " << upload_file << '\n';
 
-   if (zfl.size() > 0) {
+    if (zfl.size() > 0) {
       auto zret = zip_and_delete(upload_file, zfl);
 
       if (!bconfig.standalone && zret==0) {
@@ -944,7 +961,7 @@ int main(int argc, char** argv)
           if (retval) {
              std::cerr << "..boinc_upload_file failed for file: " << upload_file_name << std::endl;
              boinc_end_critical_section();
-             return retval;
+             return task_finish(retval);
           }
           retval = boinc_upload_status(upload_file_name);
           if (!retval) {
@@ -971,16 +988,10 @@ int main(int argc, char** argv)
     std::cerr << "Task finished." << std::endl;
 
     // if finished normally
-    if (task.process_status == 1){
-      boinc_finish(0);     // boinc_finish() exits, no further code executed after this call.
-      return 0;
-    }
-    else if (task.process_status == 2){
-      boinc_finish(0);
-      return 0;
+    if (task.process_status == 1 || task.process_status == 2) {
+      return task_finish(0);
     }
     else {
-      boinc_finish(1);
-      return 1;
+      return task_finish(1);
     }	
 }

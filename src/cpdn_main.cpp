@@ -57,7 +57,7 @@ constexpr std::string_view  MODEL_CONFIG_FILE = "model_config.xml";
  * @param modelName The name of the model.
  * @return A unique pointer to the created ModelControl instance.
 */
-std::unique_ptr<ModelControl> create_model_control(const std::string& model_name) {
+static std::unique_ptr<ModelControl> create_model_control(const std::string& model_name) {
 
     // Example model mappings:
     //if (model_name == "hadam4")   return std::make_unique<Hadam4Control>();
@@ -77,7 +77,7 @@ std::unique_ptr<ModelControl> create_model_control(const std::string& model_name
  * @param nthreads Altered number of threads as a string.
  * @returns True if the nthreads argument was valid and changed, false otherwise.
  */
-bool get_app_config_nthreads(const std::string& app_config_nthreads, std::string& nthreads) {
+static bool get_app_config_nthreads(const std::string& app_config_nthreads, std::string& nthreads) {
 
    if ( app_config_nthreads.empty() ) {
       std::cerr << "Warning. --nthreads argument present but has no value! Ignoring.\n";
@@ -114,7 +114,7 @@ bool get_app_config_nthreads(const std::string& app_config_nthreads, std::string
  *        up a reasonable name based on the workunit parameters.
  * @return Result base name string (without path or .zip)
  */
-std::string get_result_base_name(const BoincConfig& bconfig, const TaskConfig& tconfig)
+static std::string get_result_base_name(const BoincConfig& bconfig, const TaskConfig& tconfig)
 {
     std::string base_name;
 
@@ -149,7 +149,7 @@ std::string get_result_base_name(const BoincConfig& bconfig, const TaskConfig& t
  * @param tconfig TaskConfig structure to populate.
  * @return 0 on success, non-zero on failure.
  */
-int process_args(int argc, char** argv, TaskConfig& tconfig)
+static int process_args(int argc, char** argv, TaskConfig& tconfig)
 {
     if (argc < 7) {
         std::cerr << "CPDN Controller error: Not enough command line arguments provided.\n"
@@ -167,6 +167,18 @@ int process_args(int argc, char** argv, TaskConfig& tconfig)
 
     return 0;
 }
+
+
+/**
+ * @brief Prints a banner to stderr at start of controller with model name and version.
+ */
+static void banner(const std::string& model_name, const std::string& model_version, const std::string& code_version)
+{
+    fprintf(stderr, "\n\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+    fprintf(stderr, "|  CPDN task controller starting: version %s \n", code_version.c_str());
+    fprintf(stderr, "|  Model name: %s. Model version: %s \n", model_name.c_str(), model_version.c_str());
+    fprintf(stderr, "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n");
+} 
 
 
 
@@ -254,6 +266,7 @@ int main(int argc, char** argv)
     if ( !path_exists(upload_dir) ) {
       if (mkdir(upload_dir.c_str(),S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) != 0) {
          std::cerr << "..mkdir for temp folder for results failed" << std::endl;
+         boinc_finish(1);
          return 1;        // should terminate, the model won't run.
       }
     }
@@ -262,6 +275,7 @@ int main(int argc, char** argv)
     retval = move_and_unzip_app_file(bconfig.app_name, bconfig.app_version, bconfig.project_dir, bconfig.slot_path);
     if (retval) {
       std::cerr << "..move_and_unzip_app_file failed" << "\n";
+      boinc_finish(retval);
       return retval;
     }
 
@@ -281,6 +295,7 @@ int main(int argc, char** argv)
 	// Copy the namelist_zip to the slot directory and unzip
     if ( copy_and_unzip(namelist_zip, namelist_zip, bconfig.slot_path, "namelist_zip") ) {
        std::cerr << "..Copying and unzipping the namelist_zip failed: " << namelist_zip << std::endl;
+       boinc_finish(1);
        return 1;        // should terminate, the model won't run.
 	}
 
@@ -297,8 +312,6 @@ int main(int argc, char** argv)
 
     std::ifstream namelist_filestream;
 
-    char equals = '=';
-
     int upload_interval = 0;
     int trickle_freq = 0;
     int timestep = 0;
@@ -308,34 +321,54 @@ int main(int argc, char** argv)
     // Check for the existence of the namelist
     if( !path_exists(namelist_file) ) {
        std::cerr << "..The namelist file does not exist: " << namelist_file << std::endl;
+       boinc_finish(1);
        return 1;        // should terminate, the model won't run.
     }
 
-    // Open the namelist file
+    // Read the model's controlling namelist file
+
     if(!(namelist_filestream.is_open())) {
        namelist_filestream.open(namelist_file);
     }
+    if ( !namelist_filestream.is_open() ) {
+       std::cerr << "..Error opening namelist file: " << namelist_file << std::endl;
+       boinc_finish(1);   // TODO: all exits from main program should go via a single cleanup function.
+       return 1;
+    }
 
-    // Read the namelist file
-    // GC. Recoded. Removed unneccesary use of istringstream, moved code to new function, and fixed incorrect length used in substr().
-    //     Also fixed bug reading string '!NFRPOS', should have been 'NFRPOS', meaning it was never assigned correct value.
-    while(std::getline(namelist_filestream, namelist_line))
+    std::string parsed_key;
+    std::string parsed_value;
+
+    while( std::getline(namelist_filestream, namelist_line) )
     {
        tmpstr.clear();
+       parsed_key.clear();
+       parsed_value.clear();
 
-       if ( extract_key_value( namelist_line,"IFSDATA_FILE", equals, ifsdata_file ) ) {
+       if (!parse_namelist_key_value(namelist_line, parsed_key, parsed_value)) {
+          continue;
        }
-       else if ( extract_key_value( namelist_line, "IC_ANCIL_FILE", equals, ic_ancil_file ) ) {
+
+       if ( parsed_key == "IFSDATA_FILE" ) {
+          ifsdata_file = parsed_value;
        }
-       else if ( extract_key_value( namelist_line, "CLIMATE_DATA_FILE", equals, climate_data_file ) ) {
+       else if ( parsed_key == "IC_ANCIL_FILE" ) {
+          ic_ancil_file = parsed_value;
        }
-       else if ( extract_key_value( namelist_line, "HORIZ_RESOLUTION", equals, horiz_resolution ) ) {
+       else if ( parsed_key == "CLIMATE_DATA_FILE" ) {
+          climate_data_file = parsed_value;
        }
-       else if ( extract_key_value( namelist_line, "VERT_RESOLUTION", equals, vert_resolution ) ) {
+       else if ( parsed_key == "HORIZ_RESOLUTION" ) {
+          horiz_resolution = parsed_value;
        }
-       else if ( extract_key_value( namelist_line, "GRID_TYPE", equals, grid_type ) ) {
+       else if ( parsed_key == "VERT_RESOLUTION" ) {
+          vert_resolution = parsed_value;
        }
-       else if ( extract_key_value( namelist_line, "UPLOAD_INTERVAL", equals, tmpstr ) ) {
+       else if ( parsed_key == "GRID_TYPE" ) {
+          grid_type = parsed_value;
+       }
+       else if ( parsed_key == "UPLOAD_INTERVAL" ) {
+          tmpstr = parsed_value;
           try {
             upload_interval=std::stoi(tmpstr);
           }
@@ -344,7 +377,8 @@ int main(int argc, char** argv)
             upload_interval = 0;
           }
        }
-       else if ( extract_key_value( namelist_line, "UTSTEP", equals, tmpstr) ) {
+       else if ( parsed_key == "UTSTEP" ) {
+          tmpstr = parsed_value;
           try {
             timestep = std::stoi(tmpstr);
           }
@@ -353,7 +387,8 @@ int main(int argc, char** argv)
             timestep = 0;
           }
        }
-       else if ( extract_key_value( namelist_line, "NFRPOS", equals, tmpstr) ) {   // frequency of model OUTPUT file creation (for upload); +ve model steps, -ve hours.
+       else if ( parsed_key == "NFRPOS" ) {   // frequency of model OUTPUT file creation (for upload); +ve model steps, -ve hours.
+          tmpstr = parsed_value;
           try {
             ICM_file_interval = std::stoi(tmpstr);
           }
@@ -362,7 +397,8 @@ int main(int argc, char** argv)
             ICM_file_interval = 0;
           }
        }
-       else if ( extract_key_value( namelist_line, "NFRRES", equals, tmpstr) ) {     // frequency of model RESTART file creation: +ve model steps, -ve hours.
+       else if ( parsed_key == "NFRRES" ) {     // frequency of model RESTART file creation: +ve model steps, -ve hours.
+          tmpstr = parsed_value;
           try {
             restart_interval = stoi(tmpstr);
           }
@@ -423,6 +459,7 @@ int main(int argc, char** argv)
 	// Copy the ic_ancil_zip to the slot directory and unzip
     if ( copy_and_unzip(ic_ancil_zip, ic_ancil_zip, bconfig.slot_path, "ic_ancil_zip") ) {
        std::cerr << "..Copying and unzipping the ic_ancil_zip failed: " << ic_ancil_zip << std::endl;
+       boinc_finish(1);
        return 1;        // should terminate, the model won't run.
 	}
 
@@ -436,6 +473,7 @@ int main(int argc, char** argv)
     if ( !path_exists(ifsdata_folder) ) {
        if (mkdir(ifsdata_folder.c_str(),S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) != 0) {
           std::cerr << "..mkdir for ifsdata folder failed" << std::endl;
+          boinc_finish(1);
           return 1;        // should terminate, the model won't run.
        }
     }
@@ -445,6 +483,7 @@ int main(int argc, char** argv)
     std::string ifsdata_check = ifsdata_folder + "/";
     if ( copy_and_unzip(ifsdata_zip, ifsdata_destination, ifsdata_check, "ifsdata_zip") ) {
        std::cerr << "..Copying and unzipping the ifsdata_zip failed: " << ifsdata_zip << std::endl;
+       boinc_finish(1);
        return 1;        // should terminate, the model won't run.
     }
 
@@ -458,6 +497,7 @@ int main(int argc, char** argv)
     if ( !path_exists(climate_data_path) ) {
        if (mkdir(climate_data_path.c_str(),S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) != 0) {
           std::cerr << "..mkdir for the climate data folder failed" << std::endl;
+          boinc_finish(1);
           return 1;
        }
     }               
@@ -465,6 +505,7 @@ int main(int argc, char** argv)
     // Copy the climate_data_zip to the slot directory and unzip
     if ( copy_and_unzip(climate_data_zip, climate_data_destination, climate_data_path, "climate_data_zip") ) {
        std::cerr << "..Copying and unzipping the climate_data_zip failed: " << climate_data_zip << std::endl;
+       boinc_finish(1);
        return 1;        // should terminate, the model won't run.
     }
 

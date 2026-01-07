@@ -75,127 +75,157 @@ bool set_exec_perms(const std::string& filepath) {
 }
 
 
+/**
+ * @brief Trim leading characters from a string in place.
+ *        This only strips the left side; rtrim() and trim_whitespace()
+ *        handle the right side and both sides respectively.
+ */
+static void ltrim(std::string& text, const char* trim_chars)
+{
+    auto start = text.find_first_not_of(trim_chars);
+    if (start == std::string::npos) {
+        text.clear();
+        return;
+    }
+    text.erase(0, start);
+}
+
 
 /**
- * @brief Attempts to parse a single line as a key/value pair.
- * * Handles common shell formats like "VAR=VALUE" or "export VAR='VALUE'".
- *
- * @param line  The line of text to parse.
- * @param key   Returned parameter for the key.
- * @param value Returned parameter for the value.
- * @return true if successful, false if the line is empty, a comment, or invalid.
+ * @brief Trim trailing characters from a string in place.
+ *        This only strips the right side; ltrim() and trim_whitespace()
+ *        handle the left side and both sides respectively.
  */
-bool parse_key_value(const std::string& line, std::string& key, std::string& value)
+static void rtrim(std::string& text, const char* trim_chars)
+{
+    auto end = text.find_last_not_of(trim_chars);
+    if (end == std::string::npos) {
+        text.clear();
+        return;
+    }
+    text.erase(end + 1);
+}
+
+
+/**
+ * @brief Trim leading and trailing whitespace in place.
+ */
+static void trim_whitespace(std::string& text)
+{
+    ltrim(text, " \t\n\r");
+    rtrim(text, " \t\n\r");
+}
+
+
+/**
+ * @brief Remove surrounding matching quotes and re-trim whitespace.
+ *        This is separate from trim_whitespace() to keep quote handling explicit.
+ */
+static void strip_quotes_and_trim(std::string& text)
+{
+    if (text.size() < 2) {
+        return;
+    }
+    std::cerr << ".. strip_quotes_and_trim: before='" << text << "'\n";
+    std::cerr << ".. strip_quotes_and_trim: text.front()='" << text.front() << "' text.back()='" << text.back() << "'\n";
+    if ((text.front() == '"' && text.back() == '"') ||
+        (text.front() == '\'' && text.back() == '\'')) {
+        text = text.substr(1, text.size() - 2);
+        trim_whitespace(text);
+    }
+    std::cerr << ".. strip_quotes_and_trim: after='" << text << "'\n";
+}
+
+
+/**
+ * @brief Split a line into key/value by delimiter with minimal processing.
+ *        This trims outer whitespace and validates the delimiter, but does not
+ *        apply comment rules or value normalization. Normally called via 
+ *        parse_key_value() rather than directly.
+ */
+static bool split_key_value(const std::string& line, std::string& key, std::string& value, char delimiter)
 {
     std::string working_line = line;
 
-    // Trim leading whitespace
-    working_line.erase(0, working_line.find_first_not_of(" \t\n\r"));
-    
-    // Ignore comments and empty lines
-    if (working_line.empty() || working_line[0] == '#') {
+    trim_whitespace(working_line);
+    if (working_line.empty()) {
         return false;
     }
 
-    // Strip 'export' keyword if present
-    if ( const std::string export_prefix = "export "; 
-        working_line.rfind(export_prefix, 0) == 0) {
-        working_line.erase(0, export_prefix.length());
-    }
-
-    // Find the '=' delimiter
-    auto eq_pos = working_line.find('=');
-    if (eq_pos == std::string::npos || eq_pos == 0) {
+    auto delim_pos = working_line.find(delimiter);
+    if (delim_pos == std::string::npos || delim_pos == 0) {
         return false;
     }
 
-    key   = working_line.substr(0, eq_pos);
-    value = working_line.substr(eq_pos + 1);
+    key = working_line.substr(0, delim_pos);
+    value = working_line.substr(delim_pos + 1);
+    std::cerr << ".. split_key_value: key='" << key << "' value='" << value << "'\n";
 
-    // Tidy up the value (remove surrounding quotes if present)
-    value.erase(0, value.find_first_not_of(" \t\n\r"));     // Trim leading whitespace
-    value.erase(value.find_last_not_of(" \t\n\r") + 1);     // Trim trailing whitespace
-
-    if ( value.length() >= 2 && 
-       ( (value.front() == '"' && value.back() == '"') || 
-         (value.front() == '\'' && value.back() == '\'') ) ) 
-    {
-        // Remove surrounding quotes
-        value = value.substr(1, value.length() - 2);
-    }
-    
-    // Tidy up the key (trimming is sufficient)
-    key.erase(key.find_last_not_of(" \t\n\r") + 1);
-    
-    return true;
-}
-
-
-/**
- * @brief Searches a line for a specific key and extracts the value substring.
- * 
- * This function is designed to extract the value of an input 'key' in a typical
- * key=value pair contained in the input line.
- * NOTE! It is similar to read_delimited_line but that functions works by a 
- * positional search of a delimiter, rather than expecting a key/value pair.
- * 
- * @param line The input string to search (e.g., the line read from a file).
- * @param key The substring to look for (e.g., "IFSDATA_FILE").
- * @param delimiter The character separating the key from the value (e.g., '=' or ':').
- * @param out_value Reference to a string where the extracted and stripped value will be stored.
- * @return true if the key was found and a value successfully extracted; false otherwise.
- */
-bool extract_key_value(const std::string& line, const std::string& key, char delimiter, std::string& out_value ) 
-{
-    if (line.find(key) == std::string::npos) {
-        return false;
-    }
-
-    auto pos = line.find(delimiter);
-    if (pos == std::string::npos) {
-        return false;
-    }
-
-    // Extract the substring (the value part)
-    // substr(pos + 1) takes the rest of the string after the delimiter.
-    out_value = line.substr(pos + 1);
-
-    // Remove space and trailing commas (as in a namelist entry).
-    out_value.erase( std::remove(out_value.begin(), out_value.end(), ','), out_value.end() );
-    out_value.erase( std::remove(out_value.begin(), out_value.end(), ' '), out_value.end() );
+    trim_whitespace(key);
+    trim_whitespace(value);
 
     return true;
 }
 
 
 /**
- * @brief Extracts a substring following a positional delimiter (if found).
- *        This function does a similar job to extract_key_value but works by
- *        searching for a positional delimiter rather than a key/value pair.
- *        TODO: Could be combined with extract_key_value to reduce code duplication or replaced by extract_key_value.
- * 
- * @return true if value was found false otherwise. Found substring is in 'returned_value' parameter
+ * @brief Attempts to parse a single line as a key/value pair.
+ *        Handles common shell formats like "VAR=VALUE".
+ *        Lines commented out with # are ignored (but not lines starting with !).
+ *
+ * @param line      The line of text to parse.
+ * @param key       Returned parameter for the key.
+ * @param value     Returned parameter for the value.
+ * @param delimiter The character separating the key from the value.
+ * @return true if successful, false if the line is empty, a comment, or invalid.
  */
-bool read_delimited_line(std::string file_line, const std::string& delimiter, const std::string& to_find, int position, std::string& returned_value)
+bool parse_key_value(const std::string& line, std::string& key, std::string& value, char delimiter)
 {
-    size_t pos = 0;
-    int count = 0;
+    std::string work_line = line;
 
-    if (file_line.find(to_find) != std::string::npos ) {
-       // From the file line take the field specified by the position
-       while ((pos = file_line.find(delimiter)) != std::string::npos) {
-          count = count + 1;
-          if (count == position) {  
-             returned_value = file_line.substr(0,pos);
+    ltrim(work_line, " \t\n\r");
 
-             // Remove whitespace
-             returned_value.erase( std::remove_if( returned_value.begin(), \
-                                   returned_value.end(), ::isspace ), returned_value.end() );
-          }
-          file_line.erase(0, pos + delimiter.length());
-       }
+    if (work_line.empty() || work_line[0] == '#') {
+        return false;
     }
-    return !returned_value.empty();
+    if (!split_key_value(work_line, key, value, delimiter)) {
+        return false;
+    }
+    strip_quotes_and_trim(value);
+
+    return true;
+}
+
+
+bool parse_key_value(const std::string& line, std::string& key, std::string& value)
+{
+    return parse_key_value(line, key, value, '=');
+}
+
+
+/**
+ * @brief Parse key/value pairs from a Fortran namelist line.
+ *        This treats lines starting with '!' (after whitespace) as comments,
+ *        unlike parse_key_value(), which only treats '#' as a comment.
+ */
+bool parse_namelist_key_value(const std::string& line, std::string& key, std::string& value)
+{
+    std::string working_line = line;
+
+    ltrim(working_line, " \t\n\r");
+    if (working_line.empty() || working_line[0] == '!') {
+        return false;
+    }
+
+    // Namelist values can terminate with , or ! followed by comment, so strip these first
+    if (auto comment_pos = working_line.find('!'); comment_pos != std::string::npos) {
+        working_line = working_line.substr(0, comment_pos);
+    }
+    if (auto comma_pos = working_line.find(','); comma_pos != std::string::npos) {
+        working_line = working_line.substr(0, comma_pos);
+    }
+
+    return parse_key_value(working_line, key, value);
 }
 
 
@@ -207,7 +237,7 @@ bool read_delimited_line(std::string file_line, const std::string& delimiter, co
 int print_last_lines(const std::string& filename, const int maxlines)
 {
    int     count = 0;
-   std::string  lines[maxlines];        // TODO; use vector or std::array here.
+   std::vector<std::string> lines(maxlines);
 
    if ( std::ifstream filein(filename);  filein.is_open() ) {
       while ( getline(filein, lines[count%maxlines]) )
@@ -245,8 +275,8 @@ int print_last_lines(const std::string& filename, const int maxlines)
  *                if no new line was read; returns false and empty logline
  *                if the file does not exist.
  */
-bool fread_last_line(const std::string& fname, std::string& logline) {
-
+bool fread_last_line(const std::string& fname, std::string& logline)
+{
     static std::streamoff last_offset = 0;
     static std::string    last_line;
     std::string           line;
@@ -278,7 +308,6 @@ bool fread_last_line(const std::string& fname, std::string& logline) {
       last_line = line;
       new_line_read = true;
    }
-   //std::cerr << "fread_last_line: last line read: " << last_line << '\n';
 
    // Update last_offset for next call
    last_offset = logfile.tellg();
@@ -305,7 +334,8 @@ bool fread_last_line(const std::string& fname, std::string& logline) {
  * 
  * @return Formatted date/time string
  */
-std::string getDateTime() {
+std::string getDateTime()
+{
     auto now = std::chrono::system_clock::now();
     auto in_time_t = std::chrono::system_clock::to_time_t(now);
 
@@ -327,7 +357,8 @@ std::string getDateTime() {
  * @param suffix  File suffix to search for (e.g., ".grb", ".nc")
  * @return Vector<std::string> of filenames matching the suffix
  */
-std::vector<std::string> get_out_files(const std::string& suffix) {                                                                    
+std::vector<std::string> get_out_files(const std::string& suffix)
+{                                                                    
 
     std::vector<std::string> outFiles;
     std::string currentPath = fs::current_path().string();
@@ -379,13 +410,13 @@ void sleep_seconds(double seconds)
 }
 
 
-
 /**  
  * @brief Check input string is convertable to an integer by checking for any letters.
  *        stoi() will convert leading digits if alphanumeric but we know step must be all digits.
  * @return true on success, false if non-numeric data in input string.
  */
-bool check_stoi(std::string& cin) {
+bool check_stoi(std::string& cin)
+{
 
     if (std::any_of(cin.begin(), cin.end(), ::isalpha)) {
         std::cerr << "..Invalid characters in stoi string: " << cin << "\n";
@@ -407,15 +438,3 @@ bool check_stoi(std::string& cin) {
         return false;
     }
 }
-
-
-/**
- * @brief Prints a banner to stderr at start of controller with model name and version.
- */
-void banner(const std::string& model_name, const std::string& model_version, const std::string& code_version)
-{
-    fprintf(stderr, "\n\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
-    fprintf(stderr, "|  CPDN task controller starting: version %s \n", code_version.c_str());
-    fprintf(stderr, "|  Model name: %s. Model version: %s \n", model_name.c_str(), model_version.c_str());
-    fprintf(stderr, "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n");
-} 

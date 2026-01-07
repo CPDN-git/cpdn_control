@@ -139,18 +139,25 @@ bool oifs_valid_step(std::string& step, int nsteps) {
  */
 bool oifs_read_rcf_file(std::ifstream& rcf_file, std::string& ctime_value, std::string& cstep_value)
 {
-    std::string delimiter = "\"";
     std::string rcf_file_line;
-    int position = 2;
+    std::string parsed_key;
+    std::string parsed_value;
 
     // Extract the values of CSTEP and CTIME from the rcf file
     while ( std::getline( rcf_file, rcf_file_line ))
     {
-       // Check for CSTEP, if present return value
-       read_delimited_line(rcf_file_line, delimiter, "CSTEP", position, cstep_value);
+       parsed_key.clear();
+       parsed_value.clear();
 
-       // Check for CTIME, if present return value
-       read_delimited_line(rcf_file_line, delimiter, "CTIME", position, ctime_value);
+       if (!parse_namelist_key_value(rcf_file_line, parsed_key, parsed_value)) {
+          continue;
+       }
+
+       if (parsed_key == "CSTEP") {
+          cstep_value = parsed_value;
+       } else if (parsed_key == "CTIME") {
+          ctime_value = parsed_value;
+       }
     }
 
     if (cstep_value.empty()) {

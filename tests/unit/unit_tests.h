@@ -14,6 +14,7 @@ int t_read_rcf_file();
 int t_read_progress_file();
 int t_cputime_comparison();
 int t_parse_key_value();
+int t_parse_namelist_key_value();
 int t_get_tag();
 int t_check_stoi();
 int t_fread_last_line();

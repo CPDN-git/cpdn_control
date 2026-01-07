@@ -572,7 +572,6 @@ int main(int argc, char** argv)
     else if ( (path_exists(progress_file) && !file_is_empty(progress_file)) && path_exists(rcf_file) ) {
        // If progress file exists and is not empty and rcf file exists, then read rcf file and progress file
        std::ifstream rcf_file_stream;
-       std::string ctime_value;
        std::string cstep_value;
 
        // Read the rcf file
@@ -581,6 +580,7 @@ int main(int argc, char** argv)
             rcf_file_stream.open( rcf_file );
          }
          if( rcf_file_stream.is_open() ) {
+            std::string ctime_value;
             if (oifs_read_rcf_file(rcf_file_stream, ctime_value, cstep_value)) {
                std::cerr << "Read the rcf file" << '\n';
             }
@@ -736,6 +736,7 @@ int main(int argc, char** argv)
              // Move the ICMGG, ICMSH & ICMUA result files to the task folder in the project directory
              // GC. Why do this every timestep? This should be done at same frequency as NFRPOS.
              std::vector<std::string> icm = {"ICMGG", "ICMSH", "ICMUA"};
+
              for (const auto& part : icm) {
                std::string result = part + second_part;
                retval = move_result_file(bconfig.slot_path, upload_dir, result);
@@ -773,7 +774,6 @@ int main(int argc, char** argv)
                    second_part = oifs_get_filename_part(std::to_string(i), tconfig.exptid);
 
                    // Add ICM result files to zip to be uploaded
-                   std::vector<std::string> icm = {"ICMGG", "ICMSH", "ICMUA"};
                    for (const auto& part : icm) {
                       fs::path  fpath = upload_dir;
                                 fpath /= part + second_part;
@@ -926,17 +926,15 @@ int main(int argc, char** argv)
 
     // Read the remaining list of files from the slots directory and add the matching files to the list of files for the zip
     // GC. TODO. Update to C++ 17.
-    DIR *dirp = opendir(upload_dir.c_str());
-    if (dirp)
+    if (auto *dirp = opendir(upload_dir.c_str()))
     {
       regex_t regex;
       regcomp(&regex,"\\+",0);
 
-      struct dirent *dir;
-      while ((dir = readdir(dirp)) != NULL) {
-         //std::cerr << "In temp folder: "<< dir->d_name << '\n';
+      struct dirent const *dir;
+      while ((dir = readdir(dirp)) != nullptr) {
 
-         if (!regexec(&regex,dir->d_name,(size_t) 0,NULL,0)) {
+         if (!regexec(&regex,dir->d_name,(size_t) 0,nullptr,0)) {
             zfl.push_back(upload_dir + "/" + dir->d_name);
             std::cerr << "Adding to the zip: " << (upload_dir+"/" + dir->d_name) << '\n';
          }
@@ -948,7 +946,7 @@ int main(int argc, char** argv)
     std::string upload_file = bconfig.project_dir + result_base_name + "_" + std::to_string(task.upload_file_number) + ".zip";
     std::cerr << "Compressing final upload file: " << upload_file << '\n';
 
-    if (zfl.size() > 0) {
+    if (!zfl.empty()) {
       auto zret = zip_and_delete(upload_file, zfl);
 
       if (!bconfig.standalone && zret==0) {

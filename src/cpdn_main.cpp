@@ -13,6 +13,7 @@
 #include <iostream>
 #include <iomanip>
 #include <vector>
+#include <unordered_set>
 #include <cstdlib>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -356,13 +357,70 @@ int main(int argc, char** argv)
     std::string parsed_key;
     std::string parsed_value;
 
+    // Parsing the namelist file at the moment is a mix of looking for CPDN injected
+    // header variables and normal model namelist variables. It's a bit clumsy but works for now.
+
+    // The header_keys are the CPDN injected task related parameters always at the 
+    // top of the namelist file. It's not a tidy solution as they are prefixed with
+    // '!' making them normal comments. This causes issues parsing them because if we
+    // allow commented key/value pairs to be parsed, the code picks up other commented
+    // out namelist variables which has caused errors. Ideally it would have been 
+    // better to prefix with something unique such as !TASK but as this involves
+    // changing the oifs_workgen repo and I plan to tidy this whole area up by 
+    // reducing the usage of header parameters like this, for now we will simply
+    // look for these specific keys only in the header block and eliminate them
+    // as they become redundant.
+    // The rather hacky code below assumes reading header variables until it hits the
+    // first true namelist. 
+    //    Glenn   Jan 2026.
+
+    bool in_header = true;    // goes false when we reach the first namelist '&' line.
+    const std::unordered_set<std::string> header_keys = {
+        "IC_ANCIL_FILE",
+        "IFSDATA_FILE",
+        "CLIMATE_DATA_FILE",
+        "HORIZ_RESOLUTION",
+        "VERT_RESOLUTION",
+        "GRID_TYPE",
+        "UPLOAD_INTERVAL",
+        "TSTEP"
+    };
+
     while( std::getline(namelist_filestream, namelist_line) )
     {
        tmpstr.clear();
        parsed_key.clear();
        parsed_value.clear();
 
-       if (!parse_namelist_key_value(namelist_line, parsed_key, parsed_value)) {
+       trim_whitespace(namelist_line);
+       if (namelist_line.empty()) {
+          continue;
+       }
+
+       bool have_kv = false;
+       std::string header_line = namelist_line;
+
+       if (in_header) {
+          if (header_line.front() == '&') {
+             in_header = false;
+             continue;
+          }
+          if (header_line.front() == '!') {  // possible header key/value pair
+             header_line.erase(0, 1);
+
+             if (parse_key_value(header_line, parsed_key, parsed_value) &&
+                header_keys.find(parsed_key) != header_keys.end()) { // ignore any keys not in the header list above
+                have_kv = true;
+             }
+          }
+       } else {      // normal namelist parsing
+          if (!parse_namelist_key_value(namelist_line, parsed_key, parsed_value)) {
+             continue;
+          }
+          have_kv = true;
+       }
+
+       if (!have_kv) {
           continue;
        }
 
@@ -788,7 +846,7 @@ int main(int argc, char** argv)
                 std::cerr << "Compressing upload file: " << upload_file << '\n';
 
                 // Create the zipped upload file from the list of files added to zfl
-                if (zfl.size() > 0) {
+                if (!zfl.empty()) {
                   auto zret = zip_and_delete(upload_file, zfl);
 
                   // If running under a BOINC client
@@ -835,7 +893,7 @@ int main(int argc, char** argv)
        }
 
        // Calculate current_cpu_time, only update if cpu_time returns a value
-       if (cpdn_cpu_time(model_process)) {
+       if (cpdn_cpu_time(model_process) > 0) {
           task.current_cpu_time = task.last_cpu_time + cpdn_cpu_time(model_process);
        }
 

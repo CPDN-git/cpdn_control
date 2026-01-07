@@ -21,6 +21,7 @@
 #endif
 
 
+// Improved cpu time function.
 // Define the function outside of a class for direct replacement of the original
 double cpdn_cpu_time(long pid) {
 

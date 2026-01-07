@@ -75,8 +75,7 @@ int init_boinc(BoincConfig& config) {
 
     // Re-parse app version to add a dot
     // This assumes version is X.Y, X.YY or XX.YY format, will get it wrong if not.
-    auto vlen = config.app_version.length();
-    if ( vlen == 2 ) {
+    if (auto vlen = config.app_version.length();  vlen == 2 ) {
        config.app_version.insert(1, ".");
     }
     else if (vlen > 2 ) {
@@ -178,7 +177,7 @@ bool process_env_overrides(const fs::path& override_envs)
  * @param slot_path    The path to the slot directory.
  * @return int         Returns 0 on success, non-zero on failure.
  */
-int move_and_unzip_app_file(std::string app_name, std::string version, std::string project_path, std::string slot_path) {
+int move_and_unzip_app_file(const std::string& app_name, const std::string& version, const std::string& project_path, const std::string& slot_path) {
    // GC. TODO. This code could be combined with copy_and_unzip() to avoid code duplication.
 
     int retval = 0;
@@ -677,12 +676,9 @@ int copy_and_unzip(const std::string& zipfile, const std::string& destination, c
        return 1;        // should terminate, the model won't run.
     }
 		
-    // Get the name of the 'jf_' filename from a link within the 'zipfile' file
-    std::string source = get_tag(zipfile);
-
     // Copy and unzip the zip file only if the zip file contains a string between tags.
     // If it doesn't, the real zip file is likely already in the working directory from a previous run.
-    if ( !source.empty() ) {
+    if ( std::string source = get_tag(zipfile); !source.empty() ) {
        // Copy the 'jf_' file to the working directory and rename
        if ( path_exists(source) ) {
           std::cerr << "Copying the " << type << " file from: " << source << " to: " << destination << '\n';
@@ -744,12 +740,12 @@ int zip_and_delete(const std::string& upload_file, const std::vector<std::filesy
    }
    else {
       // Files have been successfully zipped, they can now be deleted
-      for (auto j = 0; j < (int) zfl.size(); ++j) {
+      for (const auto& file : zfl) {
          // Delete the zipped file
          try {
-            fs::remove(zfl[j]);
+            fs::remove(file);
          } catch (const fs::filesystem_error& e) {
-            std::cerr << "Error deleting file: " << zfl[j] << ", error: " << e.what() << '\n';
+            std::cerr << "Error deleting file: " << file << ", error: " << e.what() << '\n';
          }
       }
    }

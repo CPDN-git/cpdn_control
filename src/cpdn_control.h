@@ -69,7 +69,7 @@ struct BoincConfig {
 
 
 int init_boinc(BoincConfig&);
-int move_and_unzip_app_file(std::string, std::string, std::string, std::string);
+int move_and_unzip_app_file(const std::string&, const std::string&, const std::string&, const std::string&);
 int check_child_status(long, int);
 int check_boinc_status(long, int);
 long launch_process(const std::string&, const std::string&, const std::string&, const std::string&, const std::string&, const std::string&);

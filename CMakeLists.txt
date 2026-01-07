@@ -24,6 +24,10 @@ cmake_minimum_required(VERSION 3.16)
 
 project(cpdn_control VERSION 1.0.0  DESCRIPTION "CPDN BOINC task controller"  LANGUAGES C CXX)
 
+# Export compile_commands.json for VS Code SonarCube linter extension (and obther tools).
+# And so we can easily see exactly what compilation commands will be used.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "Export compile_commands.json" FORCE)
+
 # Require C++17 standard
 # This will apply to ALL targets
 set(CMAKE_CXX_STANDARD 17)

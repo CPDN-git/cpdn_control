@@ -110,7 +110,7 @@ static void rtrim(std::string& text, const char* trim_chars)
 /**
  * @brief Trim leading and trailing whitespace in place.
  */
-static void trim_whitespace(std::string& text)
+void trim_whitespace(std::string& text)
 {
     ltrim(text, " \t\n\r");
     rtrim(text, " \t\n\r");

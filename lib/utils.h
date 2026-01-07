@@ -10,6 +10,7 @@ bool set_env_var(const std::string&, const std::string&);
 bool path_exists(std::string_view pathname);
 bool file_is_empty(std::string_view fpath);
 bool set_exec_perms(const std::string&);
+void trim_whitespace(std::string&);
 bool parse_key_value(const std::string&, std::string&, std::string&, char);
 bool parse_key_value(const std::string&, std::string&, std::string&);
 bool parse_namelist_key_value(const std::string&, std::string&, std::string&);

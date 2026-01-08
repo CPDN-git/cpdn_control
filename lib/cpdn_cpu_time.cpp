@@ -23,7 +23,7 @@
 
 // Improved cpu time function.
 // Define the function outside of a class for direct replacement of the original
-double cpdn_cpu_time(long pid) {
+double cpdn_cpu_time(pid_t pid) {
 
 #if defined(__APPLE__)
     // Use proc_pid_rusage to obtain CPU times (nanoseconds) for the given pid.

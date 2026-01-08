@@ -231,17 +231,18 @@ int move_and_unzip_app_file(const std::string& app_name, const std::string& vers
 
 /**
  * @brief Checks the status of a child process.
+ * 
  * @param handleProcess The process handle of the child process.
  * @param process_status The current status of the process.
  * @return The updated process status.
  */
-int check_child_status(long handleProcess, int process_status) {
+int check_child_status(pid_t processid, int process_status)
+{
     int stat = 0;
-    int pid = 0;
 
     // Check whether child processed has exited
     // waitpid will return process id of zombie (finished) process; zero if still running
-    if ( (pid=waitpid(handleProcess,&stat,WNOHANG)) > 0 ) {
+    if ( pid_t pid; (pid=waitpid(processid,&stat,WNOHANG)) > 0 ) {
        process_status = 1;
        // Child exited normally but model might still have failed
        if (WIFEXITED(stat)) {
@@ -278,26 +279,26 @@ int check_child_status(long handleProcess, int process_status) {
  * @param process_status The current status of the process.
  * @return The updated process status.
  */
-int check_boinc_status(long handleProcess, int process_status) {
+int check_boinc_status(pid_t processid, int process_status) {
     BOINC_STATUS status;
     boinc_get_status(&status);
 
     // If a quit, abort or no heartbeat has been received from the BOINC client, end child process
     if (status.quit_request) {
        std::cerr << "Quit request received from BOINC client, ending the child process" << '\n';
-       kill(handleProcess, SIGKILL);
+       kill(processid, SIGKILL);
        process_status = 2;
        return process_status;
     }
     else if (status.abort_request) {
        std::cerr << "Abort request received from BOINC client, ending the child process" << '\n';
-       kill(handleProcess, SIGKILL);
+       kill(processid, SIGKILL);
        process_status = 1;
        return process_status;
     }
     else if (status.no_heartbeat) {
        std::cerr << "No heartbeat received from BOINC client, ending the child process" << '\n';
-       kill(handleProcess, SIGKILL);
+       kill(processid, SIGKILL);
        process_status = 1;
        return process_status;
     }
@@ -305,25 +306,25 @@ int check_boinc_status(long handleProcess, int process_status) {
     else {
        if (status.suspended) {
           std::cerr << "Suspend request received from the BOINC client, suspending the child process" << '\n';
-          kill(handleProcess, SIGSTOP);
+          kill(processid, SIGSTOP);
 
           while (status.suspended) {
              boinc_get_status(&status);
              if (status.quit_request) {
                 std::cerr << "Quit request received from the BOINC client, ending the child process" << '\n';
-                kill(handleProcess, SIGKILL);
+                kill(processid, SIGKILL);
                 process_status = 2;
                 return process_status;
              }
              else if (status.abort_request) {
                 std::cerr << "Abort request received from the BOINC client, ending the child process" << '\n';
-                kill(handleProcess, SIGKILL);
+                kill(processid, SIGKILL);
                 process_status = 1;
                 return process_status;
              }
              else if (status.no_heartbeat) {
                 std::cerr << "No heartbeat received from the BOINC client, ending the child process" << '\n';
-                kill(handleProcess, SIGKILL);
+                kill(processid, SIGKILL);
                 process_status = 1;
                 return process_status;
              }
@@ -331,7 +332,7 @@ int check_boinc_status(long handleProcess, int process_status) {
           }
           // Resume child process
           std::cerr << "Resuming the child process" << "\n";
-          kill(handleProcess, SIGCONT);
+          kill(processid, SIGCONT);
           process_status = 0;
        }
        return process_status;
@@ -351,13 +352,13 @@ int check_boinc_status(long handleProcess, int process_status) {
  * @param app_name The application name.
  * @return long The process handle of the launched child process, or -1 on failure.
  */
-long launch_process(const std::string& project_path, const std::string& slot_path, 
+pid_t launch_process(const std::string& project_path, const std::string& slot_path, 
                     const std::string& strCmd, const std::string& nthreads,
                     const std::string& exptid, const std::string& app_name)
 {
-    long handleProcess;
+    pid_t handle_process;
 
-    switch((handleProcess=fork())) {
+    switch((handle_process=fork())) {
        case -1: {
           std::cerr << "..Unable to start a new child process" << "\n";
           return -1;      // Don't exit() here, return as this is the parent process.
@@ -423,9 +424,9 @@ long launch_process(const std::string& project_path, const std::string& slot_pat
           break;
        }
        default: 
-          std::cerr << "The child process has been launched with process id: " << handleProcess << "\n";
+          std::cerr << "The child process has been launched with process id: " << handle_process << "\n";
     }
-    return handleProcess;
+    return handle_process;
 }
 
 

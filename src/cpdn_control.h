@@ -70,9 +70,9 @@ struct BoincConfig {
 
 int init_boinc(BoincConfig&);
 int move_and_unzip_app_file(const std::string&, const std::string&, const std::string&, const std::string&);
-int check_child_status(long, int);
-int check_boinc_status(long, int);
-long launch_process(const std::string&, const std::string&, const std::string&, const std::string&, const std::string&, const std::string&);
+int check_child_status(pid_t, int);
+int check_boinc_status(pid_t, int);
+pid_t launch_process(const std::string&, const std::string&, const std::string&, const std::string&, const std::string&, const std::string&);
 std::string get_tag(const std::string &str);
 double model_frac_done(double, double, int);
 int move_result_file(const std::string&, const std::string&, const std::string&);

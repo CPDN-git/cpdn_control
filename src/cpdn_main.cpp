@@ -731,7 +731,7 @@ int main(int argc, char** argv)
 
     // Start the model process
     std::cerr << "Launching model executable: " << exe_cmd << std::endl;
-    long model_process = launch_process(bconfig.project_dir, bconfig.slot_path, exe_cmd, nthreads, tconfig.exptid, bconfig.app_name);
+    pid_t model_process = launch_process(bconfig.project_dir, bconfig.slot_path, exe_cmd, nthreads, tconfig.exptid, bconfig.app_name);
     if (model_process > 0) task.process_status = 0;     //GC TODO. Need to handle when model_process =-1, i.e. launch failed (see code in launch_process_oifs)
 
 

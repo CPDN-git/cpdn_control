@@ -50,6 +50,7 @@ namespace     fs = std::filesystem;
 constexpr std::string_view  MODEL_CONFIG_FILE = "model_config.xml";
 
 
+
 // ------------------------------------------
 // --------------- Functions ----------------
 
@@ -62,14 +63,12 @@ constexpr std::string_view  MODEL_CONFIG_FILE = "model_config.xml";
 */
 static std::unique_ptr<ModelControl> create_model_control(const std::string& model_name) {
 
-    // Example model mappings:
-    //if (model_name == "hadam4")   return std::make_unique<Hadam4Control>();
-    //if (model_ame == "hadsm4")    return std::make_unique<Hadsm4Control>();
+    // Model mappings:
 
     if (model_name == "test_model")  return std::make_unique<TestControl>();
     //if (model_name == "oifs_43r3") return std::make_unique<OpenIFSControl>();
 
-    throw std::runtime_error("Unknown model: " + model_name);
+    throw std::runtime_error("Unsupported model name: " + model_name);
 }
 
 
@@ -1040,6 +1039,7 @@ int main(int argc, char** argv)
     boinc_end_critical_section();
 
     // Delay to ensure all files are flushed to disk before exiting
+    std::cerr << "Waiting for all file operations to complete..." << std::endl;
     sleep_seconds(120);
     std::cerr << "Task finished." << std::endl;
 

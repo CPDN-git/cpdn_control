@@ -732,7 +732,7 @@ int main(int argc, char** argv)
 
     // Start the model process
     std::cerr << "Launching model executable: " << exe_cmd << std::endl;
-    pid_t model_process = launch_process(bconfig.project_dir, bconfig.slot_path, exe_cmd, nthreads, tconfig.exptid, bconfig.app_name);
+    pid_t model_process = launch_process(bconfig.project_dir, bconfig.slot_path, exe_cmd, nthreads, tconfig.exptid);
     if (model_process > 0) task.process_status = 0;     //GC TODO. Need to handle when model_process =-1, i.e. launch failed (see code in launch_process_oifs)
 
 
@@ -917,7 +917,7 @@ int main(int argc, char** argv)
          task.process_status = check_boinc_status(model_process, task.process_status);
       }
    
-      task.process_status = check_child_status(model_process, task.process_status);
+      task.process_status = check_child_status(model_process, task.process_status, task.exit_code);
     }
 
     //----- End of main loop ---------------------------------------------------------------------------	
@@ -945,7 +945,8 @@ int main(int argc, char** argv)
          print_last_lines("waminfo",17);          // wave model restart control
          print_last_lines(progress_file,10);      // model progress file
          std::cerr << "..Failed, model did not complete successfully" << std::endl;
-         return task_finish(1);
+         std::cerr << "..Model exit code: " << task.exit_code << std::endl;
+         return task_finish(task.exit_code);    // GC TODO. Do I want to call task_finish here? There are too many return points.
        }
     }
     // ifs.stat has not been produced, then model did not start

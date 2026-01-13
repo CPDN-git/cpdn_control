@@ -3,8 +3,8 @@
 //
 //    Glenn Carver, CPDN, 2025.
 //
+// Rewritten into class structure and modular form: Glenn Carver (CPDN), 2025->
 // Original code: Andy Bowery (Oxford eResearch Centre, Oxford University) May 2023
-// Rewritten and refactored into class structure and modular form: Glenn Carver (CPDN), 2025->
 //
 
 #include <chrono>
@@ -234,9 +234,10 @@ int move_and_unzip_app_file(const std::string& app_name, const std::string& vers
  * 
  * @param handleProcess The process handle of the child process.
  * @param process_status The current status of the process.
- * @return The updated process status.
+ * @param exit_code The exit code of the child process (set on normal exit).
+ * @return The updated process status, unchanged if still running.
  */
-int check_child_status(pid_t processid, int process_status)
+int check_child_status(pid_t processid, int process_status, int& exit_code)
 {
     int stat = 0;
 
@@ -247,23 +248,27 @@ int check_child_status(pid_t processid, int process_status)
        // Child exited normally but model might still have failed
        if (WIFEXITED(stat)) {
           process_status = 1;
+          exit_code = WEXITSTATUS(stat);
           std::cerr << "..The child process terminated with status: " << WEXITSTATUS(stat) << '\n';
        }
        // Child process has exited due to signal that was not caught
        // n.b. OpenIFS has its own signal handler.
        else if (WIFSIGNALED(stat)) {
           process_status = 3;
+          exit_code = -1;
           std::cerr << "..The child process has been killed with signal: " << WTERMSIG(stat) << '\n';
        }
        // Child is stopped
        else if (WIFSTOPPED(stat)) {
           process_status = 4;
+          exit_code = -1;
           std::cerr << "..The child process has stopped with signal: " << WSTOPSIG(stat) << '\n';
        }
     }
     else if ( pid == -1) {
       // should not get here, it means the child could not be found
       process_status = 5;
+      exit_code = -1;
       std::cerr << "..Unable to retrieve status of child process " << '\n';
       perror("waitpid() error");
     }
@@ -354,7 +359,7 @@ int check_boinc_status(pid_t processid, int process_status) {
  */
 pid_t launch_process(const std::string& project_path, const std::string& slot_path, 
                     const std::string& strCmd, const std::string& nthreads,
-                    const std::string& exptid, const std::string& app_name)
+                    const std::string& exptid)
 {
     pid_t handle_process;
 
@@ -401,17 +406,9 @@ pid_t launch_process(const std::string& project_path, const std::string& slot_pa
           #endif
 
           // Execute model process.
-          // OpenIFS 40r1 requires the -e exptid argument, later versions do not.
-          // GC. TODO. This should be an input arg, not decided here.
 
-          if( (app_name == "openifs") || (app_name == "oifs_40r1")) { // OpenIFS 40r1
-            std::cerr << "Executing the command: " << strCmd << " -e " << exptid << "\n";
-            execl(strCmd.c_str(),strCmd.c_str(),"-e",exptid.c_str(),NULL);
-          }
-          else {  // OpenIFS 43r3 and above
-            std::cerr << "Executing the command: " << strCmd << "\n";
-            execl(strCmd.c_str(),strCmd.c_str(),NULL);         // always returns -1 on failure
-          }
+          std::cerr << "Executing the command: " << strCmd << "\n";
+          execl(strCmd.c_str(),strCmd.c_str(),NULL);         // always returns -1 on failure
 
           // If execl returns there was an error
           int syserr = errno;    // grab the error before any other system call.

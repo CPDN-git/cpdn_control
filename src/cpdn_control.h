@@ -2,7 +2,7 @@
 // Control code header file for the OpenIFS application in the climateprediction.net project
 //
 //     Glenn Carver, CPDN, 2025.
-//      Original version by Andy Bowery, Oxford University November 2022
+//      Rewrite of original version by Andy Bowery, Oxford University November 2022
 //
 
 #pragma once
@@ -27,6 +27,7 @@ struct TaskState {
     int current_iter = 0;           // Current iteration step (in seconds)
     int last_trickle_iter = 0;      // Last iteration when trickle was sent
     int process_status = 1;         // Child process status: 0=running, 1=stopped, etc.
+    int exit_code = 0;              // Child process exit code (valid for normal exit)
     double current_cpu_time = 0.0;  // Current accumulated CPU time
     double fraction_done = 0.0;     // Fraction of model run completed (0.0-1.0)
 };
@@ -70,9 +71,9 @@ struct BoincConfig {
 
 int init_boinc(BoincConfig&);
 int move_and_unzip_app_file(const std::string&, const std::string&, const std::string&, const std::string&);
-int check_child_status(pid_t, int);
+int check_child_status(pid_t, int, int&);
 int check_boinc_status(pid_t, int);
-pid_t launch_process(const std::string&, const std::string&, const std::string&, const std::string&, const std::string&, const std::string&);
+pid_t launch_process(const std::string&, const std::string&, const std::string&, const std::string&, const std::string&);
 std::string get_tag(const std::string &str);
 double model_frac_done(double, double, int);
 int move_result_file(const std::string&, const std::string&, const std::string&);

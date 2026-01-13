@@ -243,7 +243,7 @@ int main(int argc, char** argv)
     // Check for existence of model_config.xml in current directory (task) and fail if not found.
     if ( !path_exists(MODEL_CONFIG_FILE) ) {
         std::cerr << "..The model config.xml file does not exist in the current directory: " << MODEL_CONFIG_FILE << std::endl;
-        //GC. Testing only; return 1;        // should terminate, the model won't run.
+        //GC. Testing only; return task_finish(1);        // should terminate, the model won't run.
     }
 
     // Create model control instance.
@@ -374,6 +374,9 @@ int main(int argc, char** argv)
     //    Glenn   Jan 2026.
 
     bool in_header = true;    // goes false when we reach the first namelist '&' line.
+
+    // These are the keys injected by CPDN into the namelist header. Other variables
+    // searched for come from the namelist itself.
     const std::unordered_set<std::string> header_keys = {
         "IC_ANCIL_FILE",
         "IFSDATA_FILE",
@@ -381,8 +384,7 @@ int main(int argc, char** argv)
         "HORIZ_RESOLUTION",
         "VERT_RESOLUTION",
         "GRID_TYPE",
-        "UPLOAD_INTERVAL",
-        "TSTEP"
+        "UPLOAD_INTERVAL"
     };
 
     while( std::getline(namelist_filestream, namelist_line) )
@@ -419,7 +421,7 @@ int main(int argc, char** argv)
           have_kv = true;
        }
 
-       if (!have_kv) {
+       if (!have_kv) {  // skip lines that didn't yield a key/value pair
           continue;
        }
 

@@ -26,6 +26,7 @@ struct TaskState {
     int model_completed = 0;        // Model completion state: 0=running, 1=completed
     int current_iter = 0;           // Current iteration step (in seconds)
     int last_trickle_iter = 0;      // Last iteration when trickle was sent
+    pid_t pid = 0;                  // Process ID of the child model process
     int process_status = 1;         // Child process status: 0=running, 1=stopped, etc.
     int exit_code = 0;              // Child process exit code (valid for normal exit)
     double current_cpu_time = 0.0;  // Current accumulated CPU time

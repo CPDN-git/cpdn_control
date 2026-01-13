@@ -732,8 +732,8 @@ int main(int argc, char** argv)
 
     // Start the model process
     std::cerr << "Launching model executable: " << exe_cmd << std::endl;
-    pid_t model_process = launch_process(bconfig.project_dir, bconfig.slot_path, exe_cmd, nthreads, tconfig.exptid);
-    if (model_process > 0) task.process_status = 0;     //GC TODO. Need to handle when model_process =-1, i.e. launch failed (see code in launch_process_oifs)
+    task.pid = launch_process(bconfig.project_dir, bconfig.slot_path, exe_cmd, nthreads, tconfig.exptid);
+    if (task.pid > 0) task.process_status = 0;     //GC TODO. Need to handle when task.pid =-1, i.e. launch failed (see code in launch_process_oifs)
 
 
     boinc_end_critical_section();
@@ -808,11 +808,6 @@ int main(int argc, char** argv)
              // Convert iteration number to seconds
              task.current_iter = (std::stoi(task.last_iter)) * timestep;
 
-             //std::cerr << "Current iteration of model: " << task.last_iter << '\n';
-             //std::cerr << "timestep: " << timestep << '\n';
-             //std::cerr << "current_iter: " << task.current_iter << '\n';
-             //std::cerr << "last_upload: " << task.last_upload << '\n';
-
              // Upload a new upload file if the end of an upload_interval has been reached
              if (( ( task.current_iter - task.last_upload ) >= (upload_interval * timestep)) && (task.current_iter < total_length_of_simulation)) {
                 // Create an intermediate results zip file
@@ -825,9 +820,6 @@ int main(int argc, char** argv)
 
                 // Cycle through all the steps from the last upload to the current upload
                 for (auto i = (task.last_upload / timestep); i < (task.current_iter / timestep); i++) {   //  task.current_iter/timestep is just task.last_iter!
-                   //std::cerr << "last_upload/timestep: " << (task.last_upload/timestep) << '\n';
-                   //std::cerr << "current_iter/timestep: " << (task.current_iter/timestep) << '\n';
-                   //std::cerr << "i: " << (std::to_string(i)) << '\n';
 
                    // Construct file name of the ICM result file
                    second_part = oifs_get_filename_part(std::to_string(i), tconfig.exptid);
@@ -894,8 +886,8 @@ int main(int argc, char** argv)
        }
 
        // Calculate current_cpu_time, only update if cpu_time returns a value
-       if (cpdn_cpu_time(model_process) > 0) {
-          task.current_cpu_time = task.last_cpu_time + cpdn_cpu_time(model_process);
+       if (cpdn_cpu_time(task.pid) > 0) {
+          task.current_cpu_time = task.last_cpu_time + cpdn_cpu_time(task.pid);
        }
 
       // Calculate the fraction done
@@ -914,10 +906,10 @@ int main(int argc, char** argv)
          // Provide the fraction done to the BOINC client, necessary for the percentage bar on the client
          boinc_fraction_done(task.fraction_done);
     
-         task.process_status = check_boinc_status(model_process, task.process_status);
+         task.process_status = check_boinc_status(task.pid, task.process_status);
       }
    
-      task.process_status = check_child_status(model_process, task.process_status, task.exit_code);
+      task.process_status = check_child_status(task.pid, task.process_status, task.exit_code);
     }
 
     //----- End of main loop ---------------------------------------------------------------------------	

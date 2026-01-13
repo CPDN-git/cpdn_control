@@ -128,9 +128,6 @@ if __name__ == "__main__":
 
 
     # Create the fake model namelist file, fort.4.
-    # TODO: TRICKLE_UPLOAD_FREQUENCY and UPLOAD_NUMBER can be removed as 
-    # they are not used by the controller code any more.
-    # TODO: Should not have TSTEP as well as UTSTEP here, use the namelist variable always!
 
     # Explanation of variable values in fort.4:
     # Values below are populated from the test config JSON:
@@ -173,7 +170,7 @@ if __name__ == "__main__":
     write_file(fort4_path, fort_file_string)
     zip_single_file(fort4_path, slot0_dir / "jf_namelist", arcname="fort.4")
     os.remove(fort4_path)   # remove unzipped version
-    print(f"[setup] Wrote fort.4 and jf_namelist")
+    print("[setup] Wrote fort.4 and jf_namelist")
 
     # The OpenIFS BOINC implementation uses mapped logical filenames to
     # identify the various input files.  Here we create the files with

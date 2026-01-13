@@ -33,6 +33,7 @@
                 {"Zip And Delete",      t_zip_and_delete},
                 {"Set Env Var",         t_set_env_var},
                 {"Get Out Files",       t_get_out_files},
+                {"Launch Process",      t_launch_process},
                 // Add new test functions here! Remember previous trailing comma!
     };
 

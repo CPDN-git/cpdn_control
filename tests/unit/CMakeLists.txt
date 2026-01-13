@@ -25,10 +25,16 @@ add_executable(unit_tests unit_tests.cpp
                         t_zip_and_delete.cpp
                         t_set_env_var.cpp
                         t_get_out_files.cpp
+                        t_launch_process.cpp
 )
+
+# Helper executable used by launch_process tests
+add_executable(launch_process_helper launch_process_helper.cpp)
 
 # Link the test executable to the control code
 target_link_libraries(unit_tests PRIVATE cpdn_control)
+target_compile_definitions(unit_tests PRIVATE LAUNCH_PROCESS_HELPER="$<TARGET_FILE:launch_process_helper>")
+add_dependencies(unit_tests launch_process_helper)
 
 # Add the targets to the CTest test suite
 # The command is the path to the executable just built.
@@ -47,3 +53,4 @@ add_test( NAME FileIsEmptyTest COMMAND unit_tests "File Is Empty" )
 add_test( NAME ZipAndDeleteTest COMMAND unit_tests "Zip And Delete" )
 add_test( NAME SetEnvVarTest COMMAND unit_tests "Set Env Var" )
 add_test( NAME GetOutFilesTest COMMAND unit_tests "Get Out Files" )
+add_test( NAME LaunchProcessTest COMMAND unit_tests "Launch Process" )

@@ -259,3 +259,44 @@ ctest --test-dir build -R '^FTest1_Setup$' -V
 ctest --test-dir build -R '^FTest1$' -V
 ctest --test-dir build -R '^FTest1_Validate$' -V
 ```
+
+## Coding style: Formatting via clang-format
+
+This repo uses `clang-format` with a `.clang-format` file in the repo root to 
+ensure the preferred coding style.
+
+### VS Code
+
+To use formatting in VS Code, load a code file into the editor and press: CTRL+SHIFT+I.
+
+To setup VS Code to use clang-format:
+
+Make clang-format the formatter for C/C++:
+```
+"[cpp]": { "editor.defaultFormatter": "ms-vscode.cpptools" },
+"[c]":   { "editor.defaultFormatter": "ms-vscode.cpptools" }
+```
+Tell cpptools to use the .clang-format file:
+```
+"C_Cpp.clang_format_style": "file"
+```
+(Optional but recommended) Explicitly point to the clang-format binary so it’s consistent:
+```
+"C_Cpp.clang_format_path": "/path/to/clang-format"
+```
+
+If using the C/C++ Extension pack in VS Code, then check the bundled clang-format version
+in the extensions folder: $HOME/.vscode/extensions/ms-vscode.cpptools-*/LLVM/bin/clang-format.
+
+### Terminal
+To format a single file on the command line. From the top level of the repository do:
+```
+clang-format -i path/to/file.cpp
+```
+
+To format all source files from the repo root:
+```
+clang-format -i $(rg --files -g '*.cpp' -g '*.h' -g '*.hpp')
+```
+
+A recent version of clang-format is required that supports the custom _SpacesIn_ options.

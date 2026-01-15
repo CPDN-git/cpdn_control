@@ -1,0 +1,40 @@
+# Format all files:
+#   clang-format -i $(rg --files -g '*.cpp' -g '*.h' -g '*.hpp')
+# Format a single file:
+#   clang-format -i path/to/file.cpp
+#
+# Style overview:
+# - BraceWrapping: functions open on a new line; control statements stay on the same line.
+#   Example: "void f()\n{", but "if ( cond ) {".
+# - SpacesInParens: add spaces inside control statements and function calls (but not empty parens).
+#   Example: "foo( bar, baz )" and "if ( x == y )", but "foo()".
+# - SpacesInAngles/SquareBrackets: keep angle/square brackets tight (no inner spaces).
+#   Example: "std::vector<int>" and "values[0]".
+#
+#    Glenn Carver, CPDN, Jan 2026. Ably assisted by GPT-5.2-Codex.
+#
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 120
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+  AfterControlStatement: false
+SpaceBeforeParens: ControlStatements
+SpacesInParens: Custom
+SpacesInParensOptions:
+  InCStyleCasts: false
+  InConditionalStatements: true
+  InEmptyParentheses: false
+  Other: true
+MaxEmptyLinesToKeep: 2
+AlignTrailingComments: true
+SpacesBeforeTrailingComments: 4
+PointerAlignment: Left
+ReferenceAlignment: Left
+DerivePointerAlignment: false
+BinPackArguments: true
+BinPackParameters: true
+ReflowComments: false

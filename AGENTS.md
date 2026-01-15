@@ -102,6 +102,6 @@ Typical steps:
 
 - Prefer small, focused patches; avoid drive-by refactors/formatting.
 - Keep build logic in CMake (don’t hardcode machine-specific paths in code).
+- Formatting: use the repo `.clang-format` when you need to format code; avoid reformatting unrelated files/sections.
 - When changing controller behavior, add/adjust a unit test where practical; use functional tests for end-to-end behavior.
 - The debug controller binary enables ASan; prefer it for test runs and bug hunting.
-

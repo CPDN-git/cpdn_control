@@ -196,7 +196,8 @@ static int task_finish( int exit_code )
 {
     // Add in any task cleanup code here as needed.
 
-    boinc_finish( exit_code );    // boinc_finish exits, no further code executed after this call (unless a dummy library is used).
+    boinc_end_critical_section();    // in case we abort while in critical section (boinc api handles case if not in critical section).
+    boinc_finish( exit_code );       // boinc_finish exits, no further code executed after this call (unless a dummy library is used).
     return exit_code;
 }
 
@@ -289,7 +290,6 @@ int main( int argc, char** argv )
     if ( !path_exists( upload_dir ) ) {
         if ( mkdir( upload_dir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH ) != 0 ) {
             std::cerr << "..mkdir for temp folder for results failed" << std::endl;
-            boinc_end_critical_section();
             return task_finish( 1 );    // should terminate, the model won't run.
         }
     }
@@ -298,7 +298,6 @@ int main( int argc, char** argv )
     retval = move_and_unzip_app_file( bconfig.app_name, bconfig.app_version, bconfig.project_dir, bconfig.slot_path );
     if ( retval ) {
         std::cerr << "..move_and_unzip_app_file failed" << "\n";
-        boinc_end_critical_section();
         return task_finish( retval );
     }
 
@@ -314,7 +313,6 @@ int main( int argc, char** argv )
     // Copy the namelist_zip to the slot directory and unzip
     if ( copy_and_unzip( namelist_zip, namelist_zip, bconfig.slot_path, "namelist_zip" ) ) {
         std::cerr << "..Copying and unzipping the namelist_zip failed: " << namelist_zip << std::endl;
-        boinc_end_critical_section();
         return task_finish( 1 );    // should terminate, the model won't run.
     }
 
@@ -340,7 +338,6 @@ int main( int argc, char** argv )
     // Check for the existence of the namelist
     if ( !path_exists( namelist_file ) ) {
         std::cerr << "..The namelist file does not exist: " << namelist_file << std::endl;
-        boinc_end_critical_section();
         return task_finish( 1 );    // should terminate, the model won't run.
     }
 
@@ -351,7 +348,6 @@ int main( int argc, char** argv )
     }
     if ( !namelist_filestream.is_open() ) {
         std::cerr << "..Error opening namelist file: " << namelist_file << std::endl;
-        boinc_end_critical_section();
         return task_finish( 1 );
     }
 
@@ -524,7 +520,6 @@ int main( int argc, char** argv )
     // Copy the ic_ancil_zip to the slot directory and unzip
     if ( copy_and_unzip( ic_ancil_zip, ic_ancil_zip, bconfig.slot_path, "ic_ancil_zip" ) ) {
         std::cerr << "..Copying and unzipping the ic_ancil_zip failed: " << ic_ancil_zip << std::endl;
-        boinc_end_critical_section();
         return task_finish( 1 );    // should terminate, the model won't run.
     }
 
@@ -538,7 +533,6 @@ int main( int argc, char** argv )
     if ( !path_exists( ifsdata_folder ) ) {
         if ( mkdir( ifsdata_folder.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH ) != 0 ) {
             std::cerr << "..mkdir for ifsdata folder failed" << std::endl;
-            boinc_end_critical_section();
             return task_finish( 1 );    // should terminate, the model won't run.
         }
     }
@@ -548,7 +542,6 @@ int main( int argc, char** argv )
     std::string ifsdata_check = ifsdata_folder + "/";
     if ( copy_and_unzip( ifsdata_zip, ifsdata_destination, ifsdata_check, "ifsdata_zip" ) ) {
         std::cerr << "..Copying and unzipping the ifsdata_zip failed: " << ifsdata_zip << std::endl;
-        boinc_end_critical_section();
         return task_finish( 1 );    // should terminate, the model won't run.
     }
 
@@ -562,7 +555,6 @@ int main( int argc, char** argv )
     if ( !path_exists( climate_data_path ) ) {
         if ( mkdir( climate_data_path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH ) != 0 ) {
             std::cerr << "..mkdir for the climate data folder failed" << std::endl;
-            boinc_end_critical_section();
             return task_finish( 1 );
         }
     }
@@ -570,7 +562,6 @@ int main( int argc, char** argv )
     // Copy the climate_data_zip to the slot directory and unzip
     if ( copy_and_unzip( climate_data_zip, climate_data_destination, climate_data_path, "climate_data_zip" ) ) {
         std::cerr << "..Copying and unzipping the climate_data_zip failed: " << climate_data_zip << std::endl;
-        boinc_end_critical_section();
         return task_finish( 1 );    // should terminate, the model won't run.
     }
 
@@ -590,11 +581,13 @@ int main( int argc, char** argv )
         // If both progress file and rcf file do not exist, then model has not run.
         // Do nothing as the task state variables are already initialized to zero values above.
         std::cerr << "-- Starting new model run --\n";
+
     } else if ( path_exists( progress_file ) && file_is_empty( progress_file ) ) {
         // If progress file exists and is empty, an error has occurred, then kill model run
         model_ctrl->print_logs( 50 );
         std::cerr << "..progress file exists, but is empty => problem with model, quitting run" << '\n';
         return task_finish( 1 );
+
     } else if ( path_exists( progress_file ) && !path_exists( rcf_file ) ) {
         read_progress_file( progress_file, tstate );
         // If last_iter less than the restart interval, then model is at beginning and rcf has yet to be produced then continue
@@ -610,6 +603,7 @@ int main( int argc, char** argv )
         model_ctrl->print_logs( 50 );
         std::cerr << "..rcf file exists, but progress file does not exist => problem with model, quitting run" << '\n';
         return task_finish( 1 );
+
     } else if ( ( path_exists( progress_file ) && !file_is_empty( progress_file ) ) && path_exists( rcf_file ) ) {
         // If progress file exists and is not empty and rcf file exists, then read rcf file and progress file
         std::ifstream rcf_file_stream;
@@ -713,8 +707,12 @@ int main( int argc, char** argv )
     // Start the model process
     std::cerr << "Launching model executable: " << exe_cmd << std::endl;
     tstate.pid = launch_process( bconfig.project_dir, bconfig.slot_path, exe_cmd, nthreads, tconfig.exptid );
+
     if ( tstate.pid > 0 ) {
-        tstate.process_status = 0;    //GC TODO. handle when tstate.pid =-1, i.e. launch failed (see launch_process_oifs)
+        tstate.process_status = 0;
+    } else if ( tstate.pid == -1 ) {
+        std::cerr << "..Error launching model process, return value: " << tstate.pid << std::endl;
+        return task_finish( 1 );
     }
 
     boinc_end_critical_section();
@@ -796,7 +794,7 @@ int main( int argc, char** argv )
 
                     std::cerr << "End of upload interval reached, starting a new upload process" << std::endl;
 
-                    // *****  Critical section -- all returns must now call boinc_end_critical_section()  *****
+                    // *****  Critical section start  *****
                     boinc_begin_critical_section();
 
                     // Cycle through all the steps from the last upload to the current upload
@@ -835,7 +833,6 @@ int main( int argc, char** argv )
                             retval = boinc_upload_file( upload_file_name );
                             if ( retval ) {
                                 std::cerr << "..boinc_upload_file failed for file: " << upload_file_name << std::endl;
-                                boinc_end_critical_section();
                                 return task_finish( retval );
                             }
                             retval = boinc_upload_status( upload_file_name );
@@ -896,7 +893,7 @@ int main( int argc, char** argv )
 
     //----- End of main loop ---------------------------------------------------------------------------
 
-    // Do NOT execute a return until the final upload is done, after the boinc_end_critical_section() below.
+    // Do NOT execute a return until the final upload is done after the boinc_end_critical_section() below.
 
     // GC. I probably don't need this; use the task_process_status variable & model_success instead in main loop?
     tstate.model_completed = 1;

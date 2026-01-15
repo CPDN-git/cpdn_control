@@ -19,24 +19,17 @@ class TestControl : public ModelControl {
 
   public:
     // Constructor and destructor methods
-    TestControl( std::string_view vendor, std::string_view model, std::string_view version,
-                 std::string_view input_file )
+    TestControl( std::string_view vendor, std::string_view model, std::string_view version, std::string_view input_file )
         : ModelControl( vendor, model, version, input_file )
     {
     }
     ~TestControl() override = default;
 
     // Public interface methods
-
-    // (overrides of pure virtual functions in ModelControl)
-    //bool parse_command_line(int argc, char* argv[]) override;   // not yet implemented
-    //bool setup() override;                                      // not yet implemented
-    //bool set_envs() override;                            // not yet implemented
-    //int start() override;                                    // not yet implemented
-    //void do_step_tasks(int current_step) override;           // not yet implemented
-    //bool teardown() override;                         // not yet implemented
+    // overrides of pure virtual functions in ModelControl
 
     void print_logs( const int nlines ) const override;
+    bool check_model_success( std::string_view ifsstat_path ) const override;
 
 
     // Delete copy constructor and assignment operator

@@ -798,8 +798,8 @@ int main( int argc, char** argv )
                     boinc_begin_critical_section();
 
                     // Cycle through all the steps from the last upload to the current upload
-                    for ( auto i = ( tstate.last_upload / timestep ); i < ( tstate.current_iter / timestep );
-                          i++ ) {    //  GC. tstate.current_iter/timestep is just tstate.last_iter!
+                    //  GC. tstate.current_iter/timestep is just tstate.last_iter! Fix!
+                    for ( auto i = ( tstate.last_upload / timestep ); i < ( tstate.current_iter / timestep ); i++ ) {
 
                         // Construct file name of the ICM result file
                         second_part = oifs_get_filename_part( std::to_string( i ), tconfig.exptid );
@@ -901,22 +901,7 @@ int main( int argc, char** argv )
     // Time delay to ensure model files are all flushed to disk
     sleep_seconds( 60 );
 
-    // To check whether model completed successfully, look for 'CNT0' in 3rd column of ifs.stat
-    // This will always be the last line of a successful model forecast.
-    // TODO: This needs to be a function call.
-
-    tstate.model_success = false;    // default to false unless confirmed below.
-    if ( path_exists( ifs_stat ) ) {
-        std::string ifs_word = "";
-        fread_last_line( ifs_stat, stat_lastline );
-        oifs_parse_stat( stat_lastline, ifs_word, 3 );
-        std::cerr << "Last line of ifs.stat, ifs_word: " << stat_lastline << ", " << ifs_word << '\n';
-        if ( ifs_word != "CNT0" ) {
-            std::cerr << "CNT0 not found; string returned was: " << "'" << ifs_word << "'" << '\n';
-        } else {
-            tstate.model_success = true;    // <<< only point at which model success is set to true <<<
-        }
-    }
+    tstate.model_success = model_ctrl->check_model_success( ifs_stat );
 
     if ( tstate.model_success ) {
         std::cerr << "..Model completed successfully" << std::endl;

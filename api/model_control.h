@@ -32,6 +32,10 @@ class ModelControl {
     // Prints last n lines of key log files produced by the model.
     virtual void print_logs( const int nlines ) const = 0;
 
+    // Checks the model has completed successfully.
+    // This interface will change once the derived class is fully implemented.
+    virtual bool check_model_success( std::string_view statfile ) const = 0;
+
     // Parse command line arguments (may not need this if controller process handles it).
     //virtual bool parse_command_line(int argc, char* argv[]) = 0;
 
@@ -74,8 +78,7 @@ class ModelControl {
     // Protected constructor for use by derived classes (may change in future when we use the model XML config file)
     // Use init list here, no need to use 'setters' in constructor.
     // C++ note. Allows keeping member variables private while still enabling derived classes to use init-list construction.
-    ModelControl( std::string_view vendor, std::string_view model, std::string_view version,
-                  const fs::path& input_file )
+    ModelControl( std::string_view vendor, std::string_view model, std::string_view version, const fs::path& input_file )
         : vendor_name( vendor ), model_name( model ), model_version( version ), parameter_input_file( input_file ) {};
 
     // Setters for model information (protected so only accessible to derived classes)

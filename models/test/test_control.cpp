@@ -4,9 +4,43 @@
 
 #include "test_control.h"
 #include "../../lib/utils.h"
+#include "../openifs/oifs_utils.h"    // for oifs_parse_stat()
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <string_view>
 
-// Note: Implementations of the pure virtual functions from ModelControl
-// would go here when they are implemented.
+// Implementations of the pure virtual functions from ModelControl
+
+/**
+ * @brief Check if the model has completed successfully.
+ * @param ifsstat_path Path to the ifs.stat file.
+ * @returns True if the model completed successfully, false otherwise.
+ */
+bool TestControl::check_model_success( std::string_view ifsstat_path ) const
+{
+    bool success = false;
+
+    // To check whether the model completed successfully, look for 'CNT0' in 3rd column of ifs.stat
+    // This will always be the last line of a successful model forecast.
+
+    if ( path_exists( ifsstat_path ) ) {
+        std::string ifs_word = "";
+        std::string stat_lastline = "";
+
+        fread_last_line( std::string( ifsstat_path ), stat_lastline );    // at some point, these will all be fs::path..
+        oifs_parse_stat( stat_lastline, ifs_word, 3 );
+        std::cerr << "Last line of ifs.stat, ifs_word: " << stat_lastline << ", " << ifs_word << '\n';
+        if ( ifs_word == "CNT0" ) {
+            success = true;
+        } else {
+            std::cerr << "CNT0 not found; string returned was: " << "'" << ifs_word << "'" << '\n';
+        }
+    } else {
+        std::cerr << "ifs.stat file not found: " << ifsstat_path << '\n';
+    }
+    return success;
+}
 
 /**
  * @brief Print the last n lines of key log files produced by the model.

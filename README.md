@@ -288,6 +288,14 @@ Tell cpptools to use the .clang-format file:
 If using the C/C++ Extension pack in VS Code, then check the bundled clang-format version
 in the extensions folder: $HOME/.vscode/extensions/ms-vscode.cpptools-*/LLVM/bin/clang-format.
 
+To automatically format a code file when saving from VS Code, do:
+```
+"editor.formatOnSave": true (formats on save)
+```
+Keep "C_Cpp.clang_format_style": "file" so it uses .clang-format.
+
+Completion/indentation while typing still uses editor settings; clang-format is applied only during formatting actions.
+
 ### Terminal
 To format a single file on the command line. From the top level of the repository do:
 ```

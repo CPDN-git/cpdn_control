@@ -6,6 +6,7 @@
 
 #include <string>
 #include <filesystem>
+#include <string_view>
 
 #include "../../api/model_control.h"
 
@@ -16,27 +17,19 @@ namespace fs = std::filesystem;
 class TestControl : public ModelControl { 
 
 public:
-    TestControl() = default;
-    virtual ~TestControl() = default;
+    // Constructor and destructor methods
+    TestControl(std::string_view vendor, std::string_view model, std::string_view version, std::string_view input_file) :
+                ModelControl(vendor, model, version, input_file) {}
+    ~TestControl() override = default;
 
     // Public interface methods
     // (overrides of pure virtual functions in ModelControl)
-    bool parse_command_line(int argc, char* argv[]) override;
-    bool setup() override;
-    bool set_envs() override;
-    int start() override;
-    void do_step_tasks(int current_step) override;
-    bool teardown() override;
-
-    std::string get_vendor_name() const override;
-    std::string get_model_name() const override;
-    std::string get_model_version() const override;
-    fs::path get_parameter_input_file() const override;
-
-    void set_vendor_name(const std::string& vendor) override;
-    void set_model_name(const std::string& model) override;
-    void set_model_version(const std::string& version) override;
-    void set_parameter_input_file(const fs::path& input_file) override;
+    //bool parse_command_line(int argc, char* argv[]) override;   // not yet implemented
+    //bool setup() override;                                      // not yet implemented
+    //bool set_envs() override;                            // not yet implemented 
+    //int start() override;                                    // not yet implemented 
+    //void do_step_tasks(int current_step) override;           // not yet implemented
+    //bool teardown() override;                         // not yet implemented
 
     // Delete copy constructor and assignment operator
     

@@ -59,16 +59,22 @@ constexpr std::string_view  MODEL_CONFIG_FILE = "model_config.xml";
  *        Note that we specify the *model* name here and not the app name though they may be the same.
  * 
  * @param modelName The name of the model.
- * @return A unique pointer to the created ModelControl instance.
+ * @return A unique pointer to the created ModelControl instance. Maybe nullptr if model not supported.
 */
-static std::unique_ptr<ModelControl> create_model_control(const std::string& model_name) {
+static std::unique_ptr<ModelControl> create_model_control(std::string_view model_name)
+{
+    std::unique_ptr<ModelControl> model_ctrl;   // create a null unique_ptr ready for a new model control instance.
 
-    // Model mappings:
+    // Model mappings
 
-    if (model_name == "test_model")  return std::make_unique<TestControl>();
-    //if (model_name == "oifs_43r3") return std::make_unique<OpenIFSControl>();
+    if (model_name == "test_model") {
+      model_ctrl = std::make_unique<TestControl>("CPDN", "test_model", "1.0", "fort.4");
+    }
+    if (model_name == "oifs_43r3") {
+      //model_ctrl = std::make_unique<OpenIFSControl>("ECMWF", "OpenIFS", "43r3", "fort.4");
+    }
 
-    throw std::runtime_error("Unsupported model name: " + model_name);
+    return model_ctrl;
 }
 
 
@@ -247,7 +253,12 @@ int main(int argc, char** argv)
     }
 
     // Create model control instance.
+    // In future, rather than pass app_name, we might pass the model name read from model_config.xml.
     auto model_ctrl = create_model_control(bconfig.app_name);
+    if ( model_ctrl == nullptr ) {
+         std::cerr << "..Error creating model control instance. Unsupported model: " << bconfig.app_name << std::endl;
+         return task_finish(1);
+      }
 
     // --------------- Argument processing -----------------
 

@@ -5,6 +5,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 #include <filesystem>
 #include <string_view>
 
@@ -23,6 +24,7 @@ public:
     ~TestControl() override = default;
 
     // Public interface methods
+
     // (overrides of pure virtual functions in ModelControl)
     //bool parse_command_line(int argc, char* argv[]) override;   // not yet implemented
     //bool setup() override;                                      // not yet implemented
@@ -31,8 +33,18 @@ public:
     //void do_step_tasks(int current_step) override;           // not yet implemented
     //bool teardown() override;                         // not yet implemented
 
+    void print_logs(const int nlines) const override;
+    
+
     // Delete copy constructor and assignment operator
     
     TestControl(const TestControl&) = delete;
     TestControl& operator=(const TestControl&) = delete;
+
+
+private:
+    // Private member variables
+
+    // Key model output logs
+    std::vector<std::string> log_files = {"NODE.001_01", "ifs.stat", "rcf", "waminfo"};
 };

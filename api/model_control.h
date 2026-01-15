@@ -29,6 +29,9 @@ public:
     // Public interface methods (examples for now -- will change as more implmentation is done through the class)
     // Pure virtual functions. Overrides must be provided in derived classes.
 
+    // Prints last n lines of key log files produced by the model.
+    virtual void print_logs(const int nlines) const = 0;
+
     // Parse command line arguments (may not need this if controller process handles it).
     //virtual bool parse_command_line(int argc, char* argv[]) = 0;
 

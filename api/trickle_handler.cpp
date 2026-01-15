@@ -5,20 +5,19 @@
 
 #include "trickle_handler.h"
 #include "boinc/boinc_api.h"
-#include <sstream>
 #include <iostream>
+#include <sstream>
 #include <vector>
 
 
-TrickleHandler::TrickleHandler(const std::string& wu_name, 
-                                const std::string& result_base_name, 
-                                const std::string& slot_path)
-                    : wu_name_(wu_name), 
-                      result_base_name_(result_base_name), 
-                      slot_path_(slot_path) {
+TrickleHandler::TrickleHandler( const std::string& wu_name, const std::string& result_base_name,
+                                const std::string& slot_path )
+    : wu_name_( wu_name ), result_base_name_( result_base_name ), slot_path_( slot_path )
+{
 }
 
-TrickleHandler::~TrickleHandler() {
+TrickleHandler::~TrickleHandler()
+{
     // Nothing to clean up
 }
 
@@ -28,22 +27,21 @@ TrickleHandler::~TrickleHandler() {
  * @param current_cpu_time The current CPU time used by the task.
  * @param timestep The current timestep of the model.
  */
-void TrickleHandler::process_trickle(double current_cpu_time, int timestep)
+void TrickleHandler::process_trickle( double current_cpu_time, int timestep )
 {
     std::stringstream trickle_buffer;
-    trickle_buffer << "<wu>" << wu_name_ << "</wu>\n<result>" << result_base_name_ 
-                  << "</result>\n<ph></ph>\n<ts>" << timestep << "</ts>\n<cp>" 
-                  << current_cpu_time << "</cp>\n<vr></vr>\n";
+    trickle_buffer << "<wu>" << wu_name_ << "</wu>\n<result>" << result_base_name_ << "</result>\n<ph></ph>\n<ts>"
+                   << timestep << "</ts>\n<cp>" << current_cpu_time << "</cp>\n<vr></vr>\n";
     std::string trickle_msg = trickle_buffer.str();
 
     // Create null terminated, non-const char buffers for the boinc_send_trickle_up call
     // to avoid possible memory faults (as seen in the past).
-    std::vector<char> trickle_data(trickle_msg.begin(), trickle_msg.end());
-    trickle_data.push_back('\0');
-      
+    std::vector<char> trickle_data( trickle_msg.begin(), trickle_msg.end() );
+    trickle_data.push_back( '\0' );
+
     std::cerr << "Sending trickle message to CPDN at timestep: " << timestep << "\n";
     int reval = boinc_send_trickle_up( (char*)"orig", trickle_data.data() );
-    if (reval != 0) {
+    if ( reval != 0 ) {
         std::cerr << "Error sending trickle, boinc_send_trickle_up returned: " << reval << "\n";
     }
 }
@@ -56,15 +54,16 @@ void TrickleHandler::process_trickle(double current_cpu_time, int timestep)
  * @param total_nsteps The total number of steps in the model run.
  * @return The trickle frequency in model steps.
  */
-int TrickleHandler::get_trickle_frequency(int timestep, int total_timesteps) {
+int TrickleHandler::get_trickle_frequency( int timestep, int total_timesteps )
+{
     //GC. Oct/25. Trickles are now fixed at every 10% of the model run with a final trickle at the end of the run.
 
-    int freq_min = (24*3600)/timestep;         // minimum of a trickle every 24 model hrs.
+    int freq_min = ( 24 * 3600 ) / timestep;    // minimum of a trickle every 24 model hrs.
     int fraction = 10;
 
-    int trickle_freq = int(total_timesteps) / fraction;
+    int trickle_freq = int( total_timesteps ) / fraction;
     if ( trickle_freq < freq_min ) {
-      trickle_freq = freq_min;
+        trickle_freq = freq_min;
     }
     return trickle_freq;
 }

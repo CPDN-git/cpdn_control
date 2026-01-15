@@ -61,20 +61,21 @@ constexpr std::string_view  MODEL_CONFIG_FILE = "model_config.xml";
  * @param modelName The name of the model.
  * @return A unique pointer to the created ModelControl instance. Maybe nullptr if model not supported.
 */
-static std::unique_ptr<ModelControl> create_model_control(std::string_view model_name)
+static std::unique_ptr<ModelControl> create_model_control(std::string_view vendor, 
+         std::string_view model_name, std::string_view model_version, std::string_view primary_ctrl_file)
 {
-    std::unique_ptr<ModelControl> model_ctrl;   // create a null unique_ptr ready for a new model control instance.
+    std::unique_ptr<ModelControl> model;   // create a null unique_ptr ready for a new model control instance.
 
     // Model mappings
 
     if (model_name == "test_model") {
-      model_ctrl = std::make_unique<TestControl>("CPDN", "test_model", "1.0", "fort.4");
+      model = std::make_unique<TestControl>(vendor, model_name, model_version, primary_ctrl_file);
     }
     if (model_name == "oifs_43r3") {
       //model_ctrl = std::make_unique<OpenIFSControl>("ECMWF", "OpenIFS", "43r3", "fort.4");
     }
 
-    return model_ctrl;
+    return model;
 }
 
 
@@ -254,7 +255,8 @@ int main(int argc, char** argv)
 
     // Create model control instance.
     // In future, rather than pass app_name, we might pass the model name read from model_config.xml.
-    auto model_ctrl = create_model_control(bconfig.app_name);
+    // "CPDN" and "fort.4" are placeholders for vendor name and primary control file respectively.
+    auto model_ctrl = create_model_control("CPDN", bconfig.app_name, bconfig.app_version, "fort.4");
     if ( model_ctrl == nullptr ) {
          std::cerr << "..Error creating model control instance. Unsupported model: " << bconfig.app_name << std::endl;
          return task_finish(1);
@@ -615,8 +617,7 @@ int main(int argc, char** argv)
     }
     else if ( path_exists(progress_file) && file_is_empty(progress_file) ) {
        // If progress file exists and is empty, an error has occurred, then kill model run
-       print_last_lines("NODE.001_01", 70);
-       print_last_lines("ifs.stat",8);
+       model_ctrl->print_logs(50);
        std::cerr << "..progress file exists, but is empty => problem with model, quitting run" << '\n';
        return task_finish(1);
     }
@@ -625,8 +626,7 @@ int main(int argc, char** argv)
        // If last_iter less than the restart interval, then model is at beginning and rcf has yet to be produced then continue
        if (std::stoi(task.last_iter) >= restart_interval) {
           // Otherwise if progress file exists and rcf file does not exist, an error has occurred, then kill model run
-          print_last_lines("NODE.001_01", 70);
-          print_last_lines("ifs.stat",8);
+          model_ctrl->print_logs(50);
           std::cerr << "..progress file exists, but rcf file does not exist => problem with model, quitting run" << '\n';
           return task_finish(1);
        }
@@ -634,8 +634,7 @@ int main(int argc, char** argv)
     else if ( !path_exists(progress_file) && path_exists(rcf_file) ) {
        // If rcf file exists and progress file does not exist, an error has occurred, then kill model run
        // TODO: we should be able to bootstrap the progress file from the rcf file here?
-       print_last_lines("NODE.001_01", 70);
-       print_last_lines("ifs.stat",8);
+       model_ctrl->print_logs(50);
        std::cerr << "..rcf file exists, but progress file does not exist => problem with model, quitting run" << '\n';
        return task_finish(1);
     }
@@ -656,8 +655,7 @@ int main(int argc, char** argv)
             }
             else {
                // Reading the rcf file failed, then kill model run
-               print_last_lines("NODE.001_01", 70);
-               print_last_lines("ifs.stat",8);
+               model_ctrl->print_logs(50);
                std::cerr << "..Reading the rcf file failed" << '\n';
 	            return task_finish(1);
             }
@@ -745,7 +743,6 @@ int main(int argc, char** argv)
     std::cerr << "Launching model executable: " << exe_cmd << std::endl;
     task.pid = launch_process(bconfig.project_dir, bconfig.slot_path, exe_cmd, nthreads, tconfig.exptid);
     if (task.pid > 0) task.process_status = 0;     //GC TODO. Need to handle when task.pid =-1, i.e. launch failed (see code in launch_process_oifs)
-
 
     boinc_end_critical_section();
 
@@ -925,67 +922,76 @@ int main(int argc, char** argv)
 
     //----- End of main loop ---------------------------------------------------------------------------	
 
+    // Do NOT execute a return until the final upload is done, after the boinc_end_critical_section() below.
+
+    // GC. I probably don't need this; use the task_process_status variable & model_success instead in main loop?
+    task.model_completed = 1;
 
     // Time delay to ensure model files are all flushed to disk
-    sleep_seconds(60);
-
-    // Print content of key model files to help with diagnosing problems
-    print_last_lines("NODE.001_01", 70);    //  main model output log	
+    sleep_seconds(60);	
 
     // To check whether model completed successfully, look for 'CNT0' in 3rd column of ifs.stat
     // This will always be the last line of a successful model forecast.
+    // TODO: This needs to be a function call.
+
+    task.model_success = false;   // default to false unless confirmed below.
     if (path_exists(ifs_stat))
     {
        std::string ifs_word="";
        fread_last_line(ifs_stat, stat_lastline);
        oifs_parse_stat(stat_lastline, ifs_word, 3);
        std::cerr << "Last line of ifs.stat, ifs_word: " << stat_lastline << ", " << ifs_word << '\n';
-       if (ifs_word!="CNT0") {
-         std::cerr << "CNT0 not found; string returned was: " << "'" << ifs_word << "'" << '\n';
-         // print extra files to help diagnose fail
-         print_last_lines("ifs.stat",8);
-         print_last_lines("rcf",11);              // openifs restart control
-         print_last_lines("waminfo",17);          // wave model restart control
-         print_last_lines(progress_file,10);      // model progress file
-         std::cerr << "..Failed, model did not complete successfully" << std::endl;
-         std::cerr << "..Model exit code: " << task.exit_code << std::endl;
-         return task_finish(task.exit_code);    // GC TODO. Do I want to call task_finish here? There are too many return points.
+       if (ifs_word != "CNT0") {
+           std::cerr << "CNT0 not found; string returned was: " << "'" << ifs_word << "'" << '\n';
+       }
+       else {
+           task.model_success = true;  // <<< only point at which model success is set to true <<<
        }
     }
-    // ifs.stat has not been produced, then model did not start
-    else {
-       std::cerr << "..Failed, model did not start" << std::endl;
-       return task_finish(1);	    
+
+    if ( task.model_success ) {
+        std::cerr << "..Model completed successfully" << std::endl;
+    } else {
+      std::cerr << "..Failed, model did not complete successfully" << std::endl;
+      std::cerr << "..Model exit code: " << task.exit_code << std::endl;
     }
 
-    // Update model_completed
-    task.model_completed = 1;
+    // Print the model logs & progress file (if they exist)
+    std::cerr << ".. Printing tail of model log files .." << std::endl;
+    model_ctrl->print_logs(40);
+    std::cerr << "... Printing controller progress file .. " << std::endl;
+    print_last_lines(progress_file,10);
 
-    // Handle the last ICM files
+    // Move the final ICMGG, ICMSH and ICMUA model output files to the task folder in the project directory
     second_part = oifs_get_filename_part(task.last_iter, tconfig.exptid);
 
-    // Move the ICMGG, ICMSH and ICMUA model output files to the task folder in the project directory
     std::vector<std::string> icm = {"ICMGG", "ICMSH", "ICMUA"};
     for (const auto& part : icm) {
        std::string result = part + second_part;
        retval = move_result_file(bconfig.slot_path, upload_dir, result);
        if (retval) {
           std::cerr << "..Copying " << part << " result file to the temp folder in the projects directory failed" << "\n";
-          return task_finish(retval);
        }
     }
 
-    boinc_begin_critical_section();
-
     //-----------------------------Create the final results zip file-----------------------------------------
+
+    // Although the final move of output files may have failed above, there might still be some previous
+    // output files in the upload dir ready to be zipped and uploaded.
+
+    boinc_begin_critical_section();
 
     zfl.clear();
     std::string node_file = bconfig.slot_path + "/NODE.001_01";
-    zfl.push_back(node_file);
+    if (path_exists(node_file) ) {
+      zfl.push_back(node_file);
+      std::cerr << "Adding to the zip: " << node_file << '\n';
+    }
     std::string ifsstat_file = bconfig.slot_path + "/ifs.stat";
-    zfl.push_back(ifsstat_file);
-    std::cerr << "Adding to the zip: " << node_file << '\n';
-    std::cerr << "Adding to the zip: " << ifsstat_file << '\n';
+    if (path_exists(ifsstat_file) ) {
+       zfl.push_back(ifsstat_file);
+       std::cerr << "Adding to the zip: " << ifsstat_file << '\n';
+   }
 
     // Read the remaining list of files from the slots directory and add the matching files to the list of files for the zip
     // GC. TODO. Update to C++ 17.
@@ -1021,20 +1027,18 @@ int main(int argc, char** argv)
           retval = boinc_upload_file(upload_file_name);
           if (retval) {
              std::cerr << "..boinc_upload_file failed for file: " << upload_file_name << std::endl;
-             boinc_end_critical_section();
-             return task_finish(retval);
-          }
-          retval = boinc_upload_status(upload_file_name);
-          if (!retval) {
-             std::cerr << "Finished the upload of the final file" << '\n';
-          }
+          } else {
+            retval = boinc_upload_status(upload_file_name);
+            if (!retval) {
+                std::cerr << "Finished the upload of the final file" << '\n';
+            }
+         }
 
 	       // Produce final trickle it's the same timestep as the last main loop trickle
           if ( task.current_iter > task.last_trickle_iter ) {
             trickler.process_trickle(task.current_cpu_time, task.current_iter);
           }
        }
-       boinc_end_critical_section();
     }
 
     //-------------------------------------------------------------------------------------------------------
@@ -1046,7 +1050,7 @@ int main(int argc, char** argv)
 
     // Delay to ensure all files are flushed to disk before exiting
     std::cerr << "Waiting for all file operations to complete..." << std::endl;
-    sleep_seconds(120);
+    sleep_seconds(90);
     std::cerr << "Task finished." << std::endl;
 
     // if finished normally
@@ -1054,6 +1058,6 @@ int main(int argc, char** argv)
       return task_finish(0);
     }
     else {
-      return task_finish(1);
+      return task_finish(1);  // I could return the task return code here?
     }	
 }

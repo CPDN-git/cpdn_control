@@ -60,8 +60,7 @@ constexpr std::string_view MODEL_CONFIG_FILE = "model_config.xml";
  * @param modelName The name of the model.
  * @return A unique pointer to the created ModelControl instance. Maybe nullptr if model not supported.
 */
-static std::unique_ptr<ModelControl> create_model_control( std::string_view vendor, std::string_view model_name,
-                                                           std::string_view model_version,
+static std::unique_ptr<ModelControl> create_model_control( std::string_view vendor, std::string_view model_name, std::string_view model_version,
                                                            std::string_view primary_ctrl_file )
 {
     std::unique_ptr<ModelControl> model;    // create a null unique_ptr ready for a new model control instance.
@@ -93,19 +92,17 @@ static bool get_app_config_nthreads( const std::string& app_config_nthreads, std
         std::cerr << "Warning. --nthreads argument present but has no value! Ignoring.\n";
     } else {
         try {
-            int max_threads =
-                8;    // GC. This is the best maximum as parallel efficiency markedly drops after this many threads, even at T319.
+            // GC. The best max as parallel efficiency markedly drops after this many threads, even at T319.
+            int max_threads = 8;
             int min_threads = 1;    // minimum number of threads.
             int ithreads = -1;
 
             ithreads = std::stoi( app_config_nthreads );
             if ( ithreads > max_threads ) {
-                std::cerr << "Warning. --nthreads value is too high. Setting to max number of threads : " << max_threads
-                          << '\n';
+                std::cerr << "Warning. --nthreads value too high. Setting to max number of threads : " << max_threads << '\n';
                 nthreads = std::to_string( max_threads );
             } else if ( ithreads < min_threads ) {
-                std::cerr
-                    << "Warning. --nthreads is too low for this configuration. Minimum #threads is 2. Resetting.\n";
+                std::cerr << "Warning. --nthreads is too low for this configuration. Minimum #threads is 2. Resetting.\n";
                 nthreads = std::to_string( min_threads );
             }
             return true;
@@ -162,8 +159,7 @@ static int process_args( int argc, char** argv, TaskConfig& tconfig )
 {
     if ( argc < 7 ) {
         std::cerr << "CPDN Controller error: Not enough command line arguments provided.\n"
-                  << "Usage: " << argv[0]
-                  << " <start_date> <exptid> <unique_member_id> <batchid> <wuid> <fclen> [app_version]\n";
+                  << "Usage: " << argv[0] << " <start_date> <exptid> <unique_member_id> <batchid> <wuid> <fclen> [app_version]\n";
         return 1;
     }
 
@@ -200,8 +196,7 @@ static int task_finish( int exit_code )
 {
     // Add in any task cleanup code here as needed.
 
-    boinc_finish(
-        exit_code );    // boinc_finish exits, no further code executed after this call (unless a dummy library is used).
+    boinc_finish( exit_code );    // boinc_finish exits, no further code executed after this call (unless a dummy library is used).
     return exit_code;
 }
 
@@ -238,8 +233,7 @@ int main( int argc, char** argv )
 
     // Say who we are.
     banner( bconfig.app_name, bconfig.app_version, CODE_VERSION );
-    std::cerr << "Workunit name: " << bconfig.wu_name << '\n'
-              << "CPDN project directory: " << bconfig.project_dir << '\n';
+    std::cerr << "Workunit name: " << bconfig.wu_name << '\n' << "CPDN project directory: " << bconfig.project_dir << '\n';
 
     // ---------------- Task configuration -----------------
 
@@ -248,8 +242,7 @@ int main( int argc, char** argv )
 
     // Check for existence of model_config.xml in current directory (task) and fail if not found.
     if ( !path_exists( MODEL_CONFIG_FILE ) ) {
-        std::cerr << "..The model config.xml file does not exist in the current directory: " << MODEL_CONFIG_FILE
-                  << std::endl;
+        std::cerr << "..The model config.xml file does not exist in the current directory: " << MODEL_CONFIG_FILE << std::endl;
         //GC. Testing only; return task_finish(1);        // should terminate, the model won't run.
     }
 
@@ -282,9 +275,8 @@ int main( int argc, char** argv )
         std::cerr << "Using --nthreads from app_config.xml: " << nthreads << '\n';
     }
 
-    const std::string namelist = "fort.4";    // namelist file. will come from XML input later.
-    double num_days = atof(
-        tconfig.fclen.c_str() );    // number of simulation days; fclen should come from fort.4, not the command line.
+    const std::string namelist = "fort.4";              // namelist file. will come from XML input later.
+    double num_days = atof( tconfig.fclen.c_str() );    // number of simulation days; fclen should come from fort.4, not the command line.
 
     // --------------- Prepare the task environment -----------------
 
@@ -315,8 +307,8 @@ int main( int argc, char** argv )
     // This should really be part of a general piece of code to process the model ancil files. Needs refactoring later.
 
     fs::path namelist_zip_path = bconfig.slot_path;
-    namelist_zip_path /= std::string( bconfig.app_name ) + "_" + tconfig.unique_member_id + "_" + tconfig.start_date +
-                         "_" + std::to_string( (int)num_days ) + "_" + tconfig.batchid + "_" + tconfig.wuid + ".zip";
+    namelist_zip_path /= std::string( bconfig.app_name ) + "_" + tconfig.unique_member_id + "_" + tconfig.start_date + "_" +
+                         std::to_string( (int)num_days ) + "_" + tconfig.batchid + "_" + tconfig.wuid + ".zip";
     std::string namelist_zip = namelist_zip_path.string();    // nb this is a const string.
 
     // Copy the namelist_zip to the slot directory and unzip
@@ -387,9 +379,8 @@ int main( int argc, char** argv )
 
     // These are the keys injected by CPDN into the namelist header. Other variables
     // searched for come from the namelist itself.
-    const std::unordered_set<std::string> header_keys = { "IC_ANCIL_FILE",    "IFSDATA_FILE",    "CLIMATE_DATA_FILE",
-                                                          "HORIZ_RESOLUTION", "VERT_RESOLUTION", "GRID_TYPE",
-                                                          "UPLOAD_INTERVAL" };
+    const std::unordered_set<std::string> header_keys = { "IC_ANCIL_FILE",   "IFSDATA_FILE", "CLIMATE_DATA_FILE", "HORIZ_RESOLUTION",
+                                                          "VERT_RESOLUTION", "GRID_TYPE",    "UPLOAD_INTERVAL" };
 
     while ( std::getline( namelist_filestream, namelist_line ) ) {
         tmpstr.clear();
@@ -413,8 +404,7 @@ int main( int argc, char** argv )
                 header_line.erase( 0, 1 );
 
                 if ( parse_key_value( header_line, parsed_key, parsed_value ) &&
-                     header_keys.find( parsed_key ) !=
-                         header_keys.end() ) {    // ignore any keys not in the header list above
+                     header_keys.find( parsed_key ) != header_keys.end() ) {    // ignore any keys not in the header list above
                     have_kv = true;
                 }
             }
@@ -446,8 +436,7 @@ int main( int argc, char** argv )
             try {
                 upload_interval = std::stoi( tmpstr );
             } catch ( ... ) {
-                std::cerr << ".. Warning, unable to parse upload interval from namelist, setting to zero, got string: "
-                          << tmpstr << '\n';
+                std::cerr << ".. Warning, unable to parse upload interval from namelist, setting to zero, got string: " << tmpstr << '\n';
                 upload_interval = 0;
             }
         } else if ( parsed_key == "UTSTEP" ) {
@@ -455,13 +444,10 @@ int main( int argc, char** argv )
             try {
                 timestep = std::stoi( tmpstr );
             } catch ( ... ) {
-                std::cerr
-                    << ".. Warning, unable to parse timestep interval from namelist, setting to zero, got string: "
-                    << tmpstr << '\n';
+                std::cerr << ".. Warning, unable to parse timestep interval from namelist, setting to zero, got string: " << tmpstr << '\n';
                 timestep = 0;
             }
-        } else if ( parsed_key ==
-                    "NFRPOS" ) {    // frequency of model OUTPUT file creation (for upload); +ve model steps, -ve hours.
+        } else if ( parsed_key == "NFRPOS" ) {    // frequency of model OUTPUT file creation (for upload); +ve model steps, -ve hours.
             tmpstr = parsed_value;
             try {
                 ICM_file_interval = std::stoi( tmpstr );
@@ -471,14 +457,12 @@ int main( int argc, char** argv )
                           << tmpstr << std::endl;
                 ICM_file_interval = 0;
             }
-        } else if ( parsed_key ==
-                    "NFRRES" ) {    // frequency of model RESTART file creation: +ve model steps, -ve hours.
+        } else if ( parsed_key == "NFRRES" ) {    // frequency of model RESTART file creation: +ve model steps, -ve hours.
             tmpstr = parsed_value;
             try {
                 restart_interval = stoi( tmpstr );
             } catch ( ... ) {
-                std::cerr << "..Warning, unable to parse restart interval from namelist, setting to zero, got string: "
-                          << tmpstr << std::endl;
+                std::cerr << "..Warning, unable to parse restart interval from namelist, setting to zero, got string: " << tmpstr << std::endl;
                 restart_interval = 0;
             }
         }
@@ -596,7 +580,7 @@ int main( int argc, char** argv )
     std::string progress_file = bconfig.slot_path + "/progress_file";
     std::string rcf_file = bconfig.slot_path + "/rcf";
 
-    TaskState task;    // Initialize task state with default values
+    TaskState tstate;    // Initialize task state with default values
 
     // Check whether the rcf file and the progress file (contains model progress) are not already present from an unscheduled shutdown
     std::cerr << "Checking for rcf file and progress file: " << progress_file << '\n';
@@ -612,13 +596,12 @@ int main( int argc, char** argv )
         std::cerr << "..progress file exists, but is empty => problem with model, quitting run" << '\n';
         return task_finish( 1 );
     } else if ( path_exists( progress_file ) && !path_exists( rcf_file ) ) {
-        read_progress_file( progress_file, task );
+        read_progress_file( progress_file, tstate );
         // If last_iter less than the restart interval, then model is at beginning and rcf has yet to be produced then continue
-        if ( std::stoi( task.last_iter ) >= restart_interval ) {
+        if ( std::stoi( tstate.last_iter ) >= restart_interval ) {
             // Otherwise if progress file exists and rcf file does not exist, an error has occurred, then kill model run
             model_ctrl->print_logs( 50 );
-            std::cerr << "..progress file exists, but rcf file does not exist => problem with model, quitting run"
-                      << '\n';
+            std::cerr << "..progress file exists, but rcf file does not exist => problem with model, quitting run" << '\n';
             return task_finish( 1 );
         }
     } else if ( !path_exists( progress_file ) && path_exists( rcf_file ) ) {
@@ -651,10 +634,10 @@ int main( int argc, char** argv )
         }
         rcf_file_stream.close();
 
-        read_progress_file( progress_file, task );
+        read_progress_file( progress_file, tstate );
 
         // Check if the CSTEP variable from rcf is greater than the last_iter, if so then quit model run
-        if ( stoi( cstep_value ) > stoi( task.last_iter ) ) {
+        if ( stoi( cstep_value ) > stoi( tstate.last_iter ) ) {
             std::cerr << "..CSTEP variable from rcf is greater than last_iter from progress file, error has occurred, "
                          "quitting model run"
                       << '\n';
@@ -665,15 +648,14 @@ int main( int argc, char** argv )
         // This is always a multiple of the restart frequency
 
         std::cerr << "-- Model is restarting --\n";
-        std::cerr << "Adjusting last_iter, " << task.last_iter << ", to previous model restart step.\n";
-        int restart_iter = stoi( task.last_iter );
-        restart_iter = restart_iter - ( ( restart_iter % restart_interval ) -
-                                        1 );    // -1 because the model will continue from restart_iter.
-        task.last_iter = std::to_string( restart_iter );
+        std::cerr << "Adjusting last_iter, " << tstate.last_iter << ", to previous model restart step.\n";
+        int restart_iter = stoi( tstate.last_iter );
+        restart_iter = restart_iter - ( ( restart_iter % restart_interval ) - 1 );    // -1 because the model will continue from restart_iter.
+        tstate.last_iter = std::to_string( restart_iter );
     }
 
     // Update progress file with current values
-    update_progress_file( progress_file, task );
+    update_progress_file( progress_file, tstate );
 
     // seconds between upload files: upload_interval
     // seconds between ICM files: ICM_file_interval * timestep
@@ -724,17 +706,16 @@ int main( int argc, char** argv )
     // Manually set the permissions on the model executable before running.
 
     if ( !set_exec_perms( exe_cmd ) ) {
-        std::cerr << "..Cannot start model. Setting execute permission for model executable failed: " << exe_cmd
-                  << std::endl;
+        std::cerr << "..Cannot start model. Setting execute permission for model executable failed: " << exe_cmd << std::endl;
         return task_finish( 1 );
     }
 
     // Start the model process
     std::cerr << "Launching model executable: " << exe_cmd << std::endl;
-    task.pid = launch_process( bconfig.project_dir, bconfig.slot_path, exe_cmd, nthreads, tconfig.exptid );
-    if ( task.pid > 0 )
-        task.process_status =
-            0;    //GC TODO. Need to handle when task.pid =-1, i.e. launch failed (see code in launch_process_oifs)
+    tstate.pid = launch_process( bconfig.project_dir, bconfig.slot_path, exe_cmd, nthreads, tconfig.exptid );
+    if ( tstate.pid > 0 ) {
+        tstate.process_status = 0;    //GC TODO. handle when tstate.pid =-1, i.e. launch failed (see launch_process_oifs)
+    }
 
     boinc_end_critical_section();
 
@@ -759,7 +740,7 @@ int main( int argc, char** argv )
     int count = 0;
     std::string iter = "0";
 
-    while ( task.process_status == 0 && task.model_completed == 0 ) {
+    while ( tstate.process_status == 0 && tstate.model_completed == 0 ) {
         sleep_seconds( 1 );    // Time delay to reduce overhead
 
         count++;
@@ -769,7 +750,7 @@ int main( int argc, char** argv )
         // Going too low can cause the %age done on boincmgr to flip backwards.
         if ( count == 7 ) {
 
-            iter = task.last_iter;
+            iter = tstate.last_iter;
             if ( path_exists( ifs_stat ) ) {
 
                 // Read completed step from last line of ifs.stat file.
@@ -781,15 +762,15 @@ int main( int argc, char** argv )
                 if ( fread_last_line( ifs_stat, stat_lastline ) ) {       // only returns true if lastline has changed
                     if ( oifs_parse_stat( stat_lastline, iter, 4 ) ) {    // iter updates
                         if ( !oifs_valid_step( iter, total_nsteps ) ) {
-                            iter = task.last_iter;    // revert to last valid step
+                            iter = tstate.last_iter;    // revert to last valid step
                         }
                     }
                 }
             }
 
-            if ( std::stoi( iter ) != std::stoi( task.last_iter ) ) {
+            if ( std::stoi( iter ) != std::stoi( tstate.last_iter ) ) {
                 // Construct file name of the ICM result file
-                second_part = oifs_get_filename_part( task.last_iter, tconfig.exptid );
+                second_part = oifs_get_filename_part( tstate.last_iter, tconfig.exptid );
 
                 // Move the ICMGG, ICMSH & ICMUA result files to the task folder in the project directory
                 // GC. Why do this every timestep? This should be done at same frequency as NFRPOS.
@@ -799,18 +780,17 @@ int main( int argc, char** argv )
                     std::string result = part + second_part;
                     retval = move_result_file( bconfig.slot_path, upload_dir, result );
                     if ( retval ) {
-                        std::cerr << "..Copying " << part
-                                  << " result file to the temp folder in the projects directory failed" << "\n";
+                        std::cerr << "..Copying " << part << " result file to the temp folder in the projects directory failed" << "\n";
                         return task_finish( retval );
                     }
                 }
 
                 // Convert iteration number to seconds
-                task.current_iter = ( std::stoi( task.last_iter ) ) * timestep;
+                tstate.current_iter = ( std::stoi( tstate.last_iter ) ) * timestep;
 
                 // Upload a new upload file if the end of an upload_interval has been reached
-                if ( ( ( task.current_iter - task.last_upload ) >= ( upload_interval * timestep ) ) &&
-                     ( task.current_iter < total_length_of_simulation ) ) {
+                if ( ( ( tstate.current_iter - tstate.last_upload ) >= ( upload_interval * timestep ) ) &&
+                     ( tstate.current_iter < total_length_of_simulation ) ) {
                     // Create an intermediate results zip file
                     zfl.clear();
 
@@ -820,8 +800,8 @@ int main( int argc, char** argv )
                     boinc_begin_critical_section();
 
                     // Cycle through all the steps from the last upload to the current upload
-                    for ( auto i = ( task.last_upload / timestep ); i < ( task.current_iter / timestep );
-                          i++ ) {    //  task.current_iter/timestep is just task.last_iter!
+                    for ( auto i = ( tstate.last_upload / timestep ); i < ( tstate.current_iter / timestep );
+                          i++ ) {    //  GC. tstate.current_iter/timestep is just tstate.last_iter!
 
                         // Construct file name of the ICM result file
                         second_part = oifs_get_filename_part( std::to_string( i ), tconfig.exptid );
@@ -837,8 +817,7 @@ int main( int argc, char** argv )
                         }
                     }
 
-                    std::string upload_file = bconfig.project_dir + result_base_name + "_" +
-                                              std::to_string( task.upload_file_number ) + ".zip";
+                    std::string upload_file = bconfig.project_dir + result_base_name + "_" + std::to_string( tstate.upload_file_number ) + ".zip";
                     std::cerr << "Compressing upload file: " << upload_file << '\n';
 
                     // Create the zipped upload file from the list of files added to zfl
@@ -849,8 +828,7 @@ int main( int argc, char** argv )
                         if ( !bconfig.standalone && zret == 0 ) {
 
                             // Upload the file. In BOINC the upload file is the logical name, not the physical name
-                            std::string upload_file_name =
-                                "upload_file_" + std::to_string( task.upload_file_number ) + ".zip";
+                            std::string upload_file_name = "upload_file_" + std::to_string( tstate.upload_file_number ) + ".zip";
                             std::cerr << "Uploading the intermediate file: " << upload_file_name << '\n';
 
                             std::this_thread::sleep_until( chrono::system_clock::now() + chrono::seconds( 20 ) );
@@ -862,59 +840,58 @@ int main( int argc, char** argv )
                             }
                             retval = boinc_upload_status( upload_file_name );
                             if ( !retval ) {
-                                std::cerr << "Finished the upload of the intermediate file: " << upload_file_name
-                                          << '\n';
+                                std::cerr << "Finished the upload of the intermediate file: " << upload_file_name << '\n';
                             }
                         }
-                        task.last_upload = task.current_iter;
+                        tstate.last_upload = tstate.current_iter;
                     }
-                    task.last_upload = task.current_iter;
+                    tstate.last_upload = tstate.current_iter;
 
                     // *****  Normal end of critical section  *****
                     boinc_end_critical_section();
-                    task.upload_file_number++;
+                    tstate.upload_file_number++;
 
                 }    // end of upload new output file block.
 
                 // Trickle every required fraction of the model run
                 if ( ( std::stoi( iter ) % trickle_freq ) == 0 ) {
                     std::cerr << "Sending progress trickle message to CPDN at step: " << iter << '\n';
-                    trickler.process_trickle( task.current_cpu_time, task.current_iter );
-                    task.last_trickle_iter = task.current_iter;
+                    trickler.process_trickle( tstate.current_cpu_time, tstate.current_iter );
+                    tstate.last_trickle_iter = tstate.current_iter;
                 }
             }    // end of if it's a new timestep block.
-            task.last_iter = iter;
+            tstate.last_iter = iter;
             count = 0;
 
             // Update progress file with current values
-            update_progress_file( progress_file, task );
+            update_progress_file( progress_file, tstate );
         }
 
         // Calculate current_cpu_time, only update if cpu_time returns a value
-        if ( cpdn_cpu_time( task.pid ) > 0 ) {
-            task.current_cpu_time = task.last_cpu_time + cpdn_cpu_time( task.pid );
+        if ( cpdn_cpu_time( tstate.pid ) > 0 ) {
+            tstate.current_cpu_time = tstate.last_cpu_time + cpdn_cpu_time( tstate.pid );
         }
 
         // Calculate the fraction done
-        task.fraction_done = model_frac_done( std::stof( iter ), total_nsteps, std::stoi( nthreads ) );
+        tstate.fraction_done = model_frac_done( std::stof( iter ), total_nsteps, std::stoi( nthreads ) );
 
         if ( !bconfig.standalone ) {
             // If the current iteration is at a restart iteration
             double restart_cpu_time = 0;
             if ( !( std::stoi( iter ) % restart_interval ) ) {
-                restart_cpu_time = task.current_cpu_time;
+                restart_cpu_time = tstate.current_cpu_time;
             }
 
             // Provide the current cpu_time to the BOINC server (note: this is deprecated in BOINC)
-            boinc_report_app_status( task.current_cpu_time, restart_cpu_time, task.fraction_done );
+            boinc_report_app_status( tstate.current_cpu_time, restart_cpu_time, tstate.fraction_done );
 
             // Provide the fraction done to the BOINC client, necessary for the percentage bar on the client
-            boinc_fraction_done( task.fraction_done );
+            boinc_fraction_done( tstate.fraction_done );
 
-            task.process_status = check_boinc_status( task.pid, task.process_status );
+            tstate.process_status = check_boinc_status( tstate.pid, tstate.process_status );
         }
 
-        task.process_status = check_child_status( task.pid, task.process_status, task.exit_code );
+        tstate.process_status = check_child_status( tstate.pid, tstate.process_status, tstate.exit_code );
     }
 
     //----- End of main loop ---------------------------------------------------------------------------
@@ -922,7 +899,7 @@ int main( int argc, char** argv )
     // Do NOT execute a return until the final upload is done, after the boinc_end_critical_section() below.
 
     // GC. I probably don't need this; use the task_process_status variable & model_success instead in main loop?
-    task.model_completed = 1;
+    tstate.model_completed = 1;
 
     // Time delay to ensure model files are all flushed to disk
     sleep_seconds( 60 );
@@ -931,7 +908,7 @@ int main( int argc, char** argv )
     // This will always be the last line of a successful model forecast.
     // TODO: This needs to be a function call.
 
-    task.model_success = false;    // default to false unless confirmed below.
+    tstate.model_success = false;    // default to false unless confirmed below.
     if ( path_exists( ifs_stat ) ) {
         std::string ifs_word = "";
         fread_last_line( ifs_stat, stat_lastline );
@@ -940,15 +917,15 @@ int main( int argc, char** argv )
         if ( ifs_word != "CNT0" ) {
             std::cerr << "CNT0 not found; string returned was: " << "'" << ifs_word << "'" << '\n';
         } else {
-            task.model_success = true;    // <<< only point at which model success is set to true <<<
+            tstate.model_success = true;    // <<< only point at which model success is set to true <<<
         }
     }
 
-    if ( task.model_success ) {
+    if ( tstate.model_success ) {
         std::cerr << "..Model completed successfully" << std::endl;
     } else {
         std::cerr << "..Failed, model did not complete successfully" << std::endl;
-        std::cerr << "..Model exit code: " << task.exit_code << std::endl;
+        std::cerr << "..Model exit code: " << tstate.exit_code << std::endl;
     }
 
     // Print the model logs & progress file (if they exist)
@@ -958,7 +935,7 @@ int main( int argc, char** argv )
     print_last_lines( progress_file, 10 );
 
     // Move the final ICMGG, ICMSH and ICMUA model output files to the task folder in the project directory
-    second_part = oifs_get_filename_part( task.last_iter, tconfig.exptid );
+    second_part = oifs_get_filename_part( tstate.last_iter, tconfig.exptid );
 
     std::vector<std::string> icm = { "ICMGG", "ICMSH", "ICMUA" };
     for ( const auto& part : icm ) {
@@ -1007,8 +984,7 @@ int main( int argc, char** argv )
         closedir( dirp );
     }
 
-    std::string upload_file =
-        bconfig.project_dir + result_base_name + "_" + std::to_string( task.upload_file_number ) + ".zip";
+    std::string upload_file = bconfig.project_dir + result_base_name + "_" + std::to_string( tstate.upload_file_number ) + ".zip";
     std::cerr << "Compressing final upload file: " << upload_file << '\n';
 
     if ( !zfl.empty() ) {
@@ -1016,7 +992,7 @@ int main( int argc, char** argv )
 
         if ( !bconfig.standalone && zret == 0 ) {
 
-            std::string upload_file_name = "upload_file_" + std::to_string( task.upload_file_number ) + ".zip";
+            std::string upload_file_name = "upload_file_" + std::to_string( tstate.upload_file_number ) + ".zip";
             std::cerr << "Uploading the final file: " << upload_file_name << '\n';
 
             std::this_thread::sleep_until( chrono::system_clock::now() + chrono::seconds( 20 ) );
@@ -1031,8 +1007,8 @@ int main( int argc, char** argv )
             }
 
             // Produce final trickle it's the same timestep as the last main loop trickle
-            if ( task.current_iter > task.last_trickle_iter ) {
-                trickler.process_trickle( task.current_cpu_time, task.current_iter );
+            if ( tstate.current_iter > tstate.last_trickle_iter ) {
+                trickler.process_trickle( tstate.current_cpu_time, tstate.current_iter );
             }
         }
     }
@@ -1050,7 +1026,7 @@ int main( int argc, char** argv )
     std::cerr << "Task finished." << std::endl;
 
     // if finished normally
-    if ( task.process_status == 1 || task.process_status == 2 ) {
+    if ( tstate.process_status == 1 || tstate.process_status == 2 ) {
         return task_finish( 0 );
     } else {
         return task_finish( 1 );    // I could return the task return code here?

@@ -4,10 +4,10 @@
 
 #pragma once
 
-#include <string>
-#include <vector>
 #include <filesystem>
+#include <string>
 #include <string_view>
+#include <vector>
 
 #include "../../api/model_control.h"
 
@@ -15,12 +15,15 @@
 namespace fs = std::filesystem;
 
 
-class TestControl : public ModelControl { 
+class TestControl : public ModelControl {
 
-public:
+  public:
     // Constructor and destructor methods
-    TestControl(std::string_view vendor, std::string_view model, std::string_view version, std::string_view input_file) :
-                ModelControl(vendor, model, version, input_file) {}
+    TestControl( std::string_view vendor, std::string_view model, std::string_view version,
+                 std::string_view input_file )
+        : ModelControl( vendor, model, version, input_file )
+    {
+    }
     ~TestControl() override = default;
 
     // Public interface methods
@@ -28,23 +31,23 @@ public:
     // (overrides of pure virtual functions in ModelControl)
     //bool parse_command_line(int argc, char* argv[]) override;   // not yet implemented
     //bool setup() override;                                      // not yet implemented
-    //bool set_envs() override;                            // not yet implemented 
-    //int start() override;                                    // not yet implemented 
+    //bool set_envs() override;                            // not yet implemented
+    //int start() override;                                    // not yet implemented
     //void do_step_tasks(int current_step) override;           // not yet implemented
     //bool teardown() override;                         // not yet implemented
 
-    void print_logs(const int nlines) const override;
-    
+    void print_logs( const int nlines ) const override;
+
 
     // Delete copy constructor and assignment operator
-    
-    TestControl(const TestControl&) = delete;
-    TestControl& operator=(const TestControl&) = delete;
+
+    TestControl( const TestControl& ) = delete;
+    TestControl& operator=( const TestControl& ) = delete;
 
 
-private:
+  private:
     // Private member variables
 
     // Key model output logs
-    std::vector<std::string> log_files = {"NODE.001_01", "ifs.stat", "rcf", "waminfo"};
+    std::vector<std::string> log_files = { "NODE.001_01", "ifs.stat", "rcf", "waminfo" };
 };

@@ -23,7 +23,8 @@ struct TaskState {
     int upload_file_number = 0;     // Sequential counter for upload files
     std::string last_iter = "0";    // Last completed iteration step
     int last_upload = 0;            // Time of last upload file (in seconds)
-    int model_completed = 0;        // Model completion state: 0=running, 1=completed
+    int model_completed = 0;        // Model completion state: 0=started/running, 1=completed; does NOT imply it worked!
+    bool model_success = false;     // Model run success flag: false=failed, true=successful
     int current_iter = 0;           // Current iteration step (in seconds)
     int last_trickle_iter = 0;      // Last iteration when trickle was sent
     pid_t pid = 0;                  // Process ID of the child model process

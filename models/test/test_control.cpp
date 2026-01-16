@@ -13,7 +13,7 @@
 // Implementations of the pure virtual functions from ModelControl
 
 /**
- * @brief Check if the model has completed successfully.
+ * @brief Check if the model has completed successfully. Call this after model task has finished.
  * @param ifsstat_path Path to the ifs.stat file.
  * @returns True if the model completed successfully, false otherwise.
  */

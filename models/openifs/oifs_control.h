@@ -1,5 +1,5 @@
 //
-// Test model control class header.
+// OpenIFS model control class header.
 //  Glenn Carver, CPDN, 2025.
 
 #pragma once
@@ -15,15 +15,15 @@
 namespace fs = std::filesystem;
 
 
-class TestControl : public ModelControl {
+class OpenIFSControl : public ModelControl {
 
   public:
     // Constructor and destructor methods
-    TestControl( std::string_view vendor, std::string_view model, std::string_view version, std::string_view input_file )
+    OpenIFSControl( std::string_view vendor, std::string_view model, std::string_view version, std::string_view input_file )
         : ModelControl( vendor, model, version, input_file )
     {
     }
-    ~TestControl() override = default;
+    ~OpenIFSControl() override = default;
 
     // Public interface methods
     // overrides of pure virtual functions in ModelControl
@@ -34,8 +34,8 @@ class TestControl : public ModelControl {
 
     // Delete copy constructor and assignment operator
 
-    TestControl( const TestControl& ) = delete;
-    TestControl& operator=( const TestControl& ) = delete;
+    OpenIFSControl( const OpenIFSControl& ) = delete;
+    OpenIFSControl& operator=( const OpenIFSControl& ) = delete;
 
 
   private:

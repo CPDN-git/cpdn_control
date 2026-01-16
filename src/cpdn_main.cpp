@@ -30,7 +30,7 @@
 #include "api/model_control.h"
 #include "api/trickle_handler.h"
 
-#include "models/test/test_control.h"
+#include "models/openifs/oifs_control.h"
 
 // these includes will disappear when the code moves to Model derived classes
 #include "models/openifs/oifs_utils.h"    // for oifs_get_filename_part, oifs_*() functions.
@@ -66,12 +66,10 @@ static std::unique_ptr<ModelControl> create_model_control( std::string_view vend
     std::unique_ptr<ModelControl> model;    // create a null unique_ptr ready for a new model control instance.
 
     // Model mappings
+    // As the test model is an OpenIFS skeleton test, we use the OpenIFSControl class.
 
-    if ( model_name == "test_model" ) {
-        model = std::make_unique<TestControl>( vendor, model_name, model_version, primary_ctrl_file );
-    }
-    if ( model_name == "oifs_43r3" ) {
-        //model_ctrl = std::make_unique<OpenIFSControl>("ECMWF", "OpenIFS", "43r3", "fort.4");
+    if ( model_name == "test_model" || model_name == "oifs_43r3" ) {
+        model = std::make_unique<OpenIFSControl>( vendor, model_name, model_version, primary_ctrl_file );
     }
 
     return model;

@@ -1,10 +1,10 @@
 //
-// Implementation of the test model control class.
+// Implementation of the OpenIFS model control class.
 //  Glenn Carver, CPDN, 2025.
 
-#include "test_control.h"
+#include "oifs_control.h"
 #include "../../lib/utils.h"
-#include "../openifs/oifs_utils.h"    // for oifs_parse_stat()
+#include "oifs_utils.h"    // for oifs_parse_stat()
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -17,7 +17,7 @@
  * @param ifsstat_path Path to the ifs.stat file.
  * @returns True if the model completed successfully, false otherwise.
  */
-bool TestControl::check_model_success( std::string_view ifsstat_path ) const
+bool OpenIFSControl::check_model_success( std::string_view ifsstat_path ) const
 {
     bool success = false;
 
@@ -46,7 +46,7 @@ bool TestControl::check_model_success( std::string_view ifsstat_path ) const
  * @brief Print the last n lines of key log files produced by the model.
  * @param nlines Number of lines to print from end of each log file.
  */
-void TestControl::print_logs( const int nlines ) const
+void OpenIFSControl::print_logs( const int nlines ) const
 {
     // TODO: could this be pushed down to the base class rather than re-implemented in each derived class?
     for ( const auto& log_file : log_files ) {

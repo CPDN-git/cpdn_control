@@ -60,7 +60,7 @@ class ModelControl {
     virtual std::string get_vendor_name() const { return vendor_name; }
     virtual std::string get_model_name() const { return model_name; }
     virtual std::string get_model_version() const { return model_version; }
-    virtual fs::path get_parameter_input_file() const { return parameter_input_file; }
+    virtual std::string get_parameter_input_file() const { return parameter_input_file; }
 
 
     // Delete copy constructor and assignment operator as these are not appropriate for this class.
@@ -78,15 +78,15 @@ class ModelControl {
     // Protected constructor for use by derived classes (may change in future when we use the model XML config file)
     // Use init list here, no need to use 'setters' in constructor.
     // C++ note. Allows keeping member variables private while still enabling derived classes to use init-list construction.
-    ModelControl( std::string_view vendor, std::string_view model, std::string_view version, const fs::path& input_file )
-        : vendor_name( vendor ), model_name( model ), model_version( version ), parameter_input_file( input_file ) {};
+    ModelControl( std::string_view vendor, std::string_view model, std::string_view version, const fs::path& param_input_file )
+        : vendor_name( vendor ), model_name( model ), model_version( version ), parameter_input_file( param_input_file ) {};
 
     // Setters for model information (protected so only accessible to derived classes)
 
     void set_vendor_name( std::string_view vendor ) { vendor_name = vendor; }
     void set_model_name( std::string_view model ) { model_name = model; }
     void set_model_version( std::string_view version ) { model_version = version; }
-    void set_parameter_input_file( const fs::path& input_file ) { parameter_input_file = input_file; }
+    void set_parameter_input_file( const std::string& param_infile ) { parameter_input_file = param_infile; }
 
 
   private:
@@ -97,6 +97,6 @@ class ModelControl {
     std::string model_name;       // e.g. "OpenIFS"
     std::string model_version;    // e.g. "43r3"
 
-    fs::path parameter_input_file;    // Usually this will be a fortran namelist file. e.g. "fort.4" for OpenIFS.
-                                      // It is NOT intended for input data.
+    std::string parameter_input_file;    // Usually this will be a fortran namelist file. e.g. "fort.4" for OpenIFS.
+                                         // It is NOT intended for input data.
 };

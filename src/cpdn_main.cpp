@@ -248,7 +248,7 @@ int main( int argc, char** argv )
     // Create model control instance.
     // In future, rather than pass app_name, we might pass the model name read from model_config.xml.
     // "CPDN" and "fort.4" are placeholders for vendor name and primary control file respectively.
-    auto model_ctrl = create_model_control( "CPDN", bconfig.app_name, bconfig.app_version, "fort.4" );
+    auto model_ctrl = create_model_control( "ECMWF", bconfig.app_name, bconfig.app_version, "fort.4" );
     if ( model_ctrl == nullptr ) {
         std::cerr << "..Error creating model control instance. Unsupported model: " << bconfig.app_name << std::endl;
         return task_finish( 1 );

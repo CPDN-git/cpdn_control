@@ -65,7 +65,7 @@ bool OpenIFSControl::get_current_step( const std::string& ifs_stat, std::string&
 {
     bool result = false;
     std::string iter = "0";
-    std::string stat_lastline{};
+    std::string lastline{};
 
     // Read completed step from last line of ifs.stat file.
     // Note the first line from the model has a step count of '....  CNT3      -999 ....'
@@ -73,12 +73,25 @@ bool OpenIFSControl::get_current_step( const std::string& ifs_stat, std::string&
     // to the output files for that iteration, those files can now be moved and uploaded.
     //std::cerr << "Reading completed iteration step from last line of ifs.stat" << std::endl;
 
-    if ( fread_last_line( ifs_stat, stat_lastline ) ) {               // only returns true if lastline is read and changed.
-        if ( oifs_parse_stat( stat_lastline, current_step, 4 ) ) {    // iter updates
+    if ( fread_last_line( ifs_stat, lastline ) ) {               // only returns true if lastline is read and changed.
+        if ( oifs_parse_stat( lastline, current_step, 4 ) ) {    // iter updates
             if ( oifs_valid_step( iter, total_steps ) ) {
                 result = true;
             }
         }
     }
     return result;
+}
+
+/**
+ * @brief Returns list of model output filenames at a model step.
+ *        Used to determine which files to upload at each step.
+ * @param step The model step (string) of files to return.
+ * @param id The experiment ID or general experiment identifier (string).
+ * @returns A vector of output filenames to be uploaded.
+ */
+std::vector<std::string> OpenIFSControl::get_output_filenames( std::string_view step, std::string_view exptid ) const
+{
+    std::string suffix = oifs_get_filename_part( std::string( step ), std::string( exptid ) );
+    return { "ICMGG" + suffix, "ICMSH" + suffix, "ICMUA" + suffix };
 }

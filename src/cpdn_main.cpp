@@ -727,7 +727,6 @@ int main( int argc, char** argv )
     //----------------------------------------Main loop------------------------------------------------------
 
     // Periodically check the process status and the BOINC client status
-    std::string second_part;
     std::string ifs_stat = bconfig.slot_path + "/ifs.stat";    // GC. TODO: should be std::filesystem path.
 
     std::vector<fs::path> zfl;
@@ -754,19 +753,14 @@ int main( int argc, char** argv )
                 }
             }
 
+            // Move the model result files to the task folder in the project directory
+            // GC. Why do this every timestep? This check only needs to be done at same frequency as NFRPOS.
             if ( std::stoi( step ) != std::stoi( tstate.last_step ) ) {
-                // Construct file name of the ICM result file
-                second_part = oifs_get_filename_part( tstate.last_step, tconfig.exptid );
 
-                // Move the ICMGG, ICMSH & ICMUA result files to the task folder in the project directory
-                // GC. Why do this every timestep? This should be done at same frequency as NFRPOS.
-                std::vector<std::string> icm = { "ICMGG", "ICMSH", "ICMUA" };
-
-                for ( const auto& part : icm ) {
-                    std::string result = part + second_part;
+                for ( const auto& result : model_ctrl->get_output_filenames( tstate.last_step, tconfig.exptid ) ) {
                     retval = move_result_file( bconfig.slot_path, upload_dir, result );
                     if ( retval ) {
-                        std::cerr << "..Copying " << part << " result file to the temp folder in the projects directory failed" << "\n";
+                        std::cerr << "..Copying " << result << " result file to the temp folder in the projects directory failed" << "\n";
                         return task_finish( retval );
                     }
                 }
@@ -775,6 +769,7 @@ int main( int argc, char** argv )
                 tstate.current_step = ( std::stoi( tstate.last_step ) ) * timestep;
 
                 // Upload a new upload file if the end of an upload_interval has been reached
+                // GC. TODO. Why not combine adding to the zip file with moving the result files above?
                 if ( ( ( tstate.current_step - tstate.last_upload ) >= ( upload_interval * timestep ) ) &&
                      ( tstate.current_step < total_length_of_simulation ) ) {
                     // Create an intermediate results zip file
@@ -789,13 +784,10 @@ int main( int argc, char** argv )
                     //  GC. tstate.current_step/timestep is just tstate.last_step! Fix!
                     for ( auto i = ( tstate.last_upload / timestep ); i < ( tstate.current_step / timestep ); i++ ) {
 
-                        // Construct file name of the ICM result file
-                        second_part = oifs_get_filename_part( std::to_string( i ), tconfig.exptid );
-
-                        // Add ICM result files to zip to be uploaded
-                        for ( const auto& part : icm ) {
+                        // Add model result files to zip to be uploaded
+                        for ( const auto& result : model_ctrl->get_output_filenames( std::to_string( i ), tconfig.exptid ) ) {
                             fs::path fpath = upload_dir;
-                            fpath /= part + second_part;
+                            fpath /= result;
                             if ( path_exists( fpath.string() ) ) {
                                 std::cerr << "Adding to the zip: " << fpath << '\n';
                                 zfl.push_back( fpath );
@@ -846,7 +838,7 @@ int main( int argc, char** argv )
                 }
             }    // end of if it's a new timestep block.
             tstate.last_step = step;
-            count = 0;
+            delay_count = 0;
 
             // Update progress file with current values
             update_progress_file( progress_file, tstate );
@@ -904,18 +896,6 @@ int main( int argc, char** argv )
     std::cerr << "... Printing controller progress file .. " << std::endl;
     print_last_lines( progress_file, 10 );
 
-    // Move the final ICMGG, ICMSH and ICMUA model output files to the task folder in the project directory
-    second_part = oifs_get_filename_part( tstate.last_step, tconfig.exptid );
-
-    std::vector<std::string> icm = { "ICMGG", "ICMSH", "ICMUA" };
-    for ( const auto& part : icm ) {
-        std::string result = part + second_part;
-        retval = move_result_file( bconfig.slot_path, upload_dir, result );
-        if ( retval ) {
-            std::cerr << "..Copying " << part << " result file to the temp folder in the projects directory failed"
-                      << "\n";
-        }
-    }
 
     //-----------------------------Create the final results zip file-----------------------------------------
 
@@ -936,7 +916,15 @@ int main( int argc, char** argv )
         std::cerr << "Adding to the zip: " << ifsstat_file << '\n';
     }
 
-    // Read the remaining list of files from the slots directory and add the matching files to the list of files for the zip
+    // Move the final model result files ready for upload
+    for ( const auto& result : model_ctrl->get_output_filenames( tstate.last_step, tconfig.exptid ) ) {
+        retval = move_result_file( bconfig.slot_path, upload_dir, result );
+        if ( retval ) {
+            std::cerr << "..Copying " << result << " model result file to the temp folder in the projects directory failed" << "\n";
+        }
+    }
+
+    // Read the remaining list of files from the temp upload directory and add the matching files to the list of files for the zip
     // GC. TODO. Update to C++ 17.
     if ( auto* dirp = opendir( upload_dir.c_str() ) ) {
         regex_t regex;

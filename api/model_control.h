@@ -66,6 +66,9 @@ class ModelControl {
     // TODO. status_file should be std::filesystem path. It can be a relative or absolute path.
     virtual bool get_current_step( const std::string& status_file, std::string& current_step, const int total_steps ) const = 0;
 
+    // Provide a list of model output filenames for uploading to server at a particular step.
+    virtual std::vector<std::string> get_output_filenames( std::string_view step, std::string_view id ) const = 0;
+
 
     // Delete copy constructor and assignment operator as these are not appropriate for this class.
     // C++ note: In a polymorphic base class, the copy constructor and assignment operator

@@ -53,3 +53,32 @@ void OpenIFSControl::print_logs( const int nlines ) const
         print_last_lines( log_file, nlines );    // from lib/utils.h; will check file exists
     }
 }
+
+
+/**
+ * @brief Get the current model step from the status file.
+ * @param status_file Path to the model status file.
+ * @param current_step Reference to an integer to store the current step. Updated on success.
+ * @returns True if the current step was successfully retrieved, false otherwise.
+ */
+bool OpenIFSControl::get_current_step( const std::string& ifs_stat, std::string& current_step, const int total_steps ) const
+{
+    bool result = false;
+    std::string iter = "0";
+    std::string stat_lastline{};
+
+    // Read completed step from last line of ifs.stat file.
+    // Note the first line from the model has a step count of '....  CNT3      -999 ....'
+    // When the iteration number changes in the ifs.stat file, OpenIFS has completed writing
+    // to the output files for that iteration, those files can now be moved and uploaded.
+    //std::cerr << "Reading completed iteration step from last line of ifs.stat" << std::endl;
+
+    if ( fread_last_line( ifs_stat, stat_lastline ) ) {               // only returns true if lastline is read and changed.
+        if ( oifs_parse_stat( stat_lastline, current_step, 4 ) ) {    // iter updates
+            if ( oifs_valid_step( iter, total_steps ) ) {
+                result = true;
+            }
+        }
+    }
+    return result;
+}

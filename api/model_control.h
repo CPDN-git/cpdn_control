@@ -1,6 +1,6 @@
 //
 //   Model control base class header.
-//   This class is mainly virtual and provides an interface
+//   This class is mainly abstract and provides an interface API
 //   for derived model control classes.
 //
 //   Glenn Carver, CPDN, 2025.
@@ -26,7 +26,7 @@ class ModelControl {
     virtual ~ModelControl() = default;
 
 
-    // Public interface methods (examples for now -- will change as more implmentation is done through the class)
+    // Public interface methods
     // Pure virtual functions. Overrides must be provided in derived classes.
 
     // Prints last n lines of key log files produced by the model.
@@ -61,6 +61,10 @@ class ModelControl {
     virtual std::string get_model_name() const { return model_name; }
     virtual std::string get_model_version() const { return model_version; }
     virtual std::string get_parameter_input_file() const { return parameter_input_file; }
+
+    // Determine the current model step; return true if successful, false otherwise.
+    // TODO. status_file should be std::filesystem path. It can be a relative or absolute path.
+    virtual bool get_current_step( const std::string& status_file, std::string& current_step, const int total_steps ) const = 0;
 
 
     // Delete copy constructor and assignment operator as these are not appropriate for this class.
@@ -98,5 +102,5 @@ class ModelControl {
     std::string model_version;    // e.g. "43r3"
 
     std::string parameter_input_file;    // Usually this will be a fortran namelist file. e.g. "fort.4" for OpenIFS.
-                                         // It is NOT intended for input data.
+                                         // It is NOT intended for input data, only for gathering model info.
 };

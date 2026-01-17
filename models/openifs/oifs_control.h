@@ -31,6 +31,10 @@ class OpenIFSControl : public ModelControl {
     void print_logs( const int nlines ) const override;
     bool check_model_success( std::string_view ifsstat_path ) const override;
 
+    // Getters and setters
+
+    bool get_current_step( const std::string& ifsstat, std::string& step, const int total_steps ) const override;
+
 
     // Delete copy constructor and assignment operator
 

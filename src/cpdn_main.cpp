@@ -66,7 +66,7 @@ static std::unique_ptr<ModelControl> create_model_control( std::string_view vend
     std::unique_ptr<ModelControl> model;    // create a null unique_ptr ready for a new model control instance.
 
     // Model mappings
-    // As the test model is an OpenIFS skeleton test, we use the OpenIFSControl class.
+    // As the test model is an OpenIFS skeleton clone, we use the OpenIFSControl class.
 
     if ( model_name == "test_model" || model_name == "oifs_43r3" ) {
         model = std::make_unique<OpenIFSControl>( vendor, model_name, model_version, primary_ctrl_file );
@@ -588,8 +588,8 @@ int main( int argc, char** argv )
 
     } else if ( path_exists( progress_file ) && !path_exists( rcf_file ) ) {
         read_progress_file( progress_file, tstate );
-        // If last_iter less than the restart interval, then model is at beginning and rcf has yet to be produced then continue
-        if ( std::stoi( tstate.last_iter ) >= restart_interval ) {
+        // If last_step less than the restart interval, then model is at beginning and rcf has yet to be produced then continue
+        if ( std::stoi( tstate.last_step ) >= restart_interval ) {
             // Otherwise if progress file exists and rcf file does not exist, an error has occurred, then kill model run
             model_ctrl->print_logs( 50 );
             std::cerr << "..progress file exists, but rcf file does not exist => problem with model, quitting run" << '\n';
@@ -628,22 +628,22 @@ int main( int argc, char** argv )
 
         read_progress_file( progress_file, tstate );
 
-        // Check if the CSTEP variable from rcf is greater than the last_iter, if so then quit model run
-        if ( stoi( cstep_value ) > stoi( tstate.last_iter ) ) {
-            std::cerr << "..CSTEP variable from rcf is greater than last_iter from progress file, error has occurred, "
+        // Check if the CSTEP variable from rcf is greater than the last_step, if so then quit model run
+        if ( stoi( cstep_value ) > stoi( tstate.last_step ) ) {
+            std::cerr << "..CSTEP variable from rcf is greater than last_step from progress file, error has occurred, "
                          "quitting model run"
                       << '\n';
             return task_finish( 1 );
         }
 
-        // Adjust last_iter to the step of the previous model restart dump step.
+        // Adjust last_step to the step of the previous model restart dump step.
         // This is always a multiple of the restart frequency
 
         std::cerr << "-- Model is restarting --\n";
-        std::cerr << "Adjusting last_iter, " << tstate.last_iter << ", to previous model restart step.\n";
-        int restart_iter = stoi( tstate.last_iter );
-        restart_iter = restart_iter - ( ( restart_iter % restart_interval ) - 1 );    // -1 because the model will continue from restart_iter.
-        tstate.last_iter = std::to_string( restart_iter );
+        std::cerr << "Adjusting last_step, " << tstate.last_step << ", to previous model restart step.\n";
+        int restart_step = stoi( tstate.last_step );
+        restart_step = restart_step - ( ( restart_step % restart_interval ) - 1 );    // -1 because the model will continue from restart_step.
+        tstate.last_step = std::to_string( restart_step );
     }
 
     // Update progress file with current values
@@ -727,14 +727,13 @@ int main( int argc, char** argv )
     //----------------------------------------Main loop------------------------------------------------------
 
     // Periodically check the process status and the BOINC client status
-    std::string stat_lastline;
     std::string second_part;
     std::string ifs_stat = bconfig.slot_path + "/ifs.stat";    // GC. TODO: should be std::filesystem path.
 
     std::vector<fs::path> zfl;
 
     int count = 0;
-    std::string iter = "0";
+    std::string step = "0";
 
     while ( tstate.process_status == 0 && tstate.model_completed == 0 ) {
         sleep_seconds( 1 );    // Time delay to reduce overhead
@@ -746,27 +745,18 @@ int main( int argc, char** argv )
         // Going too low can cause the %age done on boincmgr to flip backwards.
         if ( count == 7 ) {
 
-            iter = tstate.last_iter;
+            // Get the current model step.
+            step = tstate.last_step;
             if ( path_exists( ifs_stat ) ) {
-
-                // Read completed step from last line of ifs.stat file.
-                // Note the first line from the model has a step count of '....  CNT3      -999 ....'
-                // When the iteration number changes in the ifs.stat file, OpenIFS has completed writing
-                // to the output files for that iteration, those files can now be moved and uploaded.
-                //std::cerr << "Reading completed iteration step from last line of ifs.stat" << std::endl;
-
-                if ( fread_last_line( ifs_stat, stat_lastline ) ) {       // only returns true if lastline has changed
-                    if ( oifs_parse_stat( stat_lastline, iter, 4 ) ) {    // iter updates
-                        if ( !oifs_valid_step( iter, total_nsteps ) ) {
-                            iter = tstate.last_iter;    // revert to last valid step
-                        }
-                    }
+                // step is updated by this call if successful.
+                if ( !model_ctrl->get_current_step( ifs_stat, step, total_nsteps ) ) {
+                    step = tstate.last_step;    // revert to last valid step
                 }
             }
 
-            if ( std::stoi( iter ) != std::stoi( tstate.last_iter ) ) {
+            if ( std::stoi( step ) != std::stoi( tstate.last_step ) ) {
                 // Construct file name of the ICM result file
-                second_part = oifs_get_filename_part( tstate.last_iter, tconfig.exptid );
+                second_part = oifs_get_filename_part( tstate.last_step, tconfig.exptid );
 
                 // Move the ICMGG, ICMSH & ICMUA result files to the task folder in the project directory
                 // GC. Why do this every timestep? This should be done at same frequency as NFRPOS.
@@ -781,12 +771,12 @@ int main( int argc, char** argv )
                     }
                 }
 
-                // Convert iteration number to seconds
-                tstate.current_iter = ( std::stoi( tstate.last_iter ) ) * timestep;
+                // Convert current model step to seconds
+                tstate.current_step = ( std::stoi( tstate.last_step ) ) * timestep;
 
                 // Upload a new upload file if the end of an upload_interval has been reached
-                if ( ( ( tstate.current_iter - tstate.last_upload ) >= ( upload_interval * timestep ) ) &&
-                     ( tstate.current_iter < total_length_of_simulation ) ) {
+                if ( ( ( tstate.current_step - tstate.last_upload ) >= ( upload_interval * timestep ) ) &&
+                     ( tstate.current_step < total_length_of_simulation ) ) {
                     // Create an intermediate results zip file
                     zfl.clear();
 
@@ -796,8 +786,8 @@ int main( int argc, char** argv )
                     boinc_begin_critical_section();
 
                     // Cycle through all the steps from the last upload to the current upload
-                    //  GC. tstate.current_iter/timestep is just tstate.last_iter! Fix!
-                    for ( auto i = ( tstate.last_upload / timestep ); i < ( tstate.current_iter / timestep ); i++ ) {
+                    //  GC. tstate.current_step/timestep is just tstate.last_step! Fix!
+                    for ( auto i = ( tstate.last_upload / timestep ); i < ( tstate.current_step / timestep ); i++ ) {
 
                         // Construct file name of the ICM result file
                         second_part = oifs_get_filename_part( std::to_string( i ), tconfig.exptid );
@@ -838,9 +828,9 @@ int main( int argc, char** argv )
                                 std::cerr << "Finished the upload of the intermediate file: " << upload_file_name << '\n';
                             }
                         }
-                        tstate.last_upload = tstate.current_iter;
+                        tstate.last_upload = tstate.current_step;
                     }
-                    tstate.last_upload = tstate.current_iter;
+                    tstate.last_upload = tstate.current_step;
 
                     // *****  Normal end of critical section  *****
                     boinc_end_critical_section();
@@ -849,13 +839,13 @@ int main( int argc, char** argv )
                 }    // end of upload new output file block.
 
                 // Trickle every required fraction of the model run
-                if ( ( std::stoi( iter ) % trickle_freq ) == 0 ) {
-                    std::cerr << "Sending progress trickle message to CPDN at step: " << iter << '\n';
-                    trickler.process_trickle( tstate.current_cpu_time, tstate.current_iter );
-                    tstate.last_trickle_iter = tstate.current_iter;
+                if ( ( std::stoi( step ) % trickle_freq ) == 0 ) {
+                    std::cerr << "Sending progress trickle message to CPDN at step: " << step << '\n';
+                    trickler.process_trickle( tstate.current_cpu_time, tstate.current_step );
+                    tstate.last_trickle_step = tstate.current_step;
                 }
             }    // end of if it's a new timestep block.
-            tstate.last_iter = iter;
+            tstate.last_step = step;
             count = 0;
 
             // Update progress file with current values
@@ -868,12 +858,12 @@ int main( int argc, char** argv )
         }
 
         // Calculate the fraction done
-        tstate.fraction_done = model_frac_done( std::stof( iter ), total_nsteps, std::stoi( nthreads ) );
+        tstate.fraction_done = model_frac_done( std::stof( step ), total_nsteps, std::stoi( nthreads ) );
 
         if ( !bconfig.standalone ) {
-            // If the current iteration is at a restart iteration
+            // If the current model step is at a restart interval, update restart cpu time for boinc.
             double restart_cpu_time = 0;
-            if ( !( std::stoi( iter ) % restart_interval ) ) {
+            if ( !( std::stoi( step ) % restart_interval ) ) {
                 restart_cpu_time = tstate.current_cpu_time;
             }
 
@@ -915,7 +905,7 @@ int main( int argc, char** argv )
     print_last_lines( progress_file, 10 );
 
     // Move the final ICMGG, ICMSH and ICMUA model output files to the task folder in the project directory
-    second_part = oifs_get_filename_part( tstate.last_iter, tconfig.exptid );
+    second_part = oifs_get_filename_part( tstate.last_step, tconfig.exptid );
 
     std::vector<std::string> icm = { "ICMGG", "ICMSH", "ICMUA" };
     for ( const auto& part : icm ) {
@@ -987,8 +977,8 @@ int main( int argc, char** argv )
             }
 
             // Produce final trickle it's the same timestep as the last main loop trickle
-            if ( tstate.current_iter > tstate.last_trickle_iter ) {
-                trickler.process_trickle( tstate.current_cpu_time, tstate.current_iter );
+            if ( tstate.current_step > tstate.last_trickle_step ) {
+                trickler.process_trickle( tstate.current_cpu_time, tstate.current_step );
             }
         }
     }

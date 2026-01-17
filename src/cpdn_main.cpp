@@ -732,18 +732,18 @@ int main( int argc, char** argv )
 
     std::vector<fs::path> zfl;
 
-    int count = 0;
+    int delay_count = 0;
     std::string step = "0";
 
     while ( tstate.process_status == 0 && tstate.model_completed == 0 ) {
         sleep_seconds( 1 );    // Time delay to reduce overhead
 
-        count++;
+        delay_count++;
 
         // Check whether an upload point has been reached
         // GC. 09/25. reduced to 7 secs as testing shows 10secs can miss a timestep.
         // Going too low can cause the %age done on boincmgr to flip backwards.
-        if ( count == 7 ) {
+        if ( delay_count == 7 ) {
 
             // Get the current model step.
             step = tstate.last_step;

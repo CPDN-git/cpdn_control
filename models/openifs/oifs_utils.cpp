@@ -66,8 +66,7 @@ bool oifs_setenvs( const std::string& slot_path, const std::string& nthreads )
         } else if ( name == "GRIB_SAMPLES_PATH" ) {
             std::cerr << "The GRIB_SAMPLES_PATH environmental variable is: " << getenv( "GRIB_SAMPLES_PATH" ) << "\n";
         } else if ( name == "GRIB_DEFINITION_PATH" ) {
-            std::cerr << "The GRIB_DEFINITION_PATH environmental variable is: " << getenv( "GRIB_DEFINITION_PATH" )
-                      << "\n";
+            std::cerr << "The GRIB_DEFINITION_PATH environmental variable is: " << getenv( "GRIB_DEFINITION_PATH" ) << "\n";
         }
     }
 
@@ -75,8 +74,13 @@ bool oifs_setenvs( const std::string& slot_path, const std::string& nthreads )
 }
 
 
-// Construct the filename part of the output model filename containing the iteration count.
-// nb. exptid is always 4 characters for OpenIFS.
+/**
+ *  @brief Construct the filename part of the output model filename containing the iteration count.
+ *          nb. exptid is always 4 characters for OpenIFS.
+ *  @param last_iter The last completed iteration as a string.
+ *  @param exptid The experiment ID string.
+ *  @return The constructed filename part string.
+ */
 std::string oifs_get_filename_part( const std::string& last_iter, const std::string& exptid )
 {
     std::ostringstream oss;
@@ -85,13 +89,14 @@ std::string oifs_get_filename_part( const std::string& last_iter, const std::str
 }
 
 
+/**
+ *  @brief Parse a line of the OpenIFS ifs.stat log file.
+ *  @param logline  : incoming ifs.stat logfile line to be parsed
+ *  @param stat_col : returned string given by position 'index'
+ *  @return false if string is empty.
+ */
 bool oifs_parse_stat( const std::string& logline, std::string& stat_column, const int index )
 {
-    //   Parse a line of the OpenIFS ifs.stat log file.
-    //      logline  : incoming ifs.stat logfile line to be parsed
-    //      stat_col : returned string given by position 'index'
-    //  Returns false if string is empty.
-
     std::istringstream tokens;
     std::string statstr = "";
 
@@ -110,16 +115,17 @@ bool oifs_parse_stat( const std::string& logline, std::string& stat_column, cons
 }
 
 
+/**
+ * @brief Check for a valid step count.
+ * @param step The step count as a string.
+ * @param nsteps The total number of steps in the model run.
+ * @return true if step is valid, otherwise false
+ */
 bool oifs_valid_step( std::string& step, int nsteps )
 {
-    //  checks for a valid step count in arg 'step'
-    //  Returns :   true if step is valid, otherwise false
-    //      Glenn
-
     // make sure step is valid integer
     if ( !check_stoi( step ) ) {
-        std::cerr << "..oifs_valid_step: Invalid characters in stoi string, unable to convert step to int: " << step
-                  << '\n';
+        std::cerr << "..oifs_valid_step: Invalid characters in stoi string, unable to convert step to int: " << step << '\n';
         return false;
     } else {
         // check step is in valid range: 0 -> total no. of steps

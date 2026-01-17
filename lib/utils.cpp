@@ -127,8 +127,7 @@ static void strip_quotes_and_trim( std::string& text )
         return;
     }
     std::cerr << ".. strip_quotes_and_trim: before='" << text << "'\n";
-    std::cerr << ".. strip_quotes_and_trim: text.front()='" << text.front() << "' text.back()='" << text.back()
-              << "'\n";
+    std::cerr << ".. strip_quotes_and_trim: text.front()='" << text.front() << "' text.back()='" << text.back() << "'\n";
     if ( ( text.front() == '"' && text.back() == '"' ) || ( text.front() == '\'' && text.back() == '\'' ) ) {
         text = text.substr( 1, text.size() - 2 );
         trim_whitespace( text );
@@ -197,10 +196,7 @@ bool parse_key_value( const std::string& line, std::string& key, std::string& va
 }
 
 
-bool parse_key_value( const std::string& line, std::string& key, std::string& value )
-{
-    return parse_key_value( line, key, value, '=' );
-}
+bool parse_key_value( const std::string& line, std::string& key, std::string& value ) { return parse_key_value( line, key, value, '=' ); }
 
 
 /**
@@ -266,6 +262,10 @@ int print_last_lines( const std::string& filename, const int maxlines )
  * This function maintains its state between calls to track the last read position
  * in the file, allowing it to return only new lines added since the last call.
  * It behaves similarly to the 'tail -f' command.
+ * 
+ * TODO: This function assumes that the file being read is always the same file!
+ * Currently, it is as it's always the ifs.stat file but in future we may want to
+ * generalize this to handle multiple files by storing state per filename.
  * 
  *     Glenn Carver, CPDN, 2025.
  * 

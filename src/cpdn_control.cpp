@@ -102,15 +102,12 @@ int init_boinc( BoincConfig& config )
     // Dec/2025. Testing shows that even with this option commented out we still get the memory corruption.
     //           TODO: try explicity setting the option to false?  Need to run a address sanitizer build as a batch to track this down.
     //options.multi_process = true;           // if your app uses multiple processes, do this before creating any threads or processes, or storing the PID
-    options.check_heartbeat = true;    // controller monitors 'heartbeat' messages from the client.
-    options.handle_process_control =
-        true;    // controller will handle all suspend/quit/resume messages from the boinc client.
-    options.direct_process_action =
-        false;    // controller will respond to quit messages and heartbeat failures by exiting,
-                  // and will respond to suspend and resume messages by suspending and resuming
-    options.send_status_msgs =
-        false;    // If set, the program will report its CPU time and fraction done to the client.
-                  // Set in worker programs.
+    options.check_heartbeat = true;           // controller monitors 'heartbeat' messages from the client.
+    options.handle_process_control = true;    // controller will handle all suspend/quit/resume messages from the boinc client.
+    options.direct_process_action = false;    // controller will respond to quit messages and heartbeat failures by exiting,
+                                              // and will respond to suspend and resume messages by suspending and resuming
+    options.send_status_msgs = false;         // If set, the program will report its CPU time and fraction done to the client.
+                                              // Set in worker programs.
 
     return boinc_init_options( &options );
 }
@@ -175,8 +172,7 @@ bool process_env_overrides( const fs::path& override_envs )
  * @param slot_path    The path to the slot directory.
  * @return int         Returns 0 on success, non-zero on failure.
  */
-int move_and_unzip_app_file( const std::string& app_name, const std::string& version, const std::string& project_path,
-                             const std::string& slot_path )
+int move_and_unzip_app_file( const std::string& app_name, const std::string& version, const std::string& project_path, const std::string& slot_path )
 {
     // GC. TODO. This code could be combined with copy_and_unzip() to avoid code duplication.
 
@@ -204,8 +200,8 @@ int move_and_unzip_app_file( const std::string& app_name, const std::string& ver
     try {
         fs::copy_file( app_source, app_destination, fs::copy_options::overwrite_existing );
     } catch ( const fs::filesystem_error& e ) {
-        std::cerr << "..move_and_unzip_app: Error copying file: " << app_source << " to: " << app_destination
-                  << ",\nError: " << e.what() << std::endl;
+        std::cerr << "..move_and_unzip_app: Error copying file: " << app_source << " to: " << app_destination << ",\nError: " << e.what()
+                  << std::endl;
         return 1;
     }
 
@@ -220,8 +216,7 @@ int move_and_unzip_app_file( const std::string& app_name, const std::string& ver
         try {
             fs::remove( app_destination );
         } catch ( const fs::filesystem_error& e ) {
-            std::cerr << "..move_and_unzip_app_file(). Error removing file: " << app_destination
-                      << ",\nError: " << e.what() << std::endl;
+            std::cerr << "..move_and_unzip_app_file(). Error removing file: " << app_destination << ",\nError: " << e.what() << std::endl;
         }
     }
     return retval;
@@ -350,8 +345,8 @@ int check_boinc_status( pid_t processid, int process_status )
  * @param app_name The application name.
  * @return long The process handle of the launched child process, or -1 on failure.
  */
-pid_t launch_process( const std::string& project_path, const std::string& slot_path, const std::string& strCmd,
-                      const std::string& nthreads, const std::string& exptid )
+pid_t launch_process( const std::string& project_path, const std::string& slot_path, const std::string& strCmd, const std::string& nthreads,
+                      const std::string& exptid )
 {
     pid_t handle_process;
 
@@ -406,8 +401,8 @@ pid_t launch_process( const std::string& project_path, const std::string& slot_p
         int syserr = errno;    // grab the error before any other system call.
         const char* syserr_msg = strerror( syserr );
 
-        std::cerr << "..Launch process failed: execl - errno = " << syserr << ", " << syserr_msg
-                  << "\n slot_path=" << slot_path << ",strCmd=" << strCmd << ",exptid=" << exptid << std::endl;
+        std::cerr << "..Launch process failed: execl - errno = " << syserr << ", " << syserr_msg << "\n slot_path=" << slot_path
+                  << ",strCmd=" << strCmd << ",exptid=" << exptid << std::endl;
 
         exit( syserr );    // exit child process with system code for better remote diagnosis.
         break;
@@ -511,19 +506,15 @@ void read_progress_file( std::string_view progress_file, TaskState& task )
     while ( std::getline( progress_filestream, progress_line ) ) {    //get 1 row as a string
 
         if ( progress_line.find( "last_cpu_time" ) != std::string::npos ) {
-            task.last_cpu_time =
-                std::stoi( progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 ) );
+            task.last_cpu_time = std::stoi( progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 ) );
         } else if ( progress_line.find( "upload_file_number" ) != std::string::npos ) {
-            task.upload_file_number =
-                std::stoi( progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 ) );
-        } else if ( progress_line.find( "last_iter" ) != std::string::npos ) {
-            task.last_iter = progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 );
+            task.upload_file_number = std::stoi( progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 ) );
+        } else if ( progress_line.find( "last_step" ) != std::string::npos ) {
+            task.last_step = progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 );
         } else if ( progress_line.find( "last_upload" ) != std::string::npos ) {
-            task.last_upload =
-                std::stoi( progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 ) );
+            task.last_upload = std::stoi( progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 ) );
         } else if ( progress_line.find( "model_completed" ) != std::string::npos ) {
-            task.model_completed =
-                std::stoi( progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 ) );
+            task.model_completed = std::stoi( progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 ) );
         }
     }
     progress_filestream.close();
@@ -547,7 +538,7 @@ void update_progress_file( std::string_view progress_file, const TaskState& task
                       << "control_pid=" << std::to_string( getpid() ) << '\n'
                       << "last_cpu_time=" << std::to_string( task.last_cpu_time ) << '\n'
                       << "upload_file_number=" << std::to_string( task.upload_file_number ) << '\n'
-                      << "last_iter=" << task.last_iter << '\n'
+                      << "last_step=" << task.last_step << '\n'
                       << "last_upload=" << std::to_string( task.last_upload ) << '\n'
                       << "model_completed=" << std::to_string( task.model_completed ) << '\n'
                       << "/" << std::endl;
@@ -636,8 +627,7 @@ int move_result_file( const std::string& slot_path, const std::string& temp_path
             try {
                 fs::remove( result_file );
             } catch ( const fs::filesystem_error& e ) {
-                std::cerr << "..move_result_file(). Error removing file: " << result_file << ", error: " << e.what()
-                          << "\n";
+                std::cerr << "..move_result_file(). Error removing file: " << result_file << ", error: " << e.what() << "\n";
             }
         }
     }
@@ -654,8 +644,7 @@ int move_result_file( const std::string& slot_path, const std::string& temp_path
  * @return int Returns 0 on success, non-zero on failure.
  */
 // GC. TODO. Convert this to accept  fs::path args.
-int copy_and_unzip( const std::string& zipfile, const std::string& destination, const std::string& unzip_path,
-                    const std::string& type )
+int copy_and_unzip( const std::string& zipfile, const std::string& destination, const std::string& unzip_path, const std::string& type )
 {
     int retval = 0;
 
@@ -680,8 +669,7 @@ int copy_and_unzip( const std::string& zipfile, const std::string& destination, 
             try {
                 fs::copy_file( source, destination, fs::copy_options::overwrite_existing );
             } catch ( const fs::filesystem_error& e ) {
-                std::cerr << "..copy_and_unzip: Error copying file: " << source << " to: " << destination
-                          << ",\nError: " << e.what() << "\n";
+                std::cerr << "..copy_and_unzip: Error copying file: " << source << " to: " << destination << ",\nError: " << e.what() << "\n";
                 return 1;
             }
         } else {

@@ -22,7 +22,7 @@ int t_read_progress_file()
     std::ofstream progress_test( progress_filename, std::ios::out | std::ios::trunc );
     progress_test << "last_cpu_time=76828\n"
                   << "upload_file_number=3\n"
-                  << "last_iter=1055\n"
+                  << "last_step=1055\n"
                   << "last_upload=1036800\n"
                   << "model_completed=0\n";
     progress_test.close();
@@ -31,12 +31,11 @@ int t_read_progress_file()
     TaskState task;
 
     read_progress_file( progress_filename, task );
-    if ( task.last_iter.empty() || task.last_cpu_time != 76828 || task.upload_file_number != 3 ||
-         task.last_upload != 1036800 || task.model_completed != 0 ) {
+    if ( task.last_step.empty() || task.last_cpu_time != 76828 || task.upload_file_number != 3 || task.last_upload != 1036800 ||
+         task.model_completed != 0 ) {
         FAIL;
-        std::cout << "last_iter = " << task.last_iter << ", last_cpu_time = " << task.last_cpu_time
-                  << ", upload_number = " << task.upload_file_number << ", last_upload = " << task.last_upload
-                  << ", completed = " << task.model_completed << "\n";
+        std::cout << "last_step = " << task.last_step << ", last_cpu_time = " << task.last_cpu_time << ", upload_number = " << task.upload_file_number
+                  << ", last_upload = " << task.last_upload << ", completed = " << task.model_completed << "\n";
         return EXIT_FAILURE;
     }
     SUCCESS;

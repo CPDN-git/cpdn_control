@@ -37,7 +37,7 @@ class ProgressFileHandler {
     // Methods for handling progress file operations.
 
     // Store task progress from TaskState struct to progress file
-    void write( const TaskState& task ) const;
+    bool write( const TaskState& task, std::string& err_msg ) const;
 
     // Reads task progress from progress file into TaskState struct
     void read( TaskState& task ) const;

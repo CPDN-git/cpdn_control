@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <system_error>
 
 #include <unistd.h>    // for getpid()
 
@@ -21,16 +22,25 @@ ProgressFileHandler::ProgressFileHandler( const std::string& slot_path )
 
 /**
  * @brief Write task progress from TaskState struct to progress file
- * @param progress_file Path to the progress file to write
  * @param task Reference to TaskState struct containing progress information
+ * @param err_msg Error message set on failure
+ * @return true on success, false on failure
  */
-void ProgressFileHandler::write( const TaskState& task ) const
+bool ProgressFileHandler::write( const TaskState& task, std::string& err_msg ) const
 {
-    std::ofstream progress_file_out{ progressfile_path, std::ios::out | std::ios::trunc };
+    err_msg.clear();
+    fs::path tmp_path = progressfile_path;
+    tmp_path += ".tmp";
 
-    // Write out the new progress file. Note this truncates progress_file to zero bytes if it already exists (as in a model restart)
-    // GC Oct/2025. Make progress file a fortran namelist, so the models can easily read it to check the control process is still running.
-    //              Also include controller pid so running model has additional way to check if controller is still alive.
+    std::ofstream progress_file_out{ tmp_path, std::ios::out | std::ios::trunc };
+    if ( !progress_file_out.is_open() ) {
+        err_msg = "Failed to open temp progress file for writing: " + tmp_path.string();
+        return false;
+    }
+
+    // Write out the new progress file. Truncates progress_file to zero bytes if it already exists (as in a model restart)
+    // GC Oct/2025. Made progress file a fortran namelist, so models can read it to check the control process is still running.
+    //              Also included controller pid so model has additional way to check if controller is still alive.
     progress_file_out << "! CPDN controller progress file & fortran namelist\n"
                       << "&CPDN\n"
                       << "control_pid=" << std::to_string( getpid() ) << '\n'
@@ -40,7 +50,33 @@ void ProgressFileHandler::write( const TaskState& task ) const
                       << "last_upload=" << std::to_string( task.last_upload ) << '\n'
                       << "model_completed=" << std::to_string( task.model_completed ) << '\n'
                       << "/" << std::endl;
+
+    if ( !progress_file_out ) {
+        err_msg = "Failed to write temp progress file: " + tmp_path.string();
+        progress_file_out.close();
+        std::error_code rm_ec;
+        fs::remove( tmp_path, rm_ec );    // call non-throwing remove (not interested in the error msg if it fails)
+        return false;
+    }
+
     progress_file_out.close();
+    if ( !progress_file_out ) {
+        err_msg = "Failed to close temp progress file: " + tmp_path.string();
+        std::error_code rm_ec;
+        fs::remove( tmp_path, rm_ec );
+        return false;
+    }
+
+    std::error_code ec;
+    fs::rename( tmp_path, progressfile_path, ec );
+    if ( ec ) {
+        err_msg = "Failed to replace progress file with updated file: " + progressfile_path.string() + " (" + ec.message() + ")";
+        std::error_code rm_ec;
+        fs::remove( tmp_path, rm_ec );
+        return false;
+    }
+
+    return true;
 }
 
 

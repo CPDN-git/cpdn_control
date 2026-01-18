@@ -571,6 +571,7 @@ int main( int argc, char** argv )
 
     // Initialise the ProgressFile handler
     ProgressFileHandler progress_file( bconfig.slot_path );
+    std::string err_msg;
 
     // Define the location of the OpenIFS rcf file
     std::string rcf_file = bconfig.slot_path + "/rcf";
@@ -653,7 +654,10 @@ int main( int argc, char** argv )
     }
 
     // Update progress file with current values
-    progress_file.write( tstate );
+    if ( !progress_file.write( tstate, err_msg ) ) {
+        std::cerr << "..Failed to write progress file: " << err_msg << '\n';
+        return task_finish( 1 );
+    }
 
     // seconds between upload files: upload_interval
     // seconds between ICM files: ICM_file_interval * timestep
@@ -847,7 +851,10 @@ int main( int argc, char** argv )
             delay_count = 0;
 
             // Update progress file with current values
-            progress_file.write( tstate );
+            if ( !progress_file.write( tstate, err_msg ) ) {
+                std::cerr << "..Failed to write progress file: " << err_msg << '\n';
+                return task_finish( 1 );
+            }
         }
 
         // Calculate current_cpu_time, only update if cpu_time returns a value

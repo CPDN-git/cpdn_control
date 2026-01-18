@@ -27,7 +27,12 @@ int t_read_progress_file()
 
     // Generate test progress file content
     ProgressFileHandler progress_file( "." );
-    progress_file.write( task );
+    std::string err_msg;
+    if ( !progress_file.write( task, err_msg ) ) {
+        FAIL;
+        std::cout << err_msg << "\n";
+        return EXIT_FAILURE;
+    }
 
     // Check reading the progress file
     TaskState taskin;

@@ -27,7 +27,6 @@
 #include <sys/stat.h>    // for mkdir
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <unistd.h>
 
 #include "boinc/boinc_api.h"
 #include "boinc/diagnostics.h"
@@ -481,68 +480,6 @@ std::string get_tag( const std::string& filename )
     auto length = tag_end - tag_start;
 
     return buffer.substr( tag_start, length );
-}
-
-
-/**
- * @brief Reads task progress from progress file into TaskState struct
- * @param progress_file Path to the progress file to read
- * @param task Reference to TaskState struct to populate
- */
-void read_progress_file( std::string_view progress_file, TaskState& task )
-{
-
-    // Parse the progress_file
-    std::string progress_line = "";
-    std::string delimiter = "=";
-    std::ifstream progress_filestream;
-
-    // Open the progress_file file
-    if ( !( progress_filestream.is_open() ) ) {
-        progress_filestream.open( std::string( progress_file ) );
-    }
-
-    // Read the namelist file
-    while ( std::getline( progress_filestream, progress_line ) ) {    //get 1 row as a string
-
-        if ( progress_line.find( "last_cpu_time" ) != std::string::npos ) {
-            task.last_cpu_time = std::stoi( progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 ) );
-        } else if ( progress_line.find( "upload_file_number" ) != std::string::npos ) {
-            task.upload_file_number = std::stoi( progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 ) );
-        } else if ( progress_line.find( "last_step" ) != std::string::npos ) {
-            task.last_step = progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 );
-        } else if ( progress_line.find( "last_upload" ) != std::string::npos ) {
-            task.last_upload = std::stoi( progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 ) );
-        } else if ( progress_line.find( "model_completed" ) != std::string::npos ) {
-            task.model_completed = std::stoi( progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 ) );
-        }
-    }
-    progress_filestream.close();
-}
-
-
-/**
- * @brief Store task progress from TaskState struct to progress file
- * @param progress_file Path to the progress file to write
- * @param task Reference to TaskState struct containing progress information
- */
-void update_progress_file( std::string_view progress_file, const TaskState& task )
-{
-    std::ofstream progress_file_out{ std::string( progress_file ) };
-
-    // Write out the new progress file. Note this truncates progress_file to zero bytes if it already exists (as in a model restart)
-    // GC Oct/2025. Make progress file a fortran namelist, so the models can easily read it to check the control process is still running.
-    //              Also include controller pid so running model has additional way to check if controller is still alive.
-    progress_file_out << "! CPDN controller progress file & fortran namelist\n"
-                      << "&CPDN\n"
-                      << "control_pid=" << std::to_string( getpid() ) << '\n'
-                      << "last_cpu_time=" << std::to_string( task.last_cpu_time ) << '\n'
-                      << "upload_file_number=" << std::to_string( task.upload_file_number ) << '\n'
-                      << "last_step=" << task.last_step << '\n'
-                      << "last_upload=" << std::to_string( task.last_upload ) << '\n'
-                      << "model_completed=" << std::to_string( task.model_completed ) << '\n'
-                      << "/" << std::endl;
-    progress_file_out.close();
 }
 
 

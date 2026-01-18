@@ -132,6 +132,7 @@ add_library(cpdn_control
         ./lib/utils.cpp
         ./lib/cpdn_cpu_time.cpp
         ./api/trickle_handler.cpp
+        ./api/progressfile_handler.cpp
 )
 
 # Add the model object files to the controller library

@@ -12,6 +12,8 @@
 #include <vector>
 
 
+// GC. TODO. Consider splitting these sturcts into separate header files.
+
 /**
  * @struct TaskState
  * @brief Encapsulates all task-related state variables for managing model execution.
@@ -78,8 +80,6 @@ pid_t launch_process( const std::string&, const std::string&, const std::string&
 std::string get_tag( const std::string& str );
 double model_frac_done( double, double, int );
 int move_result_file( const std::string&, const std::string&, const std::string& );
-void read_progress_file( std::string_view, TaskState& );
-void update_progress_file( std::string_view, const TaskState& );
 int copy_and_unzip( const std::string&, const std::string&, const std::string&, const std::string& );
 bool process_env_overrides( const std::filesystem::path& );
 int zip_and_delete( const std::string&, const std::vector<std::filesystem::path>& );

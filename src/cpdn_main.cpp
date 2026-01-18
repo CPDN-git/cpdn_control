@@ -28,6 +28,7 @@
 #include "lib/utils.h"
 
 #include "api/model_control.h"
+#include "api/progressfile_handler.h"
 #include "api/trickle_handler.h"
 
 #include "models/openifs/oifs_control.h"
@@ -454,7 +455,7 @@ int main( int argc, char** argv )
         } else if ( parsed_key == "NFRRES" ) {    // frequency of model RESTART file creation: +ve model steps, -ve hours.
             tmpstr = parsed_value;
             try {
-                restart_interval = stoi( tmpstr );
+                restart_interval = std::stoi( tmpstr );
             } catch ( ... ) {
                 std::cerr << "..Warning, unable to parse restart interval from namelist, setting to zero, got string: " << tmpstr << std::endl;
                 restart_interval = 0;
@@ -565,29 +566,33 @@ int main( int argc, char** argv )
 
     //-------------------------------------------------------------------------------------------------------
 
-    // Define the name and location of the progress file and the rcf file
-    std::string progress_file = bconfig.slot_path + "/progress_file";
+    // Initialize task state with default value
+    TaskState tstate;
+
+    // Initialise the ProgressFile handler
+    ProgressFileHandler progress_file( bconfig.slot_path );
+
+    // Define the location of the OpenIFS rcf file
     std::string rcf_file = bconfig.slot_path + "/rcf";
 
-    TaskState tstate;    // Initialize task state with default values
-
     // Check whether the rcf file and the progress file (contains model progress) are not already present from an unscheduled shutdown
-    std::cerr << "Checking for rcf file and progress file: " << progress_file << '\n';
+    std::cerr << "Checking for rcf file and progress file: " << progress_file.path() << '\n';
 
     // Handle the cases of the various states of the rcf file and progress file
-    if ( !path_exists( progress_file ) && !path_exists( rcf_file ) ) {
+    if ( !progress_file.exists() && !path_exists( rcf_file ) ) {
         // If both progress file and rcf file do not exist, then model has not run.
         // Do nothing as the task state variables are already initialized to zero values above.
         std::cerr << "-- Starting new model run --\n";
 
-    } else if ( path_exists( progress_file ) && file_is_empty( progress_file ) ) {
+    } else if ( progress_file.exists() && file_is_empty( progress_file.path() ) ) {
         // If progress file exists and is empty, an error has occurred, then kill model run
+        // GC. TODO. Review this. It might mean the we didn't get to the point where the progress file was written.?
         model_ctrl->print_logs( 50 );
         std::cerr << "..progress file exists, but is empty => problem with model, quitting run" << '\n';
         return task_finish( 1 );
 
-    } else if ( path_exists( progress_file ) && !path_exists( rcf_file ) ) {
-        read_progress_file( progress_file, tstate );
+    } else if ( progress_file.exists() && !path_exists( rcf_file ) ) {
+        progress_file.read( tstate );
         // If last_step less than the restart interval, then model is at beginning and rcf has yet to be produced then continue
         if ( std::stoi( tstate.last_step ) >= restart_interval ) {
             // Otherwise if progress file exists and rcf file does not exist, an error has occurred, then kill model run
@@ -595,15 +600,15 @@ int main( int argc, char** argv )
             std::cerr << "..progress file exists, but rcf file does not exist => problem with model, quitting run" << '\n';
             return task_finish( 1 );
         }
-    } else if ( !path_exists( progress_file ) && path_exists( rcf_file ) ) {
+    } else if ( !progress_file.exists() && path_exists( rcf_file ) ) {
         // If rcf file exists and progress file does not exist, an error has occurred, then kill model run
         // TODO: we should be able to bootstrap the progress file from the rcf file here?
         model_ctrl->print_logs( 50 );
         std::cerr << "..rcf file exists, but progress file does not exist => problem with model, quitting run" << '\n';
         return task_finish( 1 );
 
-    } else if ( ( path_exists( progress_file ) && !file_is_empty( progress_file ) ) && path_exists( rcf_file ) ) {
-        // If progress file exists and is not empty and rcf file exists, then read rcf file and progress file
+    } else if ( ( progress_file.exists() && !progress_file.is_empty() ) && path_exists( rcf_file ) ) {
+        // If progress file exists, not empty and rcf file exists, then read rcf file and progress file
         std::ifstream rcf_file_stream;
         std::string cstep_value;
 
@@ -626,10 +631,11 @@ int main( int argc, char** argv )
         }
         rcf_file_stream.close();
 
-        read_progress_file( progress_file, tstate );
+        progress_file.read( tstate );
 
         // Check if the CSTEP variable from rcf is greater than the last_step, if so then quit model run
-        if ( stoi( cstep_value ) > stoi( tstate.last_step ) ) {
+        // This is probably recoverable, but it might mean the model ran on after the controller crashed, so end for now.
+        if ( std::stoi( cstep_value ) > std::stoi( tstate.last_step ) ) {
             std::cerr << "..CSTEP variable from rcf is greater than last_step from progress file, error has occurred, "
                          "quitting model run"
                       << '\n';
@@ -641,13 +647,13 @@ int main( int argc, char** argv )
 
         std::cerr << "-- Model is restarting --\n";
         std::cerr << "Adjusting last_step, " << tstate.last_step << ", to previous model restart step.\n";
-        int restart_step = stoi( tstate.last_step );
+        int restart_step = std::stoi( tstate.last_step );
         restart_step = restart_step - ( ( restart_step % restart_interval ) - 1 );    // -1 because the model will continue from restart_step.
         tstate.last_step = std::to_string( restart_step );
     }
 
     // Update progress file with current values
-    update_progress_file( progress_file, tstate );
+    progress_file.write( tstate );
 
     // seconds between upload files: upload_interval
     // seconds between ICM files: ICM_file_interval * timestep
@@ -841,7 +847,7 @@ int main( int argc, char** argv )
             delay_count = 0;
 
             // Update progress file with current values
-            update_progress_file( progress_file, tstate );
+            progress_file.write( tstate );
         }
 
         // Calculate current_cpu_time, only update if cpu_time returns a value
@@ -894,7 +900,7 @@ int main( int argc, char** argv )
     std::cerr << ".. Printing tail of model log files .." << std::endl;
     model_ctrl->print_logs( 40 );
     std::cerr << "... Printing controller progress file .. " << std::endl;
-    print_last_lines( progress_file, 10 );
+    progress_file.print( std::cerr );
 
 
     //-----------------------------Create the final results zip file-----------------------------------------

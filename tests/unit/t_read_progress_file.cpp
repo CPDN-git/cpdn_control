@@ -5,7 +5,7 @@
 
 #include <fstream>
 
-#include "../src/cpdn_control.h"
+#include "../api/progressfile_handler.h"
 #include "unit_tests.h"
 
 
@@ -17,25 +17,27 @@ int t_read_progress_file()
 {
     TEST( "t_read_progress_file" );
 
-    // Generate test progress file content, taken from real batch
-    std::string progress_filename = "progress_file_12362644";
-    std::ofstream progress_test( progress_filename, std::ios::out | std::ios::trunc );
-    progress_test << "last_cpu_time=76828\n"
-                  << "upload_file_number=3\n"
-                  << "last_step=1055\n"
-                  << "last_upload=1036800\n"
-                  << "model_completed=0\n";
-    progress_test.close();
-
-    // Test setup - Create TaskState struct
+    // Test setup - taken from a real batch progress file
     TaskState task;
+    task.last_cpu_time = 76828;
+    task.upload_file_number = 3;
+    task.last_step = "1055";
+    task.last_upload = 1036800;
+    task.model_completed = 0;
 
-    read_progress_file( progress_filename, task );
-    if ( task.last_step.empty() || task.last_cpu_time != 76828 || task.upload_file_number != 3 || task.last_upload != 1036800 ||
-         task.model_completed != 0 ) {
+    // Generate test progress file content
+    ProgressFileHandler progress_file( "." );
+    progress_file.write( task );
+
+    // Check reading the progress file
+    TaskState taskin;
+    progress_file.read( taskin );
+    if ( taskin.last_step.empty() || taskin.last_cpu_time != 76828 || taskin.upload_file_number != 3 || taskin.last_upload != 1036800 ||
+         taskin.model_completed != 0 ) {
         FAIL;
-        std::cout << "last_step = " << task.last_step << ", last_cpu_time = " << task.last_cpu_time << ", upload_number = " << task.upload_file_number
-                  << ", last_upload = " << task.last_upload << ", completed = " << task.model_completed << "\n";
+        std::cout << "last_step = " << taskin.last_step << ", last_cpu_time = " << taskin.last_cpu_time
+                  << ", upload_number = " << taskin.upload_file_number << ", last_upload = " << taskin.last_upload
+                  << ", completed = " << taskin.model_completed << "\n";
         return EXIT_FAILURE;
     }
     SUCCESS;

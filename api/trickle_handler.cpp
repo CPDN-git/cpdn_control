@@ -10,15 +10,9 @@
 #include <vector>
 
 
-TrickleHandler::TrickleHandler( const std::string& wu_name, const std::string& result_base_name,
-                                const std::string& slot_path )
-    : wu_name_( wu_name ), result_base_name_( result_base_name ), slot_path_( slot_path )
+TrickleHandler::TrickleHandler( const std::string& wu, const std::string& result_base, const std::string& slot )
+    : wu_name( wu ), result_base_name( result_base ), slot_path( slot )
 {
-}
-
-TrickleHandler::~TrickleHandler()
-{
-    // Nothing to clean up
 }
 
 
@@ -27,11 +21,11 @@ TrickleHandler::~TrickleHandler()
  * @param current_cpu_time The current CPU time used by the task.
  * @param timestep The current timestep of the model.
  */
-void TrickleHandler::process_trickle( double current_cpu_time, int timestep )
+void TrickleHandler::process_trickle( double current_cpu_time, int timestep ) const
 {
     std::stringstream trickle_buffer;
-    trickle_buffer << "<wu>" << wu_name_ << "</wu>\n<result>" << result_base_name_ << "</result>\n<ph></ph>\n<ts>"
-                   << timestep << "</ts>\n<cp>" << current_cpu_time << "</cp>\n<vr></vr>\n";
+    trickle_buffer << "<wu>" << wu_name << "</wu>\n<result>" << result_base_name << "</result>\n<ph></ph>\n<ts>" << timestep << "</ts>\n<cp>"
+                   << current_cpu_time << "</cp>\n<vr></vr>\n";
     std::string trickle_msg = trickle_buffer.str();
 
     // Create null terminated, non-const char buffers for the boinc_send_trickle_up call

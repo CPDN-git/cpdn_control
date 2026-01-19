@@ -23,10 +23,9 @@
  */
 bool oifs_setenvs( const std::string& slot_path, const std::string& nthreads )
 {
-
     // check nthreads is valid integer
-    // check_stoi modifies the string
-    if ( std::string nthreads_copy = nthreads; !check_stoi( nthreads_copy ) ) {
+    // parse_int can modify the string!
+    if ( std::string nthreads_copy = nthreads; !parse_int( nthreads_copy ) ) {
         std::cerr << "..oifs_setenvs: Invalid value of 'nthreads': " << nthreads << '\n';
         return false;
     }
@@ -124,14 +123,17 @@ bool oifs_parse_stat( const std::string& logline, std::string& stat_column, cons
 bool oifs_valid_step( std::string& step, int nsteps )
 {
     // make sure step is valid integer
-    if ( !check_stoi( step ) ) {
-        std::cerr << "..oifs_valid_step: Invalid characters in stoi string, unable to convert step to int: " << step << '\n';
+    int istep;
+    std::string err_msg;
+
+    if ( !parse_int( step, istep, err_msg ) ) {
+        std::cerr << "..oifs_valid_step: unable to convert step to int: " << step << ", error: " << err_msg << '\n';
         return false;
     } else {
         // check step is in valid range: 0 -> total no. of steps
-        if ( stoi( step ) < 0 ) {
+        if ( istep < 0 ) {
             return false;
-        } else if ( stoi( step ) > nsteps ) {
+        } else if ( istep > nsteps ) {
             return false;
         }
     }

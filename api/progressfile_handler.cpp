@@ -5,11 +5,14 @@
 
 #include <filesystem>
 #include <fstream>
+#include <iostream>    // testing only; to include std::cerr/cout
 #include <string>
+#include <string_view>
 #include <system_error>
 
 #include <unistd.h>    // for getpid()
 
+#include "../lib/utils.h"
 #include "../src/cpdn_control.h"    // for TaskState struct
 #include "progressfile_handler.h"
 
@@ -82,37 +85,100 @@ bool ProgressFileHandler::write( const TaskState& task, std::string& err_msg ) c
 
 /**
  * @brief Reads task progress from progress file into TaskState struct
- * @param progress_file Path to the progress file to read
  * @param task Reference to TaskState struct to populate
+ * @param err_msg Returned error message on failure. Cleared on entry.
+ * @return true on success, false on failure
  */
-void ProgressFileHandler::read( TaskState& task ) const
+bool ProgressFileHandler::read( TaskState& task, std::string& err_msg ) const
 {
-    // Parse the progress_file
-    std::string progress_line = "";
-    std::string delimiter = "=";
-    std::ifstream progress_file_in{ progressfile_path };
+    err_msg.clear();
 
-    // Open the progress_file file
-    if ( !( progress_file_in.is_open() ) ) {
-        progress_file_in.open( progressfile_path );
+    // Parse the progress_file
+    std::string progress_line;
+    std::ifstream progress_file_in{ progressfile_path };
+    if ( !progress_file_in.is_open() ) {
+        err_msg = "Failed to open progress file: " + progressfile_path.string();
+        return false;
     }
 
-    // Read the namelist file
-    while ( std::getline( progress_file_in, progress_line ) ) {    //get 1 row as a string
+    // Check progress file is not empty, use non-throwing version
+    if ( std::error_code ec; fs::is_empty( progressfile_path, ec ) ) {
+        err_msg = "Progress file is empty: " + progressfile_path.string();
+        progress_file_in.close();
+        return false;
+    }
 
-        if ( progress_line.find( "last_cpu_time" ) != std::string::npos ) {
-            task.last_cpu_time = std::stoi( progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 ) );
-        } else if ( progress_line.find( "upload_file_number" ) != std::string::npos ) {
-            task.upload_file_number = std::stoi( progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 ) );
-        } else if ( progress_line.find( "last_step" ) != std::string::npos ) {
-            task.last_step = progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 );
-        } else if ( progress_line.find( "last_upload" ) != std::string::npos ) {
-            task.last_upload = std::stoi( progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 ) );
-        } else if ( progress_line.find( "model_completed" ) != std::string::npos ) {
-            task.model_completed = std::stoi( progress_line.substr( progress_line.find( delimiter ) + 1, progress_line.length() - 1 ) );
+    int counter = 0;
+    std::string key;
+    std::string value;
+
+    // Read the progress file
+    while ( std::getline( progress_file_in, progress_line ) ) {
+
+        trim_whitespace( progress_line );
+        if ( progress_line.empty() ) {
+            continue;
         }
+        key.clear();
+        value.clear();
+
+        // Note. As of 2025, the progress file is formatted as a fortran namelist
+        // so the model process can read it to check the controller process is ok.
+        if ( !parse_namelist_key_value( progress_line, key, value ) ) {
+            continue;
+        }
+
+        // We don't use control_pid in TaskState but read it to validate the file.
+        if ( key == "control_pid" ) {
+            int pid_value = 0;
+            counter++;
+            if ( !parse_int( value, pid_value, err_msg ) ) {
+                err_msg = "control_pid: " + err_msg;
+            }
+        } else if ( key == "last_cpu_time" ) {
+            counter++;
+            if ( !parse_int( value, task.last_cpu_time, err_msg ) ) {
+                err_msg = "last_cpu_time: " + err_msg;
+            }
+        } else if ( key == "upload_file_number" ) {
+            counter++;
+            if ( !parse_int( value, task.upload_file_number, err_msg ) ) {
+                err_msg = "upload_file_number: " + err_msg;
+            }
+        } else if ( key == "last_step" ) {
+            int last_step_value = 0;
+            counter++;
+            if ( !parse_int( value, last_step_value, err_msg ) ) {    // check it's a valid int before adding to task state.
+                err_msg = "last_step: " + err_msg;
+            }
+            task.last_step = std::to_string( last_step_value );
+        } else if ( key == "last_upload" ) {
+            counter++;
+            if ( !parse_int( value, task.last_upload, err_msg ) ) {
+                err_msg = "last_upload: " + err_msg;
+            }
+        } else if ( key == "model_completed" ) {
+            counter++;
+            if ( !parse_int( value, task.model_completed, err_msg ) ) {
+                err_msg = "model_completed: " + err_msg;
+            }
+        }
+
+        if ( !err_msg.empty() )    // error detected by parse_int
+            break;
     }
     progress_file_in.close();
+
+    if ( !err_msg.empty() ) {
+        return false;
+    }
+
+    if ( counter != PROGFILE_LINES ) {
+        err_msg = "Progress file missing required fields";
+        return false;
+    }
+
+    return true;
 }
 
 

@@ -6,6 +6,7 @@
 #pragma once
 
 #include <filesystem>
+#include <iosfwd>    // provides only forward declarations for iostream classes without huge ostream include.
 #include <string>
 #include <string_view>
 
@@ -14,6 +15,7 @@
 namespace fs = std::filesystem;
 
 constexpr std::string_view progressfile_name = "cpdn_progressfile.txt";
+constexpr int PROGFILE_LINES = 6;    // number of data fields in progress file.
 
 class ProgressFileHandler {
 
@@ -40,7 +42,7 @@ class ProgressFileHandler {
     bool write( const TaskState& task, std::string& err_msg ) const;
 
     // Reads task progress from progress file into TaskState struct
-    void read( TaskState& task ) const;
+    bool read( TaskState& task, std::string& err_msg ) const;
 
     // Print the progress file to the provided output stream
     void print( std::ostream& os ) const;

@@ -20,3 +20,4 @@ std::string getDateTime();
 std::vector<std::string> get_out_files( const std::string& );
 void sleep_seconds( double seconds );
 bool check_stoi( std::string& cin );
+bool parse_int( std::string& value, int& out, std::string& err_msg );

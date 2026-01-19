@@ -5,6 +5,8 @@
  */
 
 #include <algorithm>
+#include <cctype>
+#include <charconv>    // for std::from_chars
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -126,13 +128,10 @@ static void strip_quotes_and_trim( std::string& text )
     if ( text.size() < 2 ) {
         return;
     }
-    std::cerr << ".. strip_quotes_and_trim: before='" << text << "'\n";
-    std::cerr << ".. strip_quotes_and_trim: text.front()='" << text.front() << "' text.back()='" << text.back() << "'\n";
     if ( ( text.front() == '"' && text.back() == '"' ) || ( text.front() == '\'' && text.back() == '\'' ) ) {
         text = text.substr( 1, text.size() - 2 );
         trim_whitespace( text );
     }
-    std::cerr << ".. strip_quotes_and_trim: after='" << text << "'\n";
 }
 
 
@@ -158,7 +157,6 @@ static bool split_key_value( const std::string& line, std::string& key, std::str
 
     key = working_line.substr( 0, delim_pos );
     value = working_line.substr( delim_pos + 1 );
-    std::cerr << ".. split_key_value: key='" << key << "' value='" << value << "'\n";
 
     trim_whitespace( key );
     trim_whitespace( value );
@@ -203,6 +201,8 @@ bool parse_key_value( const std::string& line, std::string& key, std::string& va
  * @brief Parse key/value pairs from a Fortran namelist line.
  *        This treats lines starting with '!' (after whitespace) as comments,
  *        unlike parse_key_value(), which only treats '#' as a comment.
+ * 
+ *  TODO: Consider adding check for &nam string to indicate valid start to a fortran namelist.
  */
 bool parse_namelist_key_value( const std::string& line, std::string& key, std::string& value )
 {
@@ -434,4 +434,39 @@ bool check_stoi( std::string& cin )
         std::cerr << "..Out of range value for stoi : " << excep.what() << "\n";
         return false;
     }
+}
+
+
+/**
+ * @brief Parse string & extract int value
+ * @param value : input string_view to be parsed.
+ * @param out   : integer value updated on exit if successful
+ * @param err_msg : error string if unsuccessful
+ * @return true on success, false if failed to convert 'value' to int.
+ */
+bool parse_int( std::string& value, int& out, std::string& err_msg )
+{
+    err_msg.clear();
+
+    // 'from_chars' below needs no leading whitespace before or after the value to be converted.
+    trim_whitespace( value );
+    if ( value.empty() ) {
+        err_msg = "Empty integer value";
+        return false;
+    }
+
+    const char* begin = value.data();
+    const char* end = value.data() + value.size();
+
+    auto result = std::from_chars( begin, end, out );
+
+    if ( result.ec != std::errc{} ) {
+        err_msg = std::make_error_code( result.ec ).message();
+        return false;
+    }
+    if ( result.ptr != end ) {
+        err_msg = "Invalid trailing characters in integer";
+        return false;
+    }
+    return true;
 }

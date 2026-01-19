@@ -813,7 +813,6 @@ int main( int argc, char** argv )
     //----------------------------------------Main loop------------------------------------------------------
 
     // Periodically check the process status and the BOINC client status
-    std::string ifs_stat = bconfig.slot_path + "/ifs.stat";    // GC. TODO: should be std::filesystem path.
 
     std::vector<fs::path> zfl;
 
@@ -831,12 +830,9 @@ int main( int argc, char** argv )
         if ( delay_count == 7 ) {
 
             // Get the current model step.
-            step = tstate.last_step;
-            if ( path_exists( ifs_stat ) ) {
-                // step is updated by this call if successful.
-                if ( !model_ctrl->get_current_step( ifs_stat, step, total_nsteps ) ) {
-                    step = tstate.last_step;    // revert to last valid step
-                }
+            // step is updated by this call if successful.
+            if ( !model_ctrl->get_current_step( step, total_nsteps ) ) {
+                step = tstate.last_step;    // revert to last valid step
             }
 
             int step_value = 0;
@@ -991,7 +987,7 @@ int main( int argc, char** argv )
     // Time delay to ensure model files are all flushed to disk
     sleep_seconds( 60 );
 
-    tstate.model_success = model_ctrl->check_model_success( ifs_stat );
+    tstate.model_success = model_ctrl->check_model_success();
 
     if ( tstate.model_success ) {
         std::cerr << "..Model completed successfully" << std::endl;

@@ -30,11 +30,11 @@ class OpenIFSControl : public ModelControl {
     // overrides of pure virtual functions in ModelControl
 
     void print_logs( const int nlines ) const override;
-    bool check_model_success( std::string_view ifsstat_path ) const override;
+    bool check_model_success() const override;
 
     // Getters and setters
 
-    bool get_current_step( const std::string& ifsstat, std::string& step, const int total_steps ) const override;
+    bool get_current_step( std::string& step, const int total_steps ) const override;
     std::vector<std::string> get_output_filenames( std::string_view step, std::string_view id ) const override;
     std::vector<std::string> get_log_filenames() const override;
     std::regex get_output_filename_regex() const override;
@@ -48,9 +48,9 @@ class OpenIFSControl : public ModelControl {
 
   private:
     // Private member variables
+    const fs::path ifs_stat{ "ifs_stat" };
 
-    // Key model output logs
-    const std::vector<std::string> log_files = { "NODE.001_01", "ifs.stat", "rcf", "waminfo" };
+    const std::vector<std::string> log_files{ "NODE.001_01", "ifs.stat", "rcf", "waminfo" };
 
     const std::regex output_file_pattern{ R"(^ICM[A-Za-z]{6}\+[0-9]{6}$)" };
 };

@@ -14,21 +14,20 @@
 
 /**
  * @brief Check if the model has completed successfully. Call this after model task has finished.
- * @param ifsstat_path Path to the ifs.stat file.
  * @returns True if the model completed successfully, false otherwise.
  */
-bool OpenIFSControl::check_model_success( std::string_view ifsstat_path ) const
+bool OpenIFSControl::check_model_success() const
 {
     bool success = false;
 
     // To check whether the model completed successfully, look for 'CNT0' in 3rd column of ifs.stat
     // This will always be the last line of a successful model forecast.
 
-    if ( path_exists( ifsstat_path ) ) {
+    if ( fs::exists( ifs_stat ) ) {
         std::string ifs_word = "";
         std::string stat_lastline = "";
 
-        fread_last_line( std::string( ifsstat_path ), stat_lastline );    // at some point, these will all be fs::path..
+        fread_last_line( ifs_stat.string(), stat_lastline );    // at some point, these will all be fs::path..
         oifs_parse_stat( stat_lastline, ifs_word, 3 );
         std::cerr << "Last line of ifs.stat, ifs_word: " << stat_lastline << ", " << ifs_word << '\n';
         if ( ifs_word == "CNT0" ) {
@@ -37,7 +36,7 @@ bool OpenIFSControl::check_model_success( std::string_view ifsstat_path ) const
             std::cerr << "CNT0 not found; string returned was: " << "'" << ifs_word << "'" << '\n';
         }
     } else {
-        std::cerr << "ifs.stat file not found: " << ifsstat_path << '\n';
+        std::cerr << "ifs.stat file not found: " << ifs_stat << '\n';
     }
     return success;
 }
@@ -61,7 +60,7 @@ void OpenIFSControl::print_logs( const int nlines ) const
  * @param current_step Reference to an integer to store the current step. Updated on success.
  * @returns True if the current step was successfully retrieved, false otherwise.
  */
-bool OpenIFSControl::get_current_step( const std::string& ifs_stat, std::string& current_step, const int total_steps ) const
+bool OpenIFSControl::get_current_step( std::string& current_step, const int total_steps ) const
 {
     bool result = false;
     std::string iter = "0";
@@ -73,7 +72,7 @@ bool OpenIFSControl::get_current_step( const std::string& ifs_stat, std::string&
     // to the output files for that iteration, those files can now be moved and uploaded.
     //std::cerr << "Reading completed iteration step from last line of ifs.stat" << std::endl;
 
-    if ( fread_last_line( ifs_stat, lastline ) ) {               // only returns true if lastline is read and changed.
+    if ( fread_last_line( ifs_stat.string(), lastline ) ) {      // only returns true if lastline is read and changed.
         if ( oifs_parse_stat( lastline, current_step, 4 ) ) {    // iter updates
             if ( oifs_valid_step( iter, total_steps ) ) {
                 result = true;

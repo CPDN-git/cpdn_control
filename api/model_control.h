@@ -35,7 +35,7 @@ class ModelControl {
 
     // Checks the model has completed successfully.
     // This interface will change once the derived class is fully implemented.
-    virtual bool check_model_success( std::string_view statfile ) const = 0;
+    virtual bool check_model_success() const = 0;
 
     // Parse command line arguments (may not need this if controller process handles it).
     //virtual bool parse_command_line(int argc, char* argv[]) = 0;
@@ -64,8 +64,7 @@ class ModelControl {
     virtual std::string get_parameter_input_file() const { return parameter_input_file; }
 
     // Determine the current model step; return true if successful, false otherwise.
-    // TODO. status_file should be std::filesystem path. It can be a relative or absolute path.
-    virtual bool get_current_step( const std::string& status_file, std::string& current_step, const int total_steps ) const = 0;
+    virtual bool get_current_step( std::string& current_step, const int total_steps ) const = 0;
 
     // Provide a list of model output filenames for uploading to server at a particular step.
     virtual std::vector<std::string> get_output_filenames( std::string_view step, std::string_view id ) const = 0;

@@ -95,3 +95,6 @@ std::vector<std::string> OpenIFSControl::get_output_filenames( std::string_view 
     std::string suffix = oifs_get_filename_part( std::string( step ), std::string( exptid ) );
     return { "ICMGG" + suffix, "ICMSH" + suffix, "ICMUA" + suffix };
 }
+
+
+std::regex OpenIFSControl::get_output_filename_regex() const { return output_file_pattern; }

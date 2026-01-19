@@ -5,6 +5,7 @@
 #pragma once
 
 #include <filesystem>
+#include <regex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -35,6 +36,7 @@ class OpenIFSControl : public ModelControl {
 
     bool get_current_step( const std::string& ifsstat, std::string& step, const int total_steps ) const override;
     std::vector<std::string> get_output_filenames( std::string_view step, std::string_view id ) const override;
+    std::regex get_output_filename_regex() const;
 
 
     // Delete copy constructor and assignment operator
@@ -47,5 +49,7 @@ class OpenIFSControl : public ModelControl {
     // Private member variables
 
     // Key model output logs
-    std::vector<std::string> log_files = { "NODE.001_01", "ifs.stat", "rcf", "waminfo" };
+    const std::vector<std::string> log_files = { "NODE.001_01", "ifs.stat", "rcf", "waminfo" };
+
+    const std::regex output_file_pattern{ R"(^ICM[A-Za-z]{6}\+[0-9]{6}$)" };
 };

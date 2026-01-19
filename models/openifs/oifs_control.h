@@ -39,6 +39,9 @@ class OpenIFSControl : public ModelControl {
     std::vector<std::string> get_log_filenames() const override;
     std::regex get_output_filename_regex() const override;
 
+    bool restart_ctl_exists() const override;
+    bool restart_ctl_read( std::string& step, std::string& time ) const override;
+
 
     // Delete copy constructor and assignment operator
 
@@ -49,6 +52,8 @@ class OpenIFSControl : public ModelControl {
   private:
     // Private member variables
     const fs::path ifs_stat{ "ifs_stat" };
+
+    const fs::path rcf{ "rcf" };
 
     const std::vector<std::string> log_files{ "NODE.001_01", "ifs.stat", "rcf", "waminfo" };
 

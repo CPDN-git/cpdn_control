@@ -106,3 +106,36 @@ std::regex OpenIFSControl::get_output_filename_regex() const { return output_fil
  * @brief Returns vector of list of log files.
  */
 std::vector<std::string> OpenIFSControl::get_log_filenames() const { return log_files; }
+
+
+/** 
+ * @brief Returns true if OpenIFS rcf file exists in current dir 
+ */
+bool OpenIFSControl::restart_ctl_exists() const { return fs::exists( rcf ); }
+
+
+/**
+ * @brief Reads the OpenIFs restart control namelist file "rcf"
+ */
+bool OpenIFSControl::restart_ctl_read( std::string& step, std::string& time ) const
+{
+    std::ifstream rcf_stream;
+    bool ok = false;
+
+    if ( !fs::exists( rcf ) ) {
+        return ok;
+    }
+    // Read the rcf file
+    if ( !( rcf_stream.is_open() ) ) {
+        rcf_stream.open( rcf );
+    }
+    if ( rcf_stream.is_open() ) {
+        if ( oifs_read_rcf_file( rcf_stream, time, step ) ) {
+            std::cerr << "Read the rcf file" << '\n';
+            ok = true;
+        }
+    }
+    rcf_stream.close();
+
+    return ok;
+}

@@ -37,6 +37,9 @@ class ModelControl {
     // This interface will change once the derived class is fully implemented.
     virtual bool check_model_success() const = 0;
 
+    virtual bool restart_ctl_exists() const = 0;
+    virtual bool restart_ctl_read( std::string& step, std::string& time ) const = 0;
+
     // Parse command line arguments (may not need this if controller process handles it).
     //virtual bool parse_command_line(int argc, char* argv[]) = 0;
 

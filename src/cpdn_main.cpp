@@ -610,68 +610,58 @@ int main( int argc, char** argv )
     // Initialise the ProgressFile handler
     ProgressFileHandler progress_file( bconfig.slot_path );
 
-    // Define the location of the OpenIFS rcf file
-    std::string rcf_file = bconfig.slot_path + "/rcf";
+    bool restart_ctl_exists = model_ctrl->restart_ctl_exists();
+
 
     // Check whether the rcf file and the progress file (contains model progress) are not already present from an unscheduled shutdown
-    std::cerr << "Checking for rcf file and progress file: " << progress_file.path() << '\n';
+    std::cerr << "Checking model's restart file and CPDN progress file: " << progress_file.path() << '\n';
 
     // Handle the cases of the various states of the rcf file and progress file.
-    if ( !progress_file.exists() && !path_exists( rcf_file ) ) {
+    if ( !progress_file.exists() && !restart_ctl_exists ) {
 
         // Both progress file and rcf file do not exist, model has not run.
         // Do nothing as the task state variables are already initialized to zero values above.
         std::cerr << "-- Starting new model run --\n";
 
-    } else if ( ( progress_file.exists() && !progress_file.is_empty() ) && path_exists( rcf_file ) ) {
+    } else if ( ( progress_file.exists() && !progress_file.is_empty() ) && restart_ctl_exists ) {
 
-        // If progress file exists, not empty and rcf file exists, then this is a restart.
-        // Check the rcf file against the progress file and continue the run.
-        std::ifstream rcf_file_stream;
-        std::string cstep_value;
+        // If progress file exists, not empty and model's restart control file exists, this is a restart.
+        // Check the model's restart control file against the progress file and continue the run.
+        std::string restart_step;
+        std::string restart_time;
 
-        // Read the rcf file
-        if ( path_exists( rcf_file ) ) {
-            if ( !( rcf_file_stream.is_open() ) ) {
-                rcf_file_stream.open( rcf_file );
-            }
-            if ( rcf_file_stream.is_open() ) {
-                std::string ctime_value;
-                if ( oifs_read_rcf_file( rcf_file_stream, ctime_value, cstep_value ) ) {
-                    std::cerr << "Read the rcf file" << '\n';
-                } else {
-                    // Reading the rcf file failed, then kill model run
-                    model_ctrl->print_logs( 50 );
-                    std::cerr << "..Reading the rcf file failed" << '\n';
-                    return task_finish( 1 );
-                }
-            }
+        bool restart_ctl = model_ctrl->restart_ctl_read( restart_step, restart_time );
+
+        // If reading the rcf file failed, then kill model run
+        if ( !restart_ctl ) {
+            std::cerr << "..Reading the model restart control file failed" << '\n';
+            model_ctrl->print_logs( 50 );
+            return task_finish( 1 );
         }
-        rcf_file_stream.close();
 
         if ( !progress_file.read( tstate, err_msg ) ) {
             std::cerr << "..Failed to read progress file: " << err_msg << '\n';
             return task_finish( 1 );
         }
 
-        int cstep_int = 0;
-        std::string cstep_str = cstep_value;
-        if ( !parse_int( cstep_str, cstep_int, err_msg ) ) {
-            std::cerr << "..Failed to parse CSTEP value from rcf: " << err_msg << '\n';
+        int rstep_i = 0;
+        std::string step_s = restart_step;
+        if ( !parse_int( step_s, rstep_i, err_msg ) ) {
+            std::cerr << "..Failed to parse restart STEP value: " << err_msg << '\n';
             return task_finish( 1 );
         }
 
-        int last_step_int = 0;
-        std::string last_step_str = tstate.last_step;
-        if ( !parse_int( last_step_str, last_step_int, err_msg ) ) {
+        int last_step_i = 0;
+        std::string last_step_s = tstate.last_step;
+        if ( !parse_int( last_step_s, last_step_i, err_msg ) ) {
             std::cerr << "..Failed to parse last_step from progress file: " << err_msg << '\n';
             return task_finish( 1 );
         }
 
         // Check if the CSTEP variable from rcf is greater than the last_step, if so then quit model run
         // This is probably recoverable, but it might mean the model ran on after the controller crashed, so end for now.
-        if ( cstep_int > last_step_int ) {
-            std::cerr << "..CSTEP variable from rcf greater than last_step from progress file, error has occurred, quitting model run" << '\n';
+        if ( rstep_i > last_step_i ) {
+            std::cerr << "..STEP variable from model restart greater than last_step from progress file, error occurred. Exiting.." << '\n';
             return task_finish( 1 );
         }
 
@@ -680,19 +670,19 @@ int main( int argc, char** argv )
 
         std::cerr << "-- Model is restarting --\n";
         std::cerr << "Adjusting last_step, " << tstate.last_step << ", to previous model restart step.\n";
-        int restart_step = last_step_int;
-        restart_step = restart_step - ( ( restart_step % restart_interval ) - 1 );    // -1 because the model will continue from restart_step.
-        tstate.last_step = std::to_string( restart_step );
+        int restart_step_i = last_step_i;
+        restart_step_i = restart_step_i - ( ( restart_step_i % restart_interval ) - 1 );    // -1 because the model will continue from restart_step.
+        tstate.last_step = std::to_string( restart_step_i );
 
     } else if ( progress_file.exists() && file_is_empty( progress_file.path() ) ) {
 
         // If progress file exists and is empty, an error has occurred, then kill model run
         // GC. TODO. Review this. It might mean the we didn't get to the point where the progress file was written.?
-        model_ctrl->print_logs( 50 );
         std::cerr << "..progress file exists, but is empty => problem with model, quitting run" << '\n';
+        model_ctrl->print_logs( 50 );
         return task_finish( 1 );
 
-    } else if ( progress_file.exists() && !path_exists( rcf_file ) ) {
+    } else if ( progress_file.exists() && !restart_ctl_exists ) {
 
         // GC. TODO. I think this needs merging with case above of restart from existing rcf file?
         // If the progress file exists, the model has started but not yet got to the first
@@ -714,8 +704,7 @@ int main( int argc, char** argv )
             std::cerr << "..progress file exists, but rcf file does not exist => problem with model, quitting run" << '\n';
             return task_finish( 1 );
         }
-
-    } else if ( !progress_file.exists() && path_exists( rcf_file ) ) {
+    } else if ( !progress_file.exists() && restart_ctl_exists ) {
         // If rcf file exists and progress file does not exist, an error has occurred, then kill model run
         // TODO: we should be able to bootstrap the progress file from the rcf file here?
         // Maybe not as the model likely runs on after the controller process has crashed.

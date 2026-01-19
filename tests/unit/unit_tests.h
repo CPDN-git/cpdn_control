@@ -16,7 +16,7 @@ int t_cputime_comparison();
 int t_parse_key_value();
 int t_parse_namelist_key_value();
 int t_get_tag();
-int t_check_stoi();
+int t_check_parse_int();
 int t_fread_last_line();
 int t_model_frac_done();
 int t_path_exists();

@@ -17,7 +17,7 @@ add_executable(unit_tests unit_tests.cpp
                         t_parse_key_value.cpp
                         t_parse_namelist_key_value.cpp
                         t_get_tag.cpp
-                        t_check_stoi.cpp
+                        t_check_parse_int.cpp
                         t_fread_last_line.cpp
                         t_model_frac_done.cpp
                         t_path_exists.cpp
@@ -45,7 +45,7 @@ add_test( NAME CPUTimeComparisonTest COMMAND unit_tests "CPU Time Comparison" )
 add_test( NAME ParseKeyValueTest COMMAND unit_tests "Parse Key Value" )
 add_test( NAME ParseNamelistKeyValueTest COMMAND unit_tests "Parse Namelist Key Value" )
 add_test( NAME GetTagTest COMMAND unit_tests "Get Tag" )
-add_test( NAME CheckStoiTest COMMAND unit_tests "Check Stoi" )
+add_test( NAME ParseIntTest COMMAND unit_tests "Parse Int" )
 add_test( NAME FreadLastLineTest COMMAND unit_tests "Fread Last Line" )
 add_test( NAME ModelFracDoneTest COMMAND unit_tests "Model Frac Done" )
 add_test( NAME PathExistsTest COMMAND unit_tests "Path Exists" )

@@ -409,37 +409,9 @@ void sleep_seconds( double seconds )
 }
 
 
-/**  
- * @brief Check input string is convertable to an integer by checking for any letters.
- *        stoi() will convert leading digits if alphanumeric but we know step must be all digits.
- * @return true on success, false if non-numeric data in input string.
- */
-bool check_stoi( std::string& cin )
-{
-
-    if ( std::any_of( cin.begin(), cin.end(), ::isalpha ) ) {
-        std::cerr << "..Invalid characters in stoi string: " << cin << "\n";
-        return false;
-    }
-
-    //  check stoi standard exceptions
-    //  n.b. still need to check step <= max_step
-    try {
-        std::stoi( cin );
-        return true;
-    } catch ( const std::invalid_argument& excep ) {
-        std::cerr << "..Invalid input argument for stoi : " << excep.what() << "\n";
-        return false;
-    } catch ( const std::out_of_range& excep ) {
-        std::cerr << "..Out of range value for stoi : " << excep.what() << "\n";
-        return false;
-    }
-}
-
-
 /**
  * @brief Parse string & extract int value
- * @param value : input string_view to be parsed.
+ * @param value : input string_view to be parsed, may be trimmed.
  * @param out   : integer value updated on exit if successful
  * @param err_msg : error string if unsuccessful
  * @return true on success, false if failed to convert 'value' to int.
@@ -469,4 +441,14 @@ bool parse_int( std::string& value, int& out, std::string& err_msg )
         return false;
     }
     return true;
+}
+
+/**
+ * @brief Version of parse_int that only checks conversion is valid
+ */
+bool parse_int( std::string& value )
+{
+    int out;
+    std::string err_msg;
+    return parse_int( value, out, err_msg );
 }

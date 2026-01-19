@@ -24,7 +24,7 @@ int main( int argc, char* argv[] )
         { "Parse Key Value", t_parse_key_value },
         { "Parse Namelist Key Value", t_parse_namelist_key_value },
         { "Get Tag", t_get_tag },
-        { "Check Stoi", t_check_stoi },
+        { "Parse Int", t_check_parse_int },
         { "Fread Last Line", t_fread_last_line },
         { "Model Frac Done", t_model_frac_done },
         { "Path Exists", t_path_exists },

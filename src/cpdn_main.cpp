@@ -1,13 +1,13 @@
 //
 // BOINC task controller for CPDN.
 //
-// This version written by Glenn Carver, CPDN, 2025.
-// Original version by Andy Bowery (Oxford eResearch Centre, Oxford University) December 2023.
+// This version written by Glenn Carver, CPDN, 2025->
+// Rewritten of original version by Andy Bowery (Oxford eResearch Centre, Oxford University) December 2023.
 //
 
 #include <chrono>
 #include <cstdlib>
-#include <dirent.h>    // this and...
+#include <dirent.h>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -61,16 +61,17 @@ constexpr std::string_view MODEL_CONFIG_FILE = "model_config.xml";
  * @param modelName The name of the model.
  * @return A unique pointer to the created ModelControl instance. Maybe nullptr if model not supported.
 */
-static std::unique_ptr<ModelControl> create_model_control( std::string_view vendor, std::string_view model_name, std::string_view model_version,
-                                                           std::string_view primary_ctrl_file )
+static std::unique_ptr<ModelControl> create_model_control( std::string_view model_name, std::string_view model_version )
 {
     std::unique_ptr<ModelControl> model;    // create a null unique_ptr ready for a new model control instance.
 
     // Model mappings
     // As the test model is an OpenIFS skeleton clone, we use the OpenIFSControl class.
 
-    if ( model_name == "test_model" || model_name == "oifs_43r3" ) {
-        model = std::make_unique<OpenIFSControl>( vendor, model_name, model_version, primary_ctrl_file );
+    if ( model_name == "test_model" ) {
+        model = std::make_unique<OpenIFSControl>( "CPDN", model_name, model_version, "test_model", "fort.4" );
+    } else if ( model_name == "oifs_43r3" ) {
+        model = std::make_unique<OpenIFSControl>( "ECMWF", model_name, model_version, "oifs_43r3_omp_model.exe", "fort.4" );
     }
 
     return model;
@@ -282,7 +283,7 @@ int main( int argc, char** argv )
     // Create model control instance.
     // In future, rather than pass app_name, we might pass the model name read from model_config.xml.
     // "CPDN" and "fort.4" are placeholders for vendor name and primary control file respectively.
-    auto model_ctrl = create_model_control( "ECMWF", bconfig.app_name, bconfig.app_version, "fort.4" );
+    auto model_ctrl = create_model_control( bconfig.app_name, bconfig.app_version );
     if ( model_ctrl == nullptr ) {
         std::cerr << "..Error creating model control instance. Unsupported model: " << bconfig.app_name << std::endl;
         return task_finish( 1 );
@@ -741,30 +742,14 @@ int main( int argc, char** argv )
     // Create the trickle handler (only trickle if not in standalone mode)
     TrickleHandler trickler( bconfig.wu_name, result_base_name, bconfig.slot_path );
 
-    // Determine which OpenIFS executable to run.
+    // Check model executable to run.
     // GC. This should be an input parameter on the command line or the init_data.xml (or model_config.xml) later on.
 
-    fs::path single_proc_exe = bconfig.slot_path;
-    single_proc_exe /= "oifs_43r3_model.exe";
+    fs::path executable = bconfig.slot_path;
+    executable /= model_ctrl->get_executable_name();
 
-    fs::path multi_proc_exe = bconfig.slot_path;
-    multi_proc_exe /= "oifs_43r3_omp_model.exe";
-
-    fs::path test_proc_exe = bconfig.slot_path;
-    test_proc_exe /= "test_model";
-
-    std::string exe_cmd{};
-
-    // GC TODO this needs tidying up; exec name should come from model class.
-    if ( path_exists( single_proc_exe.string() ) ) {
-        exe_cmd = single_proc_exe.string();
-    } else if ( path_exists( multi_proc_exe.string() ) ) {
-        exe_cmd = multi_proc_exe.string();
-    } else if ( path_exists( test_proc_exe.string() ) ) {
-        exe_cmd = test_proc_exe.string();
-    }
-    if ( exe_cmd.empty() ) {
-        std::cerr << "..No model executable found, ending task." << std::endl;
+    if ( !fs::exists( executable ) ) {
+        std::cerr << ".. Abort. Model executable not found: " << executable << std::endl;
         return task_finish( 1 );
     }
 
@@ -772,14 +757,14 @@ int main( int argc, char** argv )
     // Manually set the permissions on the model executable before running.
     // GC. Dec/2025
 
-    if ( !set_exec_perms( exe_cmd ) ) {
-        std::cerr << "..Cannot start model. Setting execute permission for model executable failed: " << exe_cmd << std::endl;
+    if ( !set_exec_perms( executable.string() ) ) {
+        std::cerr << "..Cannot start model. Setting execute permission for model executable failed: " << executable << std::endl;
         return task_finish( 1 );
     }
 
     // Start the model process
-    std::cerr << "Launching model executable: " << exe_cmd << std::endl;
-    tstate.pid = launch_process( bconfig.project_dir, bconfig.slot_path, exe_cmd, nthreads, tconfig.exptid );
+    std::cerr << "Launching model executable: " << executable << std::endl;
+    tstate.pid = launch_process( bconfig.project_dir, bconfig.slot_path, executable.string(), nthreads, tconfig.exptid );
 
     if ( tstate.pid > 0 ) {
         tstate.process_status = 0;
@@ -873,7 +858,7 @@ int main( int argc, char** argv )
                         for ( const auto& result : model_ctrl->get_output_filenames( std::to_string( i ), tconfig.exptid ) ) {
                             fs::path fpath = upload_dir;
                             fpath /= result;
-                            if ( path_exists( fpath.string() ) ) {
+                            if ( fs::exists( fpath ) ) {
                                 std::cerr << "Adding to the zip: " << fpath << '\n';
                                 zfl.push_back( fpath );
                             }

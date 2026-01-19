@@ -20,8 +20,8 @@ class OpenIFSControl : public ModelControl {
 
   public:
     // Constructor and destructor methods
-    OpenIFSControl( std::string_view vendor, std::string_view model, std::string_view version, std::string_view param_infile )
-        : ModelControl( vendor, model, version, param_infile )
+    OpenIFSControl( std::string_view vendor, std::string_view model, std::string_view version, std::string_view exe, std::string_view param_infile )
+        : ModelControl( vendor, model, version, exe, param_infile )
     {
     }
     ~OpenIFSControl() override = default;

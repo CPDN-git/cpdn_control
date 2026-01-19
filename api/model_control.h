@@ -60,10 +60,11 @@ class ModelControl {
     //virtual bool teardown() = 0;
 
     // Getters & setters for model information (placeholders)
-    // C++ note: provide "default implementation unless overridden" so must still be virtual.
+    // C++ note: this provides "default implementation unless overridden" so must still be virtual.
     virtual std::string get_vendor_name() const { return vendor_name; }
     virtual std::string get_model_name() const { return model_name; }
     virtual std::string get_model_version() const { return model_version; }
+    virtual std::string get_executable_name() const { return executable; }
     virtual std::string get_parameter_input_file() const { return parameter_input_file; }
 
     // Determine the current model step; return true if successful, false otherwise.
@@ -93,8 +94,8 @@ class ModelControl {
     // Protected constructor for use by derived classes (may change in future when we use the model XML config file)
     // Use init list here, no need to use 'setters' in constructor.
     // C++ note. Allows keeping member variables private while still enabling derived classes to use init-list construction.
-    ModelControl( std::string_view vendor, std::string_view model, std::string_view version, const fs::path& param_input_file )
-        : vendor_name( vendor ), model_name( model ), model_version( version ), parameter_input_file( param_input_file ) {};
+    ModelControl( std::string_view vendor, std::string_view model, std::string_view version, std::string_view exe, std::string_view param_input_file )
+        : vendor_name( vendor ), model_name( model ), model_version( version ), executable( exe ), parameter_input_file( param_input_file ) {};
 
     // Setters for model information (protected so only accessible to derived classes)
 
@@ -107,10 +108,12 @@ class ModelControl {
   private:
     // Private member variables (not visible to derived classes; derived classes should use getters/setters)
     // Relates to the model XML input file read by the controller.
+    // C++ note. Order here must match the order in ModelControl().
 
     std::string vendor_name;      // e.g. "ECMWF"
     std::string model_name;       // e.g. "OpenIFS"
     std::string model_version;    // e.g. "43r3"
+    std::string executable;       // e.g. "oifs_43r3_model.exe", "oifs_43r3_omp_model.exe", "test_model"
 
     std::string parameter_input_file;    // Usually this will be a fortran namelist file. e.g. "fort.4" for OpenIFS.
                                          // It is NOT intended for input data, only for gathering model info.

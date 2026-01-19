@@ -593,7 +593,10 @@ int main( int argc, char** argv )
         return task_finish( 1 );
 
     } else if ( progress_file.exists() && !path_exists( rcf_file ) ) {
-        progress_file.read( tstate );
+        if ( !progress_file.read( tstate, err_msg ) ) {
+            std::cerr << "..Failed to read progress file: " << err_msg << '\n';
+            return task_finish( 1 );
+        }
         // If last_step less than the restart interval, then model is at beginning and rcf has yet to be produced then continue
         if ( std::stoi( tstate.last_step ) >= restart_interval ) {
             // Otherwise if progress file exists and rcf file does not exist, an error has occurred, then kill model run
@@ -632,7 +635,10 @@ int main( int argc, char** argv )
         }
         rcf_file_stream.close();
 
-        progress_file.read( tstate );
+        if ( !progress_file.read( tstate, err_msg ) ) {
+            std::cerr << "..Failed to read progress file: " << err_msg << '\n';
+            return task_finish( 1 );
+        }
 
         // Check if the CSTEP variable from rcf is greater than the last_step, if so then quit model run
         // This is probably recoverable, but it might mean the model ran on after the controller crashed, so end for now.

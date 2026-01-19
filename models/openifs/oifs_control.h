@@ -36,7 +36,8 @@ class OpenIFSControl : public ModelControl {
 
     bool get_current_step( const std::string& ifsstat, std::string& step, const int total_steps ) const override;
     std::vector<std::string> get_output_filenames( std::string_view step, std::string_view id ) const override;
-    std::regex get_output_filename_regex() const;
+    std::vector<std::string> get_log_filenames() const override;
+    std::regex get_output_filename_regex() const override;
 
 
     // Delete copy constructor and assignment operator

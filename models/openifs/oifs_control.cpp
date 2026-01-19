@@ -97,4 +97,13 @@ std::vector<std::string> OpenIFSControl::get_output_filenames( std::string_view 
 }
 
 
+/**
+ * @brief Returns regex of the OpenIFS GRIB model output filename pattern
+ */
 std::regex OpenIFSControl::get_output_filename_regex() const { return output_file_pattern; }
+
+
+/**
+ * @brief Returns vector of list of log files.
+ */
+std::vector<std::string> OpenIFSControl::get_log_filenames() const { return log_files; }

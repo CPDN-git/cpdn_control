@@ -1015,22 +1015,22 @@ int main( int argc, char** argv )
     boinc_begin_critical_section();
 
     zfl.clear();
-    std::string node_file = bconfig.slot_path + "/NODE.001_01";
-    if ( path_exists( node_file ) ) {
-        zfl.push_back( node_file );
-        std::cerr << "Adding to the zip: " << node_file << '\n';
-    }
-    std::string ifsstat_file = bconfig.slot_path + "/ifs.stat";
-    if ( path_exists( ifsstat_file ) ) {
-        zfl.push_back( ifsstat_file );
-        std::cerr << "Adding to the zip: " << ifsstat_file << '\n';
+
+    // Add the model log files to the final upload
+    for ( const auto& logfile : model_ctrl->get_log_filenames() ) {
+        fs::path logpath = bconfig.slot_path;
+        logpath /= logfile;
+        if ( fs::exists( logpath ) ) {
+            zfl.push_back( logpath.string() );
+            std::cerr << "Adding model log file to the upload zipfile: " << logpath << '\n';
+        }
     }
 
     // Move the final model result files ready for upload
     for ( const auto& result : model_ctrl->get_output_filenames( tstate.last_step, tconfig.exptid ) ) {
         retval = move_result_file( bconfig.slot_path, upload_dir, result );
         if ( retval ) {
-            std::cerr << "..Copying " << result << " model result file to the temp folder in the projects directory failed" << "\n";
+            std::cerr << "..Copying " << result << " model output file to the temp upload folder in projects directory failed" << "\n";
         }
     }
 

@@ -73,6 +73,8 @@ class ModelControl {
     // Provide a regular expression matching the model output filenames to be zipped for upload
     virtual std::regex get_output_filename_regex() const = 0;
 
+    virtual std::vector<std::string> get_log_filenames() const = 0;
+
 
     // Delete copy constructor and assignment operator as these are not appropriate for this class.
     // C++ note: In a polymorphic base class, the copy constructor and assignment operator

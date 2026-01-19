@@ -12,7 +12,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <regex.h>    // this for regex matching of output files.
+#include <regex>
 #include <sstream>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -82,32 +82,34 @@ static std::unique_ptr<ModelControl> create_model_control( std::string_view vend
  * 
  * @param app_config_nthreads The string value of the nthreads argument.
  * @param nthreads Altered number of threads as a string.
+ * @param err_msg Error string if parsing fails.
  * @returns True if the nthreads argument was valid and changed, false otherwise.
  */
-static bool get_app_config_nthreads( const std::string& app_config_nthreads, std::string& nthreads )
+static bool get_app_config_nthreads( const std::string& app_config_nthreads, std::string& nthreads, std::string& err_msg )
 {
-
+    err_msg.clear();
     if ( app_config_nthreads.empty() ) {
         std::cerr << "Warning. --nthreads argument present but has no value! Ignoring.\n";
     } else {
-        try {
-            // GC. The best max as parallel efficiency markedly drops after this many threads, even at T319.
-            int max_threads = 8;
-            int min_threads = 1;    // minimum number of threads.
-            int ithreads = -1;
+        // GC. The best max as parallel efficiency markedly drops after this many threads, even at T319.
+        int max_threads = 8;
+        int min_threads = 1;    // minimum number of threads.
+        int ithreads = -1;
 
-            ithreads = std::stoi( app_config_nthreads );
-            if ( ithreads > max_threads ) {
-                std::cerr << "Warning. --nthreads value too high. Setting to max number of threads : " << max_threads << '\n';
-                nthreads = std::to_string( max_threads );
-            } else if ( ithreads < min_threads ) {
-                std::cerr << "Warning. --nthreads is too low for this configuration. Minimum #threads is 2. Resetting.\n";
-                nthreads = std::to_string( min_threads );
-            }
-            return true;
-        } catch ( ... ) {
-            std::cerr << "Warning. --nthreads argument must be a valid integer! Ignoring.\n";
+        std::string nthreads_value = app_config_nthreads;
+        if ( !parse_int( nthreads_value, ithreads, err_msg ) ) {
+            std::cerr << "Warning. --nthreads argument must be a valid integer! " << err_msg << '\n';
+            return false;
         }
+
+        if ( ithreads > max_threads ) {
+            std::cerr << "Warning. --nthreads value too high. Setting to max number of threads : " << max_threads << '\n';
+            nthreads = std::to_string( max_threads );
+        } else if ( ithreads < min_threads ) {
+            std::cerr << "Warning. --nthreads is too low for this configuration. Minimum #threads is 2. Resetting.\n";
+            nthreads = std::to_string( min_threads );
+        }
+        return true;
     }
     return false;
 }
@@ -146,6 +148,36 @@ static std::string get_result_base_name( const BoincConfig& bconfig, const TaskC
     return base_name;
 }
 
+/**
+ * @brief Append upload files that match the expected output filename pattern.
+ *
+ * @returns zero on success, otherwise error code value.
+ */
+static int add_upload_files( const fs::path& dir, std::vector<fs::path>& out, const std::regex& pattern )
+{
+    std::error_code ec;
+
+    for ( const auto& entry : fs::directory_iterator( dir, ec ) ) {
+        if ( ec ) {
+            std::cerr << "..Unable to scan upload directory: " << dir << " (" << ec.message() << ")\n";
+            return ec.value();
+        }
+        if ( !entry.is_regular_file( ec ) ) {
+            if ( ec ) {
+                std::cerr << "..Unable to read directory entry: " << entry.path() << " (" << ec.message() << ")\n";
+                return ec.value();
+            }
+            continue;
+        }
+
+        const auto filename = entry.path().filename().string();
+        if ( std::regex_match( filename, pattern ) ) {
+            out.push_back( entry.path() );
+            std::cerr << "Adding to the zip: " << entry.path().string() << '\n';
+        }
+    }
+    return 0;
+}
 
 /**
  * @brief Process command line arguments to populate TaskConfig.
@@ -213,6 +245,7 @@ int main( int argc, char** argv )
     BoincConfig bconfig;    // BOINC settings from init_data.xml.
     TaskConfig tconfig;     // CPDN task settings from command line.
     int retval = 0;
+    std::string err_msg;
 
     // ------------- BOINC Initialisation -----------------
 
@@ -268,10 +301,19 @@ int main( int argc, char** argv )
     // TODO: look at removing string copy of nthreads and use int bconfig.ncpus throughout code. DRY.
 
     std::string nthreads = std::to_string( bconfig.ncpus );    // default number of threads from BOINC init_data.xml
+    int nthreads_int = bconfig.ncpus;
     if ( std::string( argv[argc - 2] ) == "--nthreads" ) {
         std::string app_config_nthreads = argv[argc - 1];
-        get_app_config_nthreads( app_config_nthreads, nthreads );
-        bconfig.ncpus = std::stoi( nthreads );
+        if ( !get_app_config_nthreads( app_config_nthreads, nthreads, err_msg ) && !err_msg.empty() ) {
+            std::cerr << "..Failed to parse --nthreads argument: " << err_msg << '\n';
+            return task_finish( 1 );
+        }
+        std::string nthreads_value = nthreads;
+        if ( !parse_int( nthreads_value, nthreads_int, err_msg ) ) {
+            std::cerr << "..Failed to parse --nthreads value: " << err_msg << '\n';
+            return task_finish( 1 );
+        }
+        bconfig.ncpus = nthreads_int;
         std::cerr << "Using --nthreads from app_config.xml: " << nthreads << '\n';
     }
 
@@ -355,10 +397,11 @@ int main( int argc, char** argv )
 
     // Parsing the namelist file at the moment is a mix of looking for CPDN injected
     // header variables and normal model namelist variables. It's a bit clumsy but works for now.
+    // It's not my code and I'm tidying the data flow to be more consistent.
 
     // The header_keys are the CPDN injected task related parameters always at the
     // top of the namelist file. It's not a tidy solution as they are prefixed with
-    // '!' making them normal comments. This causes issues parsing them because if we
+    // '!' making them normal format comments. This causes issues parsing them as if we
     // allow commented key/value pairs to be parsed, the code picks up other commented
     // out namelist variables which has caused errors. Ideally it would have been
     // better to prefix with something unique such as !TASK but as this involves
@@ -428,37 +471,32 @@ int main( int argc, char** argv )
             grid_type = parsed_value;
         } else if ( parsed_key == "UPLOAD_INTERVAL" ) {
             tmpstr = parsed_value;
-            try {
-                upload_interval = std::stoi( tmpstr );
-            } catch ( ... ) {
-                std::cerr << ".. Warning, unable to parse upload interval from namelist, setting to zero, got string: " << tmpstr << '\n';
-                upload_interval = 0;
+            if ( !parse_int( tmpstr, upload_interval, err_msg ) ) {
+                std::cerr << "..Failed to parse upload interval from namelist: " << err_msg << '\n';
+                return task_finish( 1 );
             }
         } else if ( parsed_key == "UTSTEP" ) {
+            // UTSTEP (secs) is written as a float in the namelist, despite it only ever being an integer.
+            // parse_int is strict about parsing only integer representations.
             tmpstr = parsed_value;
-            try {
-                timestep = std::stoi( tmpstr );
-            } catch ( ... ) {
-                std::cerr << ".. Warning, unable to parse timestep interval from namelist, setting to zero, got string: " << tmpstr << '\n';
-                timestep = 0;
+            if ( auto dp = tmpstr.find( '.' ); dp != std::string::npos ) {
+                tmpstr = tmpstr.substr( 0, dp );
+            }
+            if ( !parse_int( tmpstr, timestep, err_msg ) ) {
+                std::cerr << "..Failed to parse timestep interval from namelist: " << err_msg << '\n';
+                return task_finish( 1 );
             }
         } else if ( parsed_key == "NFRPOS" ) {    // frequency of model OUTPUT file creation (for upload); +ve model steps, -ve hours.
             tmpstr = parsed_value;
-            try {
-                ICM_file_interval = std::stoi( tmpstr );
-            } catch ( ... ) {
-                std::cerr << ".. Warning, unable to parse ICM model output interval from namelist, setting to zero, "
-                             "got string: "
-                          << tmpstr << std::endl;
-                ICM_file_interval = 0;
+            if ( !parse_int( tmpstr, ICM_file_interval, err_msg ) ) {
+                std::cerr << "..Failed to parse ICM model output interval from namelist: " << err_msg << '\n';
+                return task_finish( 1 );
             }
         } else if ( parsed_key == "NFRRES" ) {    // frequency of model RESTART file creation: +ve model steps, -ve hours.
             tmpstr = parsed_value;
-            try {
-                restart_interval = std::stoi( tmpstr );
-            } catch ( ... ) {
-                std::cerr << "..Warning, unable to parse restart interval from namelist, setting to zero, got string: " << tmpstr << std::endl;
-                restart_interval = 0;
+            if ( !parse_int( tmpstr, restart_interval, err_msg ) ) {
+                std::cerr << "..Failed to parse restart interval from namelist: " << err_msg << '\n';
+                return task_finish( 1 );
             }
         }
     }
@@ -571,7 +609,6 @@ int main( int argc, char** argv )
 
     // Initialise the ProgressFile handler
     ProgressFileHandler progress_file( bconfig.slot_path );
-    std::string err_msg;
 
     // Define the location of the OpenIFS rcf file
     std::string rcf_file = bconfig.slot_path + "/rcf";
@@ -579,40 +616,17 @@ int main( int argc, char** argv )
     // Check whether the rcf file and the progress file (contains model progress) are not already present from an unscheduled shutdown
     std::cerr << "Checking for rcf file and progress file: " << progress_file.path() << '\n';
 
-    // Handle the cases of the various states of the rcf file and progress file
+    // Handle the cases of the various states of the rcf file and progress file.
     if ( !progress_file.exists() && !path_exists( rcf_file ) ) {
-        // If both progress file and rcf file do not exist, then model has not run.
+
+        // Both progress file and rcf file do not exist, model has not run.
         // Do nothing as the task state variables are already initialized to zero values above.
         std::cerr << "-- Starting new model run --\n";
 
-    } else if ( progress_file.exists() && file_is_empty( progress_file.path() ) ) {
-        // If progress file exists and is empty, an error has occurred, then kill model run
-        // GC. TODO. Review this. It might mean the we didn't get to the point where the progress file was written.?
-        model_ctrl->print_logs( 50 );
-        std::cerr << "..progress file exists, but is empty => problem with model, quitting run" << '\n';
-        return task_finish( 1 );
-
-    } else if ( progress_file.exists() && !path_exists( rcf_file ) ) {
-        if ( !progress_file.read( tstate, err_msg ) ) {
-            std::cerr << "..Failed to read progress file: " << err_msg << '\n';
-            return task_finish( 1 );
-        }
-        // If last_step less than the restart interval, then model is at beginning and rcf has yet to be produced then continue
-        if ( std::stoi( tstate.last_step ) >= restart_interval ) {
-            // Otherwise if progress file exists and rcf file does not exist, an error has occurred, then kill model run
-            model_ctrl->print_logs( 50 );
-            std::cerr << "..progress file exists, but rcf file does not exist => problem with model, quitting run" << '\n';
-            return task_finish( 1 );
-        }
-    } else if ( !progress_file.exists() && path_exists( rcf_file ) ) {
-        // If rcf file exists and progress file does not exist, an error has occurred, then kill model run
-        // TODO: we should be able to bootstrap the progress file from the rcf file here?
-        model_ctrl->print_logs( 50 );
-        std::cerr << "..rcf file exists, but progress file does not exist => problem with model, quitting run" << '\n';
-        return task_finish( 1 );
-
     } else if ( ( progress_file.exists() && !progress_file.is_empty() ) && path_exists( rcf_file ) ) {
-        // If progress file exists, not empty and rcf file exists, then read rcf file and progress file
+
+        // If progress file exists, not empty and rcf file exists, then this is a restart.
+        // Check the rcf file against the progress file and continue the run.
         std::ifstream rcf_file_stream;
         std::string cstep_value;
 
@@ -640,12 +654,24 @@ int main( int argc, char** argv )
             return task_finish( 1 );
         }
 
+        int cstep_int = 0;
+        std::string cstep_str = cstep_value;
+        if ( !parse_int( cstep_str, cstep_int, err_msg ) ) {
+            std::cerr << "..Failed to parse CSTEP value from rcf: " << err_msg << '\n';
+            return task_finish( 1 );
+        }
+
+        int last_step_int = 0;
+        std::string last_step_str = tstate.last_step;
+        if ( !parse_int( last_step_str, last_step_int, err_msg ) ) {
+            std::cerr << "..Failed to parse last_step from progress file: " << err_msg << '\n';
+            return task_finish( 1 );
+        }
+
         // Check if the CSTEP variable from rcf is greater than the last_step, if so then quit model run
         // This is probably recoverable, but it might mean the model ran on after the controller crashed, so end for now.
-        if ( std::stoi( cstep_value ) > std::stoi( tstate.last_step ) ) {
-            std::cerr << "..CSTEP variable from rcf is greater than last_step from progress file, error has occurred, "
-                         "quitting model run"
-                      << '\n';
+        if ( cstep_int > last_step_int ) {
+            std::cerr << "..CSTEP variable from rcf greater than last_step from progress file, error has occurred, quitting model run" << '\n';
             return task_finish( 1 );
         }
 
@@ -654,9 +680,48 @@ int main( int argc, char** argv )
 
         std::cerr << "-- Model is restarting --\n";
         std::cerr << "Adjusting last_step, " << tstate.last_step << ", to previous model restart step.\n";
-        int restart_step = std::stoi( tstate.last_step );
+        int restart_step = last_step_int;
         restart_step = restart_step - ( ( restart_step % restart_interval ) - 1 );    // -1 because the model will continue from restart_step.
         tstate.last_step = std::to_string( restart_step );
+
+    } else if ( progress_file.exists() && file_is_empty( progress_file.path() ) ) {
+
+        // If progress file exists and is empty, an error has occurred, then kill model run
+        // GC. TODO. Review this. It might mean the we didn't get to the point where the progress file was written.?
+        model_ctrl->print_logs( 50 );
+        std::cerr << "..progress file exists, but is empty => problem with model, quitting run" << '\n';
+        return task_finish( 1 );
+
+    } else if ( progress_file.exists() && !path_exists( rcf_file ) ) {
+
+        // GC. TODO. I think this needs merging with case above of restart from existing rcf file?
+        // If the progress file exists, the model has started but not yet got to the first
+        // restart write. In which case the model starts from the beginning again.
+        if ( !progress_file.read( tstate, err_msg ) ) {
+            std::cerr << "..Failed to read progress file: " << err_msg << '\n';
+            return task_finish( 1 );
+        }
+        // If last_step less than restart interval, model rcf has yet to be produced so model will restart from beginning.
+        int last_step_int = 0;
+        std::string last_step_str = tstate.last_step;
+        if ( !parse_int( last_step_str, last_step_int, err_msg ) ) {
+            std::cerr << "..Failed to parse last_step from progress file: " << err_msg << '\n';
+            return task_finish( 1 );
+        }
+        if ( last_step_int >= restart_interval ) {
+            // Otherwise if progress file exists and rcf file does not exist, an error has occurred, then kill model run
+            model_ctrl->print_logs( 50 );
+            std::cerr << "..progress file exists, but rcf file does not exist => problem with model, quitting run" << '\n';
+            return task_finish( 1 );
+        }
+
+    } else if ( !progress_file.exists() && path_exists( rcf_file ) ) {
+        // If rcf file exists and progress file does not exist, an error has occurred, then kill model run
+        // TODO: we should be able to bootstrap the progress file from the rcf file here?
+        // Maybe not as the model likely runs on after the controller process has crashed.
+        model_ctrl->print_logs( 50 );
+        std::cerr << "..rcf file exists, but progress file does not exist => problem with task, quitting run" << '\n';
+        return task_finish( 1 );
     }
 
     // Update progress file with current values
@@ -692,12 +757,16 @@ int main( int argc, char** argv )
 
     fs::path single_proc_exe = bconfig.slot_path;
     single_proc_exe /= "oifs_43r3_model.exe";
+
     fs::path multi_proc_exe = bconfig.slot_path;
     multi_proc_exe /= "oifs_43r3_omp_model.exe";
+
     fs::path test_proc_exe = bconfig.slot_path;
     test_proc_exe /= "test_model";
+
     std::string exe_cmd{};
 
+    // GC TODO this needs tidying up; exec name should come from model class.
     if ( path_exists( single_proc_exe.string() ) ) {
         exe_cmd = single_proc_exe.string();
     } else if ( path_exists( multi_proc_exe.string() ) ) {
@@ -712,6 +781,7 @@ int main( int argc, char** argv )
 
     // Bug workaround. The current cpdn_unzip function does not preserve executable permissions on Linux.
     // Manually set the permissions on the model executable before running.
+    // GC. Dec/2025
 
     if ( !set_exec_perms( exe_cmd ) ) {
         std::cerr << "..Cannot start model. Setting execute permission for model executable failed: " << exe_cmd << std::endl;
@@ -769,9 +839,23 @@ int main( int argc, char** argv )
                 }
             }
 
+            int step_value = 0;
+            std::string step_str = step;
+            if ( !parse_int( step_str, step_value, err_msg ) ) {
+                std::cerr << "..Failed to parse current step: " << err_msg << '\n';
+                return task_finish( 1 );
+            }
+
+            int last_step_value = 0;
+            std::string last_step_str = tstate.last_step;
+            if ( !parse_int( last_step_str, last_step_value, err_msg ) ) {
+                std::cerr << "..Failed to parse last_step: " << err_msg << '\n';
+                return task_finish( 1 );
+            }
+
             // Move the model result files to the task folder in the project directory
             // GC. Why do this every timestep? This check only needs to be done at same frequency as NFRPOS.
-            if ( std::stoi( step ) != std::stoi( tstate.last_step ) ) {
+            if ( step_value != last_step_value ) {
 
                 for ( const auto& result : model_ctrl->get_output_filenames( tstate.last_step, tconfig.exptid ) ) {
                     retval = move_result_file( bconfig.slot_path, upload_dir, result );
@@ -782,7 +866,7 @@ int main( int argc, char** argv )
                 }
 
                 // Convert current model step to seconds
-                tstate.current_step = ( std::stoi( tstate.last_step ) ) * timestep;
+                tstate.current_step = last_step_value * timestep;
 
                 // Upload a new upload file if the end of an upload_interval has been reached
                 // GC. TODO. Why not combine adding to the zip file with moving the result files above?
@@ -847,12 +931,13 @@ int main( int argc, char** argv )
                 }    // end of upload new output file block.
 
                 // Trickle every required fraction of the model run
-                if ( ( std::stoi( step ) % trickle_freq ) == 0 ) {
+                if ( ( step_value % trickle_freq ) == 0 ) {
                     std::cerr << "Sending progress trickle message to CPDN at step: " << step << '\n';
                     trickler.process_trickle( tstate.current_cpu_time, tstate.current_step );
                     tstate.last_trickle_step = tstate.current_step;
                 }
             }    // end of if it's a new timestep block.
+
             tstate.last_step = step;
             delay_count = 0;
 
@@ -869,12 +954,18 @@ int main( int argc, char** argv )
         }
 
         // Calculate the fraction done
-        tstate.fraction_done = model_frac_done( std::stof( step ), total_nsteps, std::stoi( nthreads ) );
+        tstate.fraction_done = model_frac_done( std::stof( step ), total_nsteps, nthreads_int );
 
         if ( !bconfig.standalone ) {
             // If the current model step is at a restart interval, update restart cpu time for boinc.
             double restart_cpu_time = 0;
-            if ( !( std::stoi( step ) % restart_interval ) ) {
+            int step_value = 0;
+            std::string step_str = step;
+            if ( !parse_int( step_str, step_value, err_msg ) ) {
+                std::cerr << "..Failed to parse current step: " << err_msg << '\n';
+                return task_finish( 1 );
+            }
+            if ( !( step_value % restart_interval ) ) {
                 restart_cpu_time = tstate.current_cpu_time;
             }
 
@@ -943,22 +1034,11 @@ int main( int argc, char** argv )
         }
     }
 
-    // Read the remaining list of files from the temp upload directory and add the matching files to the list of files for the zip
-    // GC. TODO. Update to C++ 17.
-    if ( auto* dirp = opendir( upload_dir.c_str() ) ) {
-        regex_t regex;
-        regcomp( &regex, "\\+", 0 );
-
-        struct dirent const* dir;
-        while ( ( dir = readdir( dirp ) ) != nullptr ) {
-
-            if ( !regexec( &regex, dir->d_name, (size_t)0, nullptr, 0 ) ) {
-                zfl.push_back( upload_dir + "/" + dir->d_name );
-                std::cerr << "Adding to the zip: " << ( upload_dir + "/" + dir->d_name ) << '\n';
-            }
-        }
-        regfree( &regex );
-        closedir( dirp );
+    // Read the remaining list of files from the temp upload directory and
+    // add the matching files to the upload zip
+    retval = add_upload_files( upload_dir, zfl, model_ctrl->get_output_filename_regex() );
+    if ( retval ) {
+        std::cerr << "Adding model output files to the upload zip failed!\n";
     }
 
     std::string upload_file = bconfig.project_dir + result_base_name + "_" + std::to_string( tstate.upload_file_number ) + ".zip";

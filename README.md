@@ -1,31 +1,32 @@
 # CPDN control application to manage meterological/climate models running in climateprediction.net (CPDN)
 
-This respository contains the instructions and code for building the CPDN control application
+This respository contains the code and instructions for building the CPDN control application
 used for managing the models in the CPDN project at the University of Oxford.  This code acts
-as the interface between the BOINC client and the underlying model which does not (usually)
+as the interface between the BOINC client and the underlying model. Ideally the model does not (usually)
 know that it is running under a BOINC client. The advantage of doing this is the model code
-needs a minimal set of changes. The BOINC client only knows about 
-this application and only this application knows how to manage the model.
+needs a minimal set of changes. The BOINC client only knows about this application and only 
+this application knows how to manage the model.
 
 The design of this code allows it to be (mostly) agnostic about the underlying model. The
-model details and configuration are read from input XML files.  A class architecture is
-used to instantiate the model(s) handled by this code.
+model details and configuration are read from input XML files, then used to instantiate
+a base class for each model type.
 
 [![Controller CI](https://github.com/CPDN-git/cpdn_control/actions/workflows/controller_ci.yml/badge.svg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/controller_ci.yml)
 
-A number of prerequisite libraries are required.
+A number of prerequisite libraries are required detailed below.
 
 ## Prerequisite: BOINC library
 
-Download and build the BOINC libraries which this code links with 
+Download and build the BOINC libraries required for linking. 
 (BOINC is available from: https://github.com/BOINC/boinc). 
 For instructions on building BOINC see: [BOINC github](https://github.com/BOINC/boinc/wiki/).
 
-As only the libraries are required, the boinc client and manager can be disabled (reduces system packages required).
+As only the BOINC libraries are required, the boinc client and manager can be disabled (reduces system packages required).
 
 Install and build the boinc library to a directory **outside** this repository and note the install path.
 
 The boinczip library is no longer used as this repository contains an improved compression/zip library.
+The boinczip library is a buggy code that should not be used.
 
 In short, outside this repo do:
 ```
@@ -43,11 +44,12 @@ In short, outside this repo do:
 This installs the boinc libraries and include files to the directory specified in the `--prefix` argument.
 Change the value of prefix to suit.
 It's preferable not to install into the same directory as the source. 
-When compiling the control application, specify the location of the include files using the -I argument and the libraries using -L argument on the compiler command line (see the CMakeLists.txt file in the top dir).
+When compiling the control application, specify the location of the include files using the -I argument and the 
+libraries using -L argument on the compiler command line (see the CMakeLists.txt file in the top dir).
 
 ## Prerequisite: ZipLib and cpdn_zip library
 
-As of Oct 2025, the control app no longer uses the BOINC library zip routines.
+As of Oct 2025, the control application no longer uses the BOINC library zip routines.
 These old routines are not memory safe; they use fixed sized buffers and unbounded string copy routines.
 They also do not work correctly under Windows (their low-level file handling breaks in Windows Update environments).
 
@@ -75,10 +77,10 @@ However, if the ZipLib source needs to be upgraded follow these steps:
 ### cpdn_zip library
 
 This is a simple wrapper around ZipLib to provide `cpdn_zip` and `cpdn_unzip` functions to the 
-control app.
+control application.
 
 It's built as a static library and combined with ZipLib object files and its 
-compression library dependencies. cpdn_zip and unzip use the zip compression by default.
+compression library dependencies. cpdn_zip/unzip use zip compression by default.
 
 The software is built in separate `build` and
 `install` directories to the source. See `CMakeLists.txt` in the `zip` folder for
@@ -90,7 +92,7 @@ more details.
  2. mkdir build
  3. cd build
  4. cmake -DCMAKE_INSTALL_PREFIX=../install ..
- 5. make
+ 5. cmake --build .
  6. make install
 
  To run a simple test of the code:
@@ -104,15 +106,16 @@ The `models` folder contains the model specific code for this application.
 The meteorological and climate models themselves are not contained in this repository. They
 are built separately.
 
-Each model interface code in should use the class structure described by the code in the `api`
-directory. See that code for more details.
+Each model interface code should use the class structure described by the code in the `api`
+directory. See that code for more details and the test model appication for an 
+implementation example.
 
 ### Test model
 A small test model code is available which behaves similarly to the OpenIFS 43r3 model. 
 This is used to test functionality of the control app. See the `test` folder for 
 more details.
 
-The 'Makefile' in the top directory currently builds the test model code.
+The test model is built when the control application is built using CMake (see below).
 
 ## Build CPDN Controller
 
@@ -122,7 +125,7 @@ This is downloaded from the site: [RapidXml](http://rapidxml.sourceforge.net/).
 We only need the file: 'rapidxml.hpp'. Download this file and put in the `src` folder along with cpdn_main.cpp.
 
 ### Linux
-cmake is used to build the controller application. Ensure the prerequisite steps
+Cmake is used to build the controller application. Ensure the prerequisite steps
 above have been completed.
 
 BOINC libraries: These can either be specified by editing the CMakeLists.txt file directly
@@ -137,8 +140,8 @@ In the top level directory:
 1. mkdir build (or remove it for fresh build).
 2. cd build
 3. cmake ..
-4. cmake --build . --verbose (omit --verbose if not interested in compile commands)
-5. ctest -V    (see below for more details)
+4. cmake --build . --verbose    # omit --verbose if not interested in compile commands
+5. ctest -V                     # see below for more details
 
 This creates 3 executables in the build directory:
 ```
@@ -155,17 +158,21 @@ The default TARGET is the build intended for production.
 The version number of the executable is best left as-is and changed when transferring to CPDN.
 
 ### Windows
-Not yet ported to Windows.
+Not yet ported to Windows. In progress.
 
 #### macOS
-OLD: Build the BOINC and cpdn_zip libraries using Xcode. Modify the Makefile to use `clang++` as the compiler and the object file as `oifs_43r3_100_x86_64-apple-darwin`.
+Not ported.
+
+[comment]: # (OLD: Build the BOINC and cpdn_zip libraries using Xcode. Modify the Makefile to use `clang++` as the compiler and the object file as `oifs_43r3_100_x86_64-apple-darwin`.)
 
 #### ARM
-OLD: To build OpenIFS on an ARM architecture machine modify the Makefile and set `-D_ARM` and the object file becomes `oifs_43r3_1.00_aarch64-poky-linux`.
+Not ported.
+
+[comment]: # (OLD: To build OpenIFS on an ARM architecture machine modify the Makefile and set `-D_ARM` and the object file becomes `oifs_43r3_1.00_aarch64-poky-linux`.)
 
 ## How to run the controller executable with OpenIFS
-In order for OpenIFS to run, its ancillary files need to be installed correctly from the
-download directory on the client. This is the responsibility of the controller code.
+In order for OpenIFS to run, its ancillary inpur files need to be installed correctly from the
+download directory on the client. This is the responsibility of the controller process.
 
 The command to run the control in standalone mode with OpenIFS on Linux is:
 ```
@@ -175,20 +182,22 @@ The command to run the control in standalone mode with OpenIFS on Linux is:
 ### Command line parameters
 The command line parameters are:
 ```
-0 : compiled executable, 
-1 : start date in YYYYMMDDHH format, 
-2 : experiment id, 
-3 : unique member id, 
-4 : batch id, 
-5 : workunit id, 
-6 : forecast length (days: FCLEN), 
-7 : app name, 
+0 : controller compiled executable, 
+1 : model start date in YYYYMMDDHH format, 
+2 : model experiment id, 
+3 : model unique member id, 
+4 : CPDN batch id, 
+5 : CPDN workunit id, 
+6 : model forecast length (days: FCLEN), 
+7 : CPDN app name, 
 ```
 Other information about the workunit comes from the BOINC supplied init_data.xml file.
 
 ## Testing
 
-The project uses **CTest** (via CMake) for both unit tests and functional tests. After configuring and building, you can run tests from inside the `build/` directory, or from the repo root by using `ctest --test-dir build`.
+The project uses **CTest** (via CMake) for both unit tests and functional tests. 
+After configuring and building, you can run tests from inside the `build/` directory, 
+or from the repo root by using `ctest --test-dir build`.
 
 ### Unit testing
 
@@ -210,7 +219,7 @@ ctest --test-dir build -V
 
 Show output only when a test fails (often a good default in CI):
 ```
-ctest --test-dir build --output-on-failure
+ctest --test-dir build --output-on-failure --stop-on-failure
 ```
 
 Run a single CTest test by name (example):
@@ -230,9 +239,11 @@ build/tests/unit/unit_tests "Read RCF File"
 
 ### Functional testing
 
-Functional tests exercise the application end-to-end using the `test_model` program, which mimics the behaviour of the OpenIFS model from the controller’s point of view.
+Functional tests exercise the application end-to-end using the `test_model` program, 
+which mimics the behaviour of the OpenIFS model from the controller’s point of view.
 
-Functional tests live under `tests/functional/` and are driven by JSON fixture files in `tests/functional/fixtures/`. Each logical functional test is split into three CTest tests:
+Functional tests live under `tests/functional/` and are driven by JSON fixture files 
+in `tests/functional/fixtures/`. Each logical functional test is split into three CTest tests:
 
 - `<TestName>_Setup` (create a BOINC-like work directory layout and inputs)
 - `<TestName>` (run the controller against the prepared work directory)
@@ -266,7 +277,6 @@ This repo uses `clang-format` with a `.clang-format` file in the repo root to
 ensure the preferred coding style.
 
 ### VS Code
-
 To use formatting in VS Code, load a code file into the editor and press: CTRL+SHIFT+I.
 
 To setup VS Code to use clang-format:

@@ -122,10 +122,11 @@ The test model is built when the control application is built using CMake (see b
 ### RapidXML
 If not already present, obtain the RapidXml code (as a header) for parsing XML files. 
 This is downloaded from the site: [RapidXml](http://rapidxml.sourceforge.net/).
-We only need the file: 'rapidxml.hpp'. Download this file and put in the `src` folder along with cpdn_main.cpp.
+We only need the files: 'rapidxml.hpp' and the license.txt file. 
+Download this file into the directory `tools/RapidXML`.
 
 ### Linux
-Cmake is used to build the controller application. Ensure the prerequisite steps
+CMake is used to build the controller application. Ensure the prerequisite steps
 above have been completed.
 
 BOINC libraries: These can either be specified by editing the CMakeLists.txt file directly

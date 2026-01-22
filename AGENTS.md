@@ -7,6 +7,9 @@ This repository builds the **CPDN controller** executable used to run/manage cli
 - `src/cpdn_main.cpp`
   - Program entry point (`main`) and high-level flow: BOINC init, argument parsing, model selection, run loop.
   - Contains the model factory `create_model_control(...)` mapping `app_name/model_name -> ModelControl`.
+- `src/parse.h`, `src/parse.cpp`
+  - CLI11-based command-line parsing for `--cpdn_*` and `--model_*` arguments.
+  - Uses vendored CLI11 headers under `tools/CLI11/`.
 - `src/cpdn_control.cpp`, `src/cpdn_control.h`
   - Core controller logic used by the release/debug executables and unit tests.
 - `api/model_control.h`

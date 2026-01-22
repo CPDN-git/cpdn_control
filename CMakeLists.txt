@@ -118,6 +118,7 @@ set(LOCAL_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/lib
     ${CMAKE_CURRENT_SOURCE_DIR}/api
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/CLI11
 )
 
 #--------------------------- Model control sources -----------------------------------
@@ -129,6 +130,7 @@ add_subdirectory(models)
 # Unit tests need just these source files; create a library for them to link against.
 add_library(cpdn_control 
         ./src/cpdn_control.cpp
+        ./src/parse.cpp
         ./lib/utils.cpp
         ./lib/cpdn_cpu_time.cpp
         ./api/trickle_handler.cpp

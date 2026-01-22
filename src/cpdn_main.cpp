@@ -2,7 +2,7 @@
 // BOINC task controller for CPDN.
 //
 // This version written by Glenn Carver, CPDN, 2025->
-// Rewritten of original version by Andy Bowery (Oxford eResearch Centre, Oxford University) December 2023.
+// Complete rewrite of original version by Andy Bowery (OERC) December 2023.
 //
 
 #include <chrono>
@@ -26,6 +26,7 @@
 #include "cpdn_zip.h"
 #include "lib/cpdn_cpu_time.h"
 #include "lib/utils.h"
+#include "parse_args.h"
 
 #include "api/model_control.h"
 #include "api/progressfile_handler.h"
@@ -291,6 +292,14 @@ int main( int argc, char** argv )
 
     // --------------- Argument processing -----------------
 
+    // New long-form arg approach.
+    ParseResult parse_result = parse_args( argc, argv );
+    if ( !parse_result.ok ) {
+        return task_finish( parse_result.exit_code );
+    }
+    const ParsedArgs& parsed_args = parse_result.args;
+
+    // Old static ordered list approach.
     // app_name & nthreads have been removed from command line args, they now come from BOINC init_data.xml.
     retval = process_args( argc, argv, tconfig );
     if ( retval ) {
@@ -300,6 +309,7 @@ int main( int argc, char** argv )
 
     // Check for optional '--nthreads <value>' at end of arg list optionally set by app_config.xml on user's machine.
     // TODO: look at removing string copy of nthreads and use int bconfig.ncpus throughout code. DRY.
+    // BUT! Need to allow for user supplying --nthreads through the user of app_config.xml files in project dirs.
 
     std::string nthreads = std::to_string( bconfig.ncpus );    // default number of threads from BOINC init_data.xml
     int nthreads_int = bconfig.ncpus;

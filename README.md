@@ -12,6 +12,7 @@ model details and configuration are read from input XML files, then used to inst
 a base class for each model type.
 
 [![Controller CI](https://github.com/CPDN-git/cpdn_control/actions/workflows/controller_ci.yml/badge.svg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/controller_ci.yml)
+[![CodeQL Advanced](https://github.com/CPDN-git/cpdn_control/actions/workflows/codeql.yml/badge.svg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/codeql.yml)
 
 A number of prerequisite libraries are required detailed below.
 

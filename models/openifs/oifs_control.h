@@ -51,7 +51,7 @@ class OpenIFSControl : public ModelControl {
 
   private:
     // Private member variables
-    const fs::path ifs_stat{ "ifs_stat" };
+    const fs::path ifs_stat{ "ifs.stat" };
 
     const fs::path rcf{ "rcf" };
 

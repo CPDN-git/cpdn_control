@@ -288,7 +288,7 @@ bool fread_last_line( const std::string& fname, std::string& logline )
         logline.clear();
         last_offset = 0;
         last_line.clear();
-        std::cerr << ".. file_last_line(): warning, " << fname << " does not exist." << std::endl;
+        std::cerr << ".. fread_last_line(): warning, " << fname << " does not exist." << std::endl;
         return false;
     }
 

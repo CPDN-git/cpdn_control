@@ -340,12 +340,10 @@ int check_boinc_status( pid_t processid, int process_status )
  * @param slot_path The path to the slot directory.
  * @param strCmd The command to execute (model executable).
  * @param nthreads The number of threads to use.
- * @param exptid The experiment ID.
  * @param app_name The application name.
  * @return long The process handle of the launched child process, or -1 on failure.
  */
-pid_t launch_process( const std::string& project_path, const std::string& slot_path, const std::string& strCmd, const std::string& nthreads,
-                      const std::string& exptid )
+pid_t launch_process( const std::string& project_path, const std::string& slot_path, const std::string& strCmd, const std::string& nthreads )
 {
     pid_t handle_process;
 
@@ -401,7 +399,7 @@ pid_t launch_process( const std::string& project_path, const std::string& slot_p
         const char* syserr_msg = strerror( syserr );
 
         std::cerr << "..Launch process failed: execl - errno = " << syserr << ", " << syserr_msg << "\n slot_path=" << slot_path
-                  << ",strCmd=" << strCmd << ",exptid=" << exptid << std::endl;
+                  << ",strCmd=" << strCmd << std::endl;
 
         exit( syserr );    // exit child process with system code for better remote diagnosis.
         break;

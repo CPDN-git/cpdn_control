@@ -39,15 +39,14 @@ struct TaskState {
 /**
  * @struct TaskConfig
  * @brief Encapsulates all CPDN specific task-related configuration parameters.
- *        Variables extracted from command line arguments.
  */
 struct TaskConfig {
-    std::string start_date;          // Simulation start date
-    std::string unique_member_id;    // Unique member ID (umid)
-    std::string batchid;             // Batch ID
-    std::string wuid;                // Workunit ID
-    std::string exptid;              // Experiment ID for the model run << GC. Why is this here? Should be in model obj.
-    std::string fclen;               // Forecast length in days
+    std::string batch;        // Batch ID
+    std::string workunit;     // Workunit ID
+    std::string memberid;     // Unique member ID (umid)
+    std::string startdate;    // Simulation start date
+    std::string exptid;       // Experiment ID for the model run << GC. Why is this here? Should be in model obj.
+    std::string fclen;        // Forecast length in days : need this before model starts for filenames. It should match with the model!
 };
 
 
@@ -76,7 +75,7 @@ int init_boinc( BoincConfig& );
 int move_and_unzip_app_file( const std::string&, const std::string&, const std::string&, const std::string& );
 int check_child_status( pid_t, int, int& );
 int check_boinc_status( pid_t, int );
-pid_t launch_process( const std::string&, const std::string&, const std::string&, const std::string&, const std::string& );
+pid_t launch_process( const std::string&, const std::string&, const std::string&, const std::string& );
 std::string get_tag( const std::string& str );
 double model_frac_done( double, double, int );
 int move_result_file( const std::string&, const std::string&, const std::string& );

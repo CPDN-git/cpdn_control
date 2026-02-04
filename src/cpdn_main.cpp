@@ -145,7 +145,7 @@ static std::string get_result_base_name( const BoincConfig& bconfig, const TaskC
             return base_name;
         }
     } else {
-        base_name = bconfig.app_name + "_" + tconfig.start_date + "_" + tconfig.batchid + "_" + tconfig.wuid;
+        base_name = bconfig.app_name + "_" + tconfig.startdate + "_" + tconfig.batch + "_" + tconfig.workunit;
     }
     return base_name;
 }
@@ -183,28 +183,28 @@ static int add_upload_files( const fs::path& dir, std::vector<fs::path>& out, co
 
 /**
  * @brief Process command line arguments to populate TaskConfig.
- * @param argc Argument count.
- * @param argv Argument vector.
+ * @param parse_result The result of parsing the command line arguments.
  * @param tconfig TaskConfig structure to populate.
  * @return 0 on success, non-zero on failure.
  */
-static int process_args( int argc, char** argv, TaskConfig& tconfig )
+static void process_args( const ParseResult& parse_result, TaskConfig& tconfig )
 {
-    if ( argc < 7 ) {
-        std::cerr << "CPDN Controller error: Not enough command line arguments provided.\n"
-                  << "Usage: " << argv[0] << " <start_date> <exptid> <unique_member_id> <batchid> <wuid> <fclen> [app_version]\n";
-        return 1;
-    }
+    // Read the exptid, umid, batchid, wuid, fclen from the parsed command line
+    tconfig.startdate = parse_result.startdate;    // simulation start date : needed for filename before model starts.
+    tconfig.exptid = "NSET";                       // Model experiment id : TODO. this should come from the model instance via the namelist.
+    std::cerr << "Experiment ID (exptid) is set to: " << tconfig.exptid << " (TODO. this should come from the model instance via the namelist.)\n";
+    tconfig.memberid = parse_result.memberid;    // CPDN's unique member id (umid)
+    tconfig.batch = parse_result.batch;          // batch id
+    tconfig.workunit = parse_result.workunit;    // workunit id
+    tconfig.fclen = parse_result.fcast_len;      // forecast length in days. Needed before model runs for filenames.
 
-    // Read the exptid, umid, batchid, wuid, fclen from the command line
-    tconfig.start_date = argv[1];          // simulation start date
-    tconfig.exptid = argv[2];              // OpenIFS experiment id
-    tconfig.unique_member_id = argv[3];    // umid
-    tconfig.batchid = argv[4];             // batch id
-    tconfig.wuid = argv[5];                // workunit id
-    tconfig.fclen = argv[6];               // number of simulation days
-
-    return 0;
+    std::cerr << "Parsed arguments:\n"
+              << "  startdate: " << tconfig.startdate << '\n'
+              << "  exptid: " << tconfig.exptid << '\n'
+              << "  memberid: " << tconfig.memberid << '\n'
+              << "  batch: " << tconfig.batch << '\n'
+              << "  workunit: " << tconfig.workunit << '\n'
+              << "  fcast_len: " << tconfig.fclen << '\n';
 }
 
 
@@ -297,15 +297,9 @@ int main( int argc, char** argv )
     if ( !parse_result.ok ) {
         return task_finish( parse_result.exit_code );
     }
-    const ParsedArgs& parsed_args = parse_result.args;
 
-    // Old static ordered list approach.
-    // app_name & nthreads have been removed from command line args, they now come from BOINC init_data.xml.
-    retval = process_args( argc, argv, tconfig );
-    if ( retval ) {
-        std::cerr << "..Error processing command line arguments" << std::endl;
-        return task_finish( retval );
-    }
+    // Process parsed arguments into the data structures used by the rest of the code.
+    process_args( parse_result, tconfig );
 
     // Check for optional '--nthreads <value>' at end of arg list optionally set by app_config.xml on user's machine.
     // TODO: look at removing string copy of nthreads and use int bconfig.ncpus throughout code. DRY.
@@ -328,7 +322,8 @@ int main( int argc, char** argv )
         std::cerr << "Using --nthreads from app_config.xml: " << nthreads << '\n';
     }
 
-    const std::string namelist = "fort.4";              // namelist file. will come from XML input later.
+    const std::string namelist = "fort.4";    // namelist file. will come from XML input later.
+    // THIS WILL NO LONGER WORK!
     double num_days = atof( tconfig.fclen.c_str() );    // number of simulation days; fclen should come from fort.4, not the command line.
 
     // --------------- Prepare the task environment -----------------
@@ -337,7 +332,7 @@ int main( int argc, char** argv )
 
     // Create temp upload folder for moving the results to and uploading the results from.
     // BOINC measures the disk usage on the slots directory so we must move all results out of this folder
-    std::string upload_dir = bconfig.project_dir + bconfig.app_name + "_" + tconfig.wuid;
+    std::string upload_dir = bconfig.project_dir + bconfig.app_name + "_" + tconfig.workunit;
     std::cerr << "Location of temp folder: " << upload_dir << '\n';
     if ( !path_exists( upload_dir ) ) {
         if ( mkdir( upload_dir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH ) != 0 ) {
@@ -358,8 +353,8 @@ int main( int argc, char** argv )
     // This should really be part of a general piece of code to process the model ancil files. Needs refactoring later.
 
     fs::path namelist_zip_path = bconfig.slot_path;
-    namelist_zip_path /= std::string( bconfig.app_name ) + "_" + tconfig.unique_member_id + "_" + tconfig.start_date + "_" +
-                         std::to_string( (int)num_days ) + "_" + tconfig.batchid + "_" + tconfig.wuid + ".zip";
+    namelist_zip_path /= std::string( bconfig.app_name ) + "_" + tconfig.memberid + "_" + tconfig.startdate + "_" + std::to_string( (int)num_days ) +
+                         "_" + tconfig.batch + "_" + tconfig.workunit + ".zip";
     std::string namelist_zip = namelist_zip_path.string();    // nb this is a const string.
 
     // Copy the namelist_zip to the slot directory and unzip
@@ -621,7 +616,7 @@ int main( int argc, char** argv )
     // Initialise the ProgressFile handler
     ProgressFileHandler progress_file( bconfig.slot_path );
 
-    bool restart_ctl_exists = model_ctrl->restart_ctl_exists();
+    bool restart_ctl_exists = model_ctrl->restart_ctl_exists();    // -> model_is_restarting().
 
 
     // Check whether the rcf file and the progress file (contains model progress) are not already present from an unscheduled shutdown
@@ -774,7 +769,7 @@ int main( int argc, char** argv )
 
     // Start the model process
     std::cerr << "Launching model executable: " << executable << std::endl;
-    tstate.pid = launch_process( bconfig.project_dir, bconfig.slot_path, executable.string(), nthreads, tconfig.exptid );
+    tstate.pid = launch_process( bconfig.project_dir, bconfig.slot_path, executable.string(), nthreads );
 
     if ( tstate.pid > 0 ) {
         tstate.process_status = 0;

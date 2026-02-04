@@ -57,8 +57,9 @@ if __name__ == "__main__":
 
     forecast_length = config["forecast_length"]
     experiment_id = config["experiment_id"]
-    unique_member_id = config["unique_member_id"]
+    member_id = config["member_id"]
     batch_id = config["batch_id"]
+    wu_name = config["wu_name"]
     upload_interval = config["upload_interval"]
     timestep = float(config["timestep"])
     nfrres = config["nfrres"]
@@ -99,7 +100,7 @@ if __name__ == "__main__":
                        "     <project_preferences></project_preferences>\n" +\
                        f"    <project_dir>{projects_dir}</project_dir>\n" +\
                        f"    <boinc_dir>{current_path}</boinc_dir>\n" +\
-                       f"    <wu_name>test_model_{unique_member_id}_yyyymmddhh_1_{batch_id}_0</wu_name>\n" +\
+                       f"    <wu_name>test_model_{member_id}_yyyymmddhh_1_{batch_id}_0</wu_name>\n" +\
                        "     <shm_key>0</shm_key>\n" +\
                        "     <slot>0</slot>\n" +\
                        "     <wu_cpu_time>0.000000</wu_cpu_time>\n" +\
@@ -145,7 +146,7 @@ if __name__ == "__main__":
 
     fort_file_string = "!WU_TEMPLATE_VERSION=43r3-seasonal-20250801\n"+\
                          f"!EXPTID={experiment_id}\n"+\
-                         f"!UNIQUE_MEMBER_ID={unique_member_id}\n"+\
+                         f"!UNIQUE_MEMBER_ID={member_id}\n"+\
                          "!IC_ANCIL_FILE=ic_ancil_0\n" +\
                          "!IFSDATA_FILE=ifsdata_0\n" +\
                          "!CLIMATE_DATA_FILE=clim_data_0\n" +\
@@ -181,7 +182,7 @@ if __name__ == "__main__":
 
     # Create logical namelist file
     namelist_string = ">jf_namelist<\n"
-    namelist_path = slot0_dir / f"test_model_{unique_member_id}_yyyymmddhh_1_{batch_id}_0.zip"
+    namelist_path = slot0_dir / f"test_model_{member_id}_yyyymmddhh_{forecast_length}_{batch_id}_{wu_name}.zip"
     write_file(namelist_path, namelist_string)
     print(f"[setup] Wrote logical namelist {namelist_path.name}")
 

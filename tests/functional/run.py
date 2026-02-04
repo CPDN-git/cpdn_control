@@ -71,9 +71,9 @@ def copy_binary(src: Path, dst: Path, label: str):
     print(f"[run] Copied {label} binary to {dst}")
 
 
-def ensure_forecast_zip(slot0_dir: Path, unique_member_id: str, batch_id: str, forecast_length: int):
-    base_zip = slot0_dir / f"test_model_{unique_member_id}_yyyymmddhh_1_{batch_id}_0.zip"
-    target_zip = slot0_dir / f"test_model_{unique_member_id}_yyyymmddhh_{forecast_length}_{batch_id}_0.zip"
+def ensure_forecast_zip(slot0_dir: Path, member_id: str, batch_id: str, forecast_length: int):
+    base_zip = slot0_dir / f"test_model_{member_id}_yyyymmddhh_1_{batch_id}_0.zip"
+    target_zip = slot0_dir / f"test_model_{member_id}_yyyymmddhh_{forecast_length}_{batch_id}_0.zip"
     if target_zip.exists():
         print(f"[run] Forecast zip already present: {target_zip.name}")
         return
@@ -89,6 +89,7 @@ def maybe_symlink(target: Path, link_path: Path):
     if link_path.name != target.name:
         link_path.symlink_to(target.name)
         print(f"[run] Linked {link_path.name} -> {target.name}")
+
 
 def dump_slot_stderr(slot0_dir: Path) -> None:
     stderr_path = slot0_dir / "stderr.txt"
@@ -145,14 +146,15 @@ def main():
 
     #maybe_symlink(model_dst, slot0_dir / "test_model")
 
-    forecast_length = int(config["forecast_length"])
-    experiment_id = config["experiment_id"]
-    unique_member_id = config["unique_member_id"]
     batch_id = config["batch_id"]
+    workunit = config["wu_name"]
+    member_id = config["member_id"]
+    forecast_length = int(config["forecast_length"])
 
     # create a copy for the correct forecast length.
-    ensure_forecast_zip(slot0_dir, unique_member_id, batch_id, forecast_length)
+    ensure_forecast_zip(slot0_dir, member_id, batch_id, forecast_length)
 
+    # set the library path environment
     env = os.environ.copy()
     env["CPDN_PLATFORM"] = platform_triplet
     if args.boinc_lib_dir:
@@ -164,14 +166,14 @@ def main():
             if platform_triplet.endswith("apple-darwin"):
                 env["DYLD_LIBRARY_PATH"] = f"{lib_dir}:{env.get('DYLD_LIBRARY_PATH', '')}".rstrip(":")
 
+    # Either use <arg>=<val> syntax or split the arg & val into separate tokens. 
     controller_cmd = [
         str(controller_dst),
-        "yyyymmddhh",
-        experiment_id,
-        unique_member_id,
-        batch_id,
-        "0",
-        str(forecast_length),
+        "--startdate=yyyymmddhh",
+        f"--batch={batch_id}",
+        f"--workunit={workunit}",
+        f"--memberid={member_id}",
+        f"--fcast_len={forecast_length}",
     ]
     print(f"[run] Launching controller: {' '.join(controller_cmd)}")
     try:

@@ -62,11 +62,10 @@ int t_launch_process()
     const std::string slot_path = tmp_dir.string();
     const std::string cmd = LAUNCH_PROCESS_HELPER;
     const std::string nthreads = "1";
-    const std::string exptid = "test";
 
     // Normal exit case.
     test_count++;
-    pid_t pid = launch_process( project_path, slot_path, cmd, nthreads, exptid );
+    pid_t pid = launch_process( project_path, slot_path, cmd, nthreads );
     if ( pid > 0 ) {
         test_passed++;
     } else {
@@ -97,7 +96,7 @@ int t_launch_process()
     if ( setenv( kSignalEnv, "TERM", 1 ) != 0 ) {
         std::cerr << "  Failed to set " << kSignalEnv << " environment variable\n";
     } else {
-        pid = launch_process( project_path, slot_path, cmd, nthreads, exptid );
+        pid = launch_process( project_path, slot_path, cmd, nthreads );
         if ( pid > 0 ) {
             bool saw_running = false;
             int exit_code = 0;

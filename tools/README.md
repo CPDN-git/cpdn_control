@@ -10,3 +10,7 @@ RapidXML : Fast XML parser.
            https://rapidxml.sourceforge.net/
            Using MIT license.
 
+fmt : Modern formatting library for C++.
+      https://github.com/fmtlib/fmt
+      Using MIT license.
+

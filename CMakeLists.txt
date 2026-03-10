@@ -110,6 +110,10 @@ configure_cpdnzip()
 # Other packages required
 find_package(Threads REQUIRED)
 
+# --- CONFIGURATION FOR FMT LIBRARY (headers only, vendored)
+include(cmake/fmtConfig.cmake)
+configure_fmt()
+
 #--------------------------- Include paths -----------------------------------
 
 # Add the source include dirs (local headers only)
@@ -156,6 +160,7 @@ target_include_directories(cpdn_control PUBLIC ${LOCAL_INCLUDE_DIRS})
 target_link_libraries(cpdn_control PUBLIC
                     ${BOINC_API} ${BOINC_LIB}
                     ${CPDNZIP_LIB}
+                    fmt::fmt
 )
 
 # this executes git to retrieve the current hash of the branch and sets a macro the code uses.

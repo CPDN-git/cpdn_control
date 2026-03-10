@@ -2,6 +2,8 @@
 build
 zip/build
 zip/install
+tools/fmt/build
+tools/fmt/install
 
 # Ignore test model directories
 **/projects

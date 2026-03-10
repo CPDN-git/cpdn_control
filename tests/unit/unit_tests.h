@@ -25,3 +25,4 @@ int t_zip_and_delete();
 int t_set_env_var();
 int t_get_out_files();
 int t_launch_process();
+int t_trickle_handler();

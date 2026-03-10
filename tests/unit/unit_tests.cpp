@@ -33,6 +33,7 @@ int main( int argc, char* argv[] )
         { "Set Env Var", t_set_env_var },
         { "Get Out Files", t_get_out_files },
         { "Launch Process", t_launch_process },
+        { "Trickle Handler", t_trickle_handler },
         // Add new test functions here! Remember previous trailing comma!
     };
 

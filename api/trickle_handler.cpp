@@ -77,8 +77,8 @@ std::string TrickleHandler::read_trickle_data_file() const
         std::cerr << "Warning: trickle_data file contained invalid characters; stripped non-numeric/comma content\n";
     }
 
-    // Check size limit (509 chars + 1 null terminator = 510 max)
-    const size_t MAX_DATA_SIZE = 509;
+    // Check size limit (511 chars + 1 null terminator = 512 max)
+    const size_t MAX_DATA_SIZE = 511;
     if ( sanitized.length() > MAX_DATA_SIZE ) {
         std::cerr << "Warning: trickle_data content exceeds " << MAX_DATA_SIZE << " characters; truncating\n";
         sanitized = sanitized.substr( 0, MAX_DATA_SIZE );

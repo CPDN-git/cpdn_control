@@ -8,7 +8,12 @@
 #include <string>
 #include <vector>
 
+// Forward declare test function as friend to allow access to private members
+int t_trickle_handler();
+
 class TrickleHandler {
+
+    friend int t_trickle_handler();    // Allow unit test in 'test/unit/' to access private members
 
   public:
     TrickleHandler( const std::string& wu_name, const std::string& result_base_name, const std::string& slot_path );
@@ -34,6 +39,9 @@ class TrickleHandler {
     int process_trickle( double current_cpu_time, int timestep );
 
   private:
+    // Read and sanitize trickle data from 'trickle_data' file in current working directory.
+    std::string read_trickle_data_file() const;
+
     std::string wu_name;
     std::string result_base_name;
     std::string slot_path;
@@ -59,7 +67,4 @@ class TrickleHandler {
     // temporary stack buffers could result in use-after-free race conditions.
     std::vector<char> m_variety_buffer;
     std::vector<char> m_trickle_buffer;
-
-    // Read and sanitize trickle data from 'trickle_data' file in current working directory.
-    std::string read_trickle_data_file() const;
 };

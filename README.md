@@ -103,8 +103,8 @@ more details.
 
 ## Prerequisite: fmt C++17 compatible library
 
-The fmt library is a modern formatting library that provides `std::format`-like functionality for C++17.
-It is vendored in the repository under `tools/fmt/` and does not require separate installation.
+The fmt library is a modern formatting library that provides C++20 `std::format`-like functionality for C++17.
+It is in the repository under `tools/fmt/` and does not require separate installation.
 
 To obtain the fmt library, execute the following command in the top-level directory:
 
@@ -118,6 +118,7 @@ run the same git clone command from within that directory. The CMake build syste
 and configure fmt for use in the build.
 
 ## Models
+
 The `models` folder contains the model specific code for this application.
 
 The meteorological and climate models themselves are not contained in this repository. They
@@ -128,6 +129,7 @@ directory. See that code for more details and the test model appication for an
 implementation example.
 
 ### Test model
+
 A small test model code is available which behaves similarly to the OpenIFS 43r3 model. 
 This is used to test functionality of the control app. See the `test` folder for 
 more details.
@@ -137,12 +139,14 @@ The test model is built when the control application is built using CMake (see b
 ## Build CPDN Controller
 
 ### RapidXML
+
 If not already present, obtain the RapidXml code (as a header) for parsing XML files. 
 This is downloaded from the site: [RapidXml](http://rapidxml.sourceforge.net/).
 We only need the files: 'rapidxml.hpp' and the license.txt file. 
 Download this file into the directory `tools/RapidXML`.
 
 ### Linux
+
 CMake is used to build the controller application. Ensure the prerequisite steps
 above have been completed.
 
@@ -154,6 +158,7 @@ set(BOINC_DIR "../boinc-8.0.2-x86_64" CACHE STRING "Root directory of BOINC inst
 Or make a temporary change on the cmake command line by using the -DBOINC_DIR argument.
 
 #### Steps to build
+
 In the top level directory:
 1. mkdir build (or remove it for fresh build).
 2. cd build
@@ -176,19 +181,23 @@ The default TARGET is the build intended for production.
 The version number of the executable is best left as-is and changed when transferring to CPDN.
 
 ### Windows
+
 Not yet ported to Windows. In progress.
 
 #### macOS
+
 Not ported.
 
 [comment]: # (OLD: Build the BOINC and cpdn_zip libraries using Xcode. Modify the Makefile to use `clang++` as the compiler and the object file as `oifs_43r3_100_x86_64-apple-darwin`.)
 
 #### ARM
+
 Not ported.
 
 [comment]: # (OLD: To build OpenIFS on an ARM architecture machine modify the Makefile and set `-D_ARM` and the object file becomes `oifs_43r3_1.00_aarch64-poky-linux`.)
 
 ## How to run the controller executable with OpenIFS
+
 In order for OpenIFS to run, its ancillary inpur files need to be installed correctly from the
 download directory on the client. This is the responsibility of the controller process.
 
@@ -198,6 +207,7 @@ The command to run the control in standalone mode with OpenIFS on Linux is:
 ```
 
 ### Command line parameters
+
 The command line parameters are:
 ```
 0 : controller compiled executable, 

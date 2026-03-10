@@ -6,6 +6,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 class TrickleHandler {
 
@@ -30,7 +31,7 @@ class TrickleHandler {
     TrickleHandler& operator=( TrickleHandler&& ) = delete;
 
     // Construct and upload a trickle message
-    int process_trickle( double current_cpu_time, int timestep ) const;
+    int process_trickle( double current_cpu_time, int timestep );
 
   private:
     std::string wu_name;
@@ -51,4 +52,14 @@ class TrickleHandler {
     std::string_view ORIG_TRICKLE_FORMAT = "<wu>{}</wu>\n<result>{}</result>\n<ph>{}</ph>\n<ts>{}</ts>\n<cp>{}</cp>\n<vr>{}</vr>\n";
     std::string_view GENERAL_TRICKLE_FORMAT =
         "<wu>{}</wu>\n<result>{}</result>\n<ph>{}</ph>\n<ts>{}</ts>\n<cp>{}</cp>\n<vr>{}</vr>\n<data>{}</data>\n";
+
+    // Persistent buffers for trickle data passed to BOINC.
+    // These are member variables to ensure extended lifetime, as BOINC may process
+    // trickle data asynchronously via background threads. Storing pointers to
+    // temporary stack buffers could result in use-after-free race conditions.
+    std::vector<char> m_variety_buffer;
+    std::vector<char> m_trickle_buffer;
+
+    // Read and sanitize trickle data from 'trickle_data' file in current working directory.
+    std::string read_trickle_data_file() const;
 };

@@ -7,6 +7,15 @@
 
 #include <string>
 
+// This is the 'variety' or 'type' of the trickle message. It's used on the server side
+// to determine how to process the trickle contents. For OpenIFS, we use the 'general'
+// trickle variety which includes a 'data' field allowing us to send a small amount of
+// model output or diagnostics to the Oxford server for batch analysis.
+// The other variety is 'orig' which is used by the Hadley models and does not have the
+// 'data' field.
+
+const std::string variety = "general";
+
 class TrickleHandler {
 
   public:

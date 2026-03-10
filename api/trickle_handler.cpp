@@ -34,7 +34,7 @@ void TrickleHandler::process_trickle( double current_cpu_time, int timestep ) co
     trickle_data.push_back( '\0' );
 
     std::cerr << "Sending trickle message to CPDN at timestep: " << timestep << "\n";
-    int reval = boinc_send_trickle_up( (char*)"orig", trickle_data.data() );
+    int reval = boinc_send_trickle_up( variety.c_str(), trickle_data.data() );
     if ( reval != 0 ) {
         std::cerr << "Error sending trickle, boinc_send_trickle_up returned: " << reval << "\n";
     }

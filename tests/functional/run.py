@@ -121,7 +121,9 @@ def main():
     slot0_dir = workdir / "slots" / "0"
     print(f"[run] Working directory: {workdir}")
 
-    default_controller = f"cpdn_control_1.0.0_{platform_triplet}-debug"
+    #default_controller = f"cpdn_control_1.0.0_{platform_triplet}-debug"
+    # if using valgrind, do not use binary linked with AddressSanitizer
+    default_controller = f"cpdn_control_1.0.0_{platform_triplet}"
     default_model = "test_model"
 
     controller_name = args.controller_binary or default_controller
@@ -168,6 +170,7 @@ def main():
 
     # Either use <arg>=<val> syntax or split the arg & val into separate tokens. 
     controller_cmd = [
+        "valgrind","--leak-check=full",
         str(controller_dst),
         "--startdate=yyyymmddhh",
         f"--batch={batch_id}",

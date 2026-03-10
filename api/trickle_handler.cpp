@@ -5,8 +5,8 @@
 
 #include "trickle_handler.h"
 #include "boinc/boinc_api.h"
+#include <fmt/format.h>
 #include <iostream>
-#include <sstream>
 #include <vector>
 
 
@@ -21,23 +21,37 @@ TrickleHandler::TrickleHandler( const std::string& wu, const std::string& result
  * @param current_cpu_time The current CPU time used by the task.
  * @param timestep The current timestep of the model.
  */
-void TrickleHandler::process_trickle( double current_cpu_time, int timestep ) const
+int TrickleHandler::process_trickle( double current_cpu_time, int timestep ) const
 {
-    std::stringstream trickle_buffer;
-    trickle_buffer << "<wu>" << wu_name << "</wu>\n<result>" << result_base_name << "</result>\n<ph></ph>\n<ts>" << timestep << "</ts>\n<cp>"
-                   << current_cpu_time << "</cp>\n<vr></vr>\n";
-    std::string trickle_msg = trickle_buffer.str();
+    std::string ph = "";
+    std::string vr = "";
+    std::string data = "";
+    std::string trickle_msg;
+    int retval = 0;
+
+    if ( variety == "orig" ) {
+        trickle_msg = fmt::format( ORIG_TRICKLE_FORMAT, wu_name, result_base_name, ph, timestep, current_cpu_time, vr );
+    } else if ( variety == "general" ) {
+        trickle_msg = fmt::format( GENERAL_TRICKLE_FORMAT, wu_name, result_base_name, ph, timestep, current_cpu_time, vr, data );
+    } else {
+        std::cerr << "Error: Unrecognized trickle variety: " << variety << "\n";
+        return -1;
+    }
 
     // Create null terminated, non-const char buffers for the boinc_send_trickle_up call
     // to avoid possible memory faults (as seen in the past).
+    std::vector<char> variety_data( variety.begin(), variety.end() );
+    variety_data.push_back( '\0' );
+
     std::vector<char> trickle_data( trickle_msg.begin(), trickle_msg.end() );
     trickle_data.push_back( '\0' );
 
     std::cerr << "Sending trickle message to CPDN at timestep: " << timestep << "\n";
-    int reval = boinc_send_trickle_up( variety.c_str(), trickle_data.data() );
-    if ( reval != 0 ) {
-        std::cerr << "Error sending trickle, boinc_send_trickle_up returned: " << reval << "\n";
+    retval = boinc_send_trickle_up( variety_data.data(), trickle_data.data() );
+    if ( retval != 0 ) {
+        std::cerr << "Error sending trickle, boinc_send_trickle_up returned: " << retval << "\n";
     }
+    return retval;
 }
 
 

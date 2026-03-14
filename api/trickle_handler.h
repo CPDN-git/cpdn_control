@@ -41,6 +41,7 @@ class TrickleHandler {
   private:
     // Read and sanitize trickle data from 'trickle_data' file in current working directory.
     std::string read_trickle_data_file() const;
+    const size_t MAX_DATA_LEN = 511;
 
     std::string wu_name;
     std::string result_base_name;
@@ -64,7 +65,7 @@ class TrickleHandler {
     // Persistent buffers for trickle data passed to BOINC.
     // These are member variables to ensure extended lifetime, as BOINC may process
     // trickle data asynchronously via background threads. Storing pointers to
-    // temporary stack buffers could result in use-after-free race conditions.
+    // temporary stack buffers can result in use-after-free race conditions.
     std::vector<char> m_variety_buffer;
     std::vector<char> m_trickle_buffer;
 };

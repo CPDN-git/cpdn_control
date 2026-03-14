@@ -29,6 +29,10 @@ def detect_platform() -> str:
     return f"{arch}-pc-linux-gnu"
 
 
+def running_in_github_actions() -> bool:
+    return os.environ.get("GITHUB_ACTIONS", "").lower() == "true"
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Run functional test workunit.")
 
@@ -168,9 +172,8 @@ def main():
             if platform_triplet.endswith("apple-darwin"):
                 env["DYLD_LIBRARY_PATH"] = f"{lib_dir}:{env.get('DYLD_LIBRARY_PATH', '')}".rstrip(":")
 
-    # Either use <arg>=<val> syntax or split the arg & val into separate tokens. 
+    # Either use <arg>=<val> syntax or split the arg & val into separate tokens.
     controller_cmd = [
-        "valgrind","--leak-check=full",
         str(controller_dst),
         "--startdate=yyyymmddhh",
         f"--batch={batch_id}",
@@ -178,6 +181,12 @@ def main():
         f"--memberid={member_id}",
         f"--fcast_len={forecast_length}",
     ]
+
+    if running_in_github_actions():
+        print("[run] GitHub Actions detected; running controller without valgrind")
+    else:
+        controller_cmd = ["valgrind", "--leak-check=full", *controller_cmd]
+
     print(f"[run] Launching controller: {' '.join(controller_cmd)}")
     try:
         result = subprocess.run(controller_cmd, cwd=slot0_dir, env=env)

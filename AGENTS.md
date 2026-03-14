@@ -7,6 +7,7 @@ This repository builds the **CPDN controller** executable used to run/manage cli
 - `src/cpdn_main.cpp`
   - Program entry point (`main`) and high-level flow: BOINC init, argument parsing, model selection, run loop.
   - Contains the model factory `create_model_control(...)` mapping `app_name/model_name -> ModelControl`.
+  - Currently also contains **experimental** step-diagnostics glue that runs `diagnostics.exe` before result files are moved out of the slot directory. This is a temporary integration and is expected to move under model-class control later.
 - `src/parse.h`, `src/parse.cpp`
   - CLI11-based command-line parsing for `--cpdn_*` and `--model_*` arguments.
   - Uses vendored CLI11 headers under `tools/CLI11/`.
@@ -21,11 +22,13 @@ This repository builds the **CPDN controller** executable used to run/manage cli
   - Built as an **object library** (`cpdn_models`) and folded into the main `cpdn_control` library (see `models/CMakeLists.txt`).
 - `lib/`
   - Shared utilities (filesystem helpers, CPU-time helpers, etc).
+  - `lib/utils.h`, `lib/utils.cpp` now include a general `run_process_with_timeout(...)` helper used for short synchronous external programs that must run in a specific working directory and may be validated by checking an output file timestamp/update.
 - `zip/`
   - Standalone CMake project that builds the `cpdn_zip` static library (wrapper around ZipLib).
   - The top-level controller build expects this to be installed into `zip/install`.
 - `tests/unit/`
   - CTest-driven unit tests (single `unit_tests` executable invoked with different arguments).
+  - Includes `t_run_process_with_timeout.cpp` plus `timed_process_helper.cpp` for exercising timed external-process execution.
 - `tests/functional/`
   - End-to-end/“workunit style” tests driven by Python scripts:
   - `setup_test.py` creates a fake BOINC directory layout (`projects/`, `slots/0/`, input zips, `init_data.xml`, etc).
@@ -101,6 +104,13 @@ Typical steps:
 - Update the model factory in `src/cpdn_main.cpp` (`create_model_control`) to return your new class for the appropriate model/app name.
 - Add targeted unit tests in `tests/unit/` and/or a functional fixture in `tests/functional/fixtures/`.
 
+## Current experimental area
+
+- `src/cpdn_main.cpp` contains temporary logic for running an external `diagnostics.exe` program on completed OpenIFS output before `move_result_file()` removes those files from the slot directory.
+- The current implementation only looks for the `ICMSH...` file from `get_output_filenames(...)` and builds a hard-coded experimental argument list for diagnostics. Treat this as provisional, not as a stable interface.
+- If you are extending or refactoring this area, prefer moving the diagnostics decision-making and argument construction into model-specific code rather than growing more OpenIFS-specific logic in `main()`.
+- The diagnostics path currently depends on `TrickleHandler` consuming `trickle_data` from the slot directory, so any redesign that stages work elsewhere must either copy `trickle_data` back or update that contract deliberately.
+
 ## Repo conventions for AI-assisted changes
 
 - Prefer small, focused patches; avoid drive-by refactors/formatting.
@@ -108,3 +118,4 @@ Typical steps:
 - Formatting: use the repo `.clang-format` when you need to format code; avoid reformatting unrelated files/sections.
 - When changing controller behavior, add/adjust a unit test where practical; use functional tests for end-to-end behavior.
 - The debug controller binary enables ASan; prefer it for test runs and bug hunting.
+- When touching the experimental diagnostics path, keep the change narrowly scoped unless the task is explicitly to migrate it into the model classes.

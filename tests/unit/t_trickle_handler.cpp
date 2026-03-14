@@ -45,16 +45,16 @@ int t_trickle_handler()
 
     // Use a test directory for isolation
     std::string test_dir = "trickle_test_temp/";
-    
+
     // Save current working directory for restoration later
     fs::path original_cwd = fs::current_path();
-    
+
     // Cleanup any existing test artifacts
     if ( fs::exists( test_dir ) ) {
         fs::remove_all( test_dir );
     }
     fs::create_directory( test_dir );
-    
+
     // Change to test directory so trickle_data is found/created there
     fs::current_path( test_dir );
 
@@ -213,15 +213,15 @@ int t_trickle_handler()
     // Test 7: Content exceeding 509 characters is truncated
     test_count++;
     {
-        // Create file with content exceeding 509 chars (after sanitization)
+        // Create file with content exceeding data chars (after sanitization)
         {
             std::ofstream file( "trickle_data" );
             // Create a string with 520 valid characters (digits, commas, minus signs)
             std::string long_content;
             for ( int i = 0; i < 50; ++i ) {
-                long_content += "1,2,3,4,5,";  // 10 chars per iteration, 50 iterations = 500 chars
+                long_content += "1,2,3,4,5,";    // 10 chars per iteration, 50 iterations = 500 chars
             }
-            long_content += "6,7,8,9,0,1,2,3,4,5";  // Add 20 more chars to exceed 509
+            long_content += "6,7,8,9,0,1,2,3,4,5";    // Add 20 more chars to exceed 509
             file << long_content;
             file.close();
         }
@@ -229,12 +229,12 @@ int t_trickle_handler()
         TrickleHandler handler( "test_wu", "test_result", "test_slot" );
         std::string result = handler.read_trickle_data_file();
 
-        // Should be truncated to exactly 509 characters
-        if ( result.length() == 509 ) {
+        // Should be truncated to exactly MAX_DATA_LEN characters
+        if ( result.length() == handler.MAX_DATA_LEN ) {
             test_passed++;
         } else {
-            std::cerr << "  Test 7 FAILED: Content exceeding 509 chars should be truncated\n";
-            std::cerr << "    Expected length: 509\n";
+            std::cerr << "  Test 7 FAILED: Content exceeding " << handler.MAX_DATA_LEN << " chars should be truncated\n";
+            std::cerr << "    Expected length: " << handler.MAX_DATA_LEN << "\n";
             std::cerr << "    Got length: " << result.length() << "\n";
         }
 

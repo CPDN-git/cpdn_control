@@ -26,3 +26,4 @@ int t_set_env_var();
 int t_get_out_files();
 int t_launch_process();
 int t_trickle_handler();
+int t_run_process_with_timeout();

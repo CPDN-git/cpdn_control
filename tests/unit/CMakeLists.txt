@@ -27,15 +27,18 @@ add_executable(unit_tests unit_tests.cpp
                         t_get_out_files.cpp
                         t_launch_process.cpp
                         t_trickle_handler.cpp
+                        t_run_process_with_timeout.cpp
 )
 
 # Helper executable used by launch_process tests
 add_executable(launch_process_helper launch_process_helper.cpp)
+add_executable(timed_process_helper timed_process_helper.cpp)
 
 # Link the test executable to the control code
 target_link_libraries(unit_tests PRIVATE cpdn_control)
 target_compile_definitions(unit_tests PRIVATE LAUNCH_PROCESS_HELPER="$<TARGET_FILE:launch_process_helper>")
-add_dependencies(unit_tests launch_process_helper)
+target_compile_definitions(unit_tests PRIVATE TIMED_PROCESS_HELPER="$<TARGET_FILE:timed_process_helper>")
+add_dependencies(unit_tests launch_process_helper timed_process_helper)
 
 # Add the targets to the CTest test suite
 # The command is the path to the executable just built.
@@ -56,3 +59,4 @@ add_test( NAME SetEnvVarTest COMMAND unit_tests "Set Env Var" )
 add_test( NAME GetOutFilesTest COMMAND unit_tests "Get Out Files" )
 add_test( NAME LaunchProcessTest COMMAND unit_tests "Launch Process" )
 add_test( NAME TrickleHandlerTest COMMAND unit_tests "Trickle Handler" )
+add_test( NAME RunProcessWithTimeoutTest COMMAND unit_tests "Run Process With Timeout" )

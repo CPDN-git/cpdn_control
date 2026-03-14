@@ -34,6 +34,7 @@ int main( int argc, char* argv[] )
         { "Get Out Files", t_get_out_files },
         { "Launch Process", t_launch_process },
         { "Trickle Handler", t_trickle_handler },
+        { "Run Process With Timeout", t_run_process_with_timeout },
         // Add new test functions here! Remember previous trailing comma!
     };
 

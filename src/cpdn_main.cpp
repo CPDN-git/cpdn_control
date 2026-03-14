@@ -50,6 +50,11 @@ namespace fs = std::filesystem;
 
 // Constants
 constexpr std::string_view MODEL_CONFIG_FILE = "model_config.xml";
+constexpr int LOOP_DELAY_DEFAULT = 7;
+constexpr int LOOP_DELAY_FAST = 1;
+constexpr int DIAGNOSTICS_TIMEOUT_SECONDS = 30;
+constexpr std::string_view DIAGNOSTICS_INPUT_PREFIX = "ICMSH";
+constexpr std::string_view TRICKLE_DATA_FILE = "trickle_data";
 
 
 // ------------------------------------------
@@ -76,6 +81,86 @@ static std::unique_ptr<ModelControl> create_model_control( std::string_view mode
     }
 
     return model;
+}
+
+/**
+ * @brief Return the ICMSH filename to use as diagnostics input for the completed step.
+ *        Returns an empty string when no matching diagnostics input file is present in the slot directory.
+ */
+static std::string get_diagnostics_input_file( const fs::path& slot_path, const std::vector<std::string>& output_files )
+{
+    for ( const auto& output_file : output_files ) {
+        if ( output_file.rfind( DIAGNOSTICS_INPUT_PREFIX.data(), 0 ) != 0 ) {
+            continue;
+        }
+
+        fs::path output_path = slot_path / output_file;
+        if ( fs::exists( output_path ) ) {
+            return output_file;
+        }
+    }
+
+    return "";
+}
+
+
+/**
+ * @brief Run diagnostics.exe synchronously in the slot directory for the completed step.
+ *        Builds the current experimental argument list from the matching ICMSH filename and only leaves trickle_data in place if the run succeeds.
+ */
+static bool run_step_diagnostics( const fs::path& diag_exe, const fs::path& slot_path, const std::vector<std::string>& output_files )
+{
+    std::string diagnostics_input = get_diagnostics_input_file( slot_path, output_files );
+    if ( diag_exe.empty() || diagnostics_input.empty() ) {
+        return false;
+    }
+
+    // GC ** EXPERIMENTAL **
+    // Currently 'diagnostics.exe' is 'sptogp_parest.exe', which is a modified version
+    // of sptogp that read the ICMSH output file, transforms to gridpoint and computes
+    // zonal mean of zonal wind over the Pacific region defined by Chris O'Reilly.
+    // If successful this should be handled by the oifs class.
+
+    // Args to sptogp are:
+    // -s <input file> -G <output file>
+    // -t f :  transform to full grid, not reduced grid
+    // -l   :  linear grid
+    // -f 131 : grid field code to convert; 131 is U wind.
+    // -n   : do not truncate output field.
+    // -p ./rtables/ : path for resolution tables.
+
+    fs::path trickle_data_path = slot_path / TRICKLE_DATA_FILE;
+    std::vector<std::string> diag_args = { "-s", diagnostics_input, "-G", diagnostics_input + ".diag", "-t", "f", "-l", "-f", "131", "-n",
+                                           "-p", "./rtables/" };
+    std::error_code ec;
+    fs::remove( trickle_data_path, ec );
+    if ( ec ) {
+        std::cerr << "Warning: failed to remove stale trickle_data before diagnostics run: " << ec.message() << '\n';
+        ec.clear();
+    }
+
+    std::cerr << "Running external diagnostics program: " << diag_exe << " with input file: " << diagnostics_input << '\n';
+    TimedProcessResult diag_result =
+        run_process_with_timeout( diag_exe.string(), diag_args, slot_path.string(), DIAGNOSTICS_TIMEOUT_SECONDS, trickle_data_path );
+
+    if ( diag_result.status != TimedProcessStatus::success ) {
+        std::cerr << "Warning: diagnostics program failed with status " << timed_process_status_to_string( diag_result.status );
+        if ( diag_result.exit_code >= 0 ) {
+            std::cerr << ", exit_code=" << diag_result.exit_code;
+        }
+        std::cerr << '\n';
+        fs::remove( trickle_data_path, ec );
+        return true;
+    }
+
+    if ( !diag_result.output_updated ) {
+        std::cerr << "Warning: diagnostics program completed but did not produce a fresh trickle_data file\n";
+        fs::remove( trickle_data_path, ec );
+        return true;
+    }
+
+    std::cerr << "Diagnostics completed and updated trickle_data\n";
+    return true;
 }
 
 
@@ -750,11 +835,11 @@ int main( int argc, char** argv )
     // Check model executable to run.
     // GC. This should be an input parameter on the command line or the init_data.xml (or model_config.xml) later on.
 
-    fs::path executable = bconfig.slot_path;
-    executable /= model_ctrl->get_executable_name();
+    fs::path model_exe = bconfig.slot_path;
+    model_exe /= model_ctrl->get_executable_name();
 
-    if ( !fs::exists( executable ) ) {
-        std::cerr << ".. Abort. Model executable not found: " << executable << std::endl;
+    if ( !fs::exists( model_exe ) ) {
+        std::cerr << ".. Abort. Model executable not found: " << model_exe << std::endl;
         return task_finish( 1 );
     }
 
@@ -762,14 +847,34 @@ int main( int argc, char** argv )
     // Manually set the permissions on the model executable before running.
     // GC. Dec/2025
 
-    if ( !set_exec_perms( executable.string() ) ) {
-        std::cerr << "..Cannot start model. Setting execute permission for model executable failed: " << executable << std::endl;
+    if ( !set_exec_perms( model_exe.string() ) ) {
+        std::cerr << "..Cannot start model. Setting execute permission for model executable failed: " << model_exe << std::endl;
         return task_finish( 1 );
     }
 
+    // GC. --- EXPERIMENTAL CODE ---
+    // This code is hardwired while I test the use of external diagnostics program
+    // The test is Chris O'Reilly's batches where we run a modified sptogp to compute
+    // the zonal mean zonal wind.
+
+    fs::path diag_exe = bconfig.slot_path;
+    diag_exe /= "diagnostics.exe";
+
+    if ( !fs::exists( diag_exe ) ) {
+        std::cerr << " NOTE: No external diagnostics program found. No extra trickle data will be written.";
+        diag_exe.clear();    // set to empty path to indicate no diagnostics program. check with diag_exe.empty() before trying to run diagnostics.
+    } else {
+        // Set execute permissions on diagnostics program if it exists (as above)
+        if ( !set_exec_perms( diag_exe.string() ) ) {
+            std::cerr << "..Cannot set execute permission for diagnostics program: " << diag_exe << std::endl;
+            return task_finish( 1 );
+        }
+    }
+    // ------ END OF EXPERIMENTAL CODE -------
+
     // Start the model process
-    std::cerr << "Launching model executable: " << executable << std::endl;
-    tstate.pid = launch_process( bconfig.project_dir, bconfig.slot_path, executable.string(), nthreads );
+    std::cerr << "Launching model executable: " << model_exe << std::endl;
+    tstate.pid = launch_process( bconfig.project_dir, bconfig.slot_path, model_exe.string(), nthreads );
 
     if ( tstate.pid > 0 ) {
         tstate.process_status = 0;
@@ -796,6 +901,7 @@ int main( int argc, char** argv )
     std::vector<fs::path> zfl;
 
     int delay_count = 0;
+    int delay_max = LOOP_DELAY_DEFAULT;
     std::string step = "0";
 
     while ( tstate.process_status == 0 && tstate.model_completed == 0 ) {
@@ -806,7 +912,7 @@ int main( int argc, char** argv )
         // Check whether an upload point has been reached
         // GC. 09/25. reduced to 7 secs as testing shows 10secs can miss a timestep.
         // Going too low can cause the %age done on boincmgr to flip backwards.
-        if ( delay_count == 7 ) {
+        if ( delay_count >= delay_max ) {
 
             // Get the current model step.
             // step is updated by this call if successful.
@@ -830,12 +936,15 @@ int main( int argc, char** argv )
 
             // Move the model result files to the task folder in the project directory
             // GC. Why do this every timestep? This check only needs to be done at same frequency as NFRPOS.
+            // GC. Added run of external diagnostics code if present. EXPERIMENTAL STILL.
             if ( step_value != last_step_value ) {
+                auto output_files = model_ctrl->get_output_filenames( tstate.last_step, tconfig.exptid );
+                bool diagnostics_ran = run_step_diagnostics( diag_exe, bconfig.slot_path, output_files );
 
-                for ( const auto& result : model_ctrl->get_output_filenames( tstate.last_step, tconfig.exptid ) ) {
+                for ( const auto& result : output_files ) {
                     retval = move_result_file( bconfig.slot_path, upload_dir, result );
                     if ( retval ) {
-                        std::cerr << "..Copying " << result << " result file to the temp folder in the projects directory failed" << "\n";
+                        std::cerr << ".. Moving " << result << " result file to the temp folder in the projects directory failed" << "\n";
                         return task_finish( retval );
                     }
                 }
@@ -911,6 +1020,10 @@ int main( int argc, char** argv )
                     trickler.process_trickle( tstate.current_cpu_time, tstate.current_step );
                     tstate.last_trickle_step = tstate.current_step;
                 }
+
+                delay_max = diagnostics_ran ? LOOP_DELAY_FAST : LOOP_DELAY_DEFAULT;
+            } else {
+                delay_max = LOOP_DELAY_DEFAULT;
             }    // end of if it's a new timestep block.
 
             tstate.last_step = step;
@@ -1002,7 +1115,9 @@ int main( int argc, char** argv )
     }
 
     // Move the final model result files ready for upload
-    for ( const auto& result : model_ctrl->get_output_filenames( tstate.last_step, tconfig.exptid ) ) {
+    auto output_files = model_ctrl->get_output_filenames( tstate.last_step, tconfig.exptid );
+    run_step_diagnostics( diag_exe, bconfig.slot_path, output_files );
+    for ( const auto& result : output_files ) {
         retval = move_result_file( bconfig.slot_path, upload_dir, result );
         if ( retval ) {
             std::cerr << "..Copying " << result << " model output file to the temp upload folder in projects directory failed" << "\n";

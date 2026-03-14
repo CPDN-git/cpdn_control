@@ -25,7 +25,7 @@
 #  we can also be included.
 #
 # To build and run:
-# 1. cd ../CPDN_control_code/zip
+# 1. cd ../cpdn_control/zip
 # 2. mkdir build
 # 3. cd build
 #    Configure with your desired installation path
@@ -33,12 +33,12 @@
 # 5. make
 # 6. make install
 # 7. ./test_zip
-# 8. In CPDN_control_code, make sure Makefile uses ../zip/install/lib and ../zip/install/include
+# 8. In cpdn_control, make sure Makefile uses ../zip/install/lib and ../zip/install/include
 # 9. make clean; make
 #
 # For cpdn_zip, use 'make clean' in the build directory or simply delete the zip/build and zip/install directories.
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.16)
 
 project(CpdnZip VERSION 1.0 LANGUAGES C CXX)
 
@@ -110,10 +110,10 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/combine_libs.sh "${COMBINE_SCRIPT}")
 
 # Add the custom command to run the script just created.
 add_custom_command(
-    TARGET test_zip POST_BUILD
-    COMMAND bash ${CMAKE_CURRENT_BINARY_DIR}/combine_libs.sh
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMENT "Bundling all static libraries into a single libcpdn_zip.a"
+            TARGET test_zip POST_BUILD
+            COMMAND bash ${CMAKE_CURRENT_BINARY_DIR}/combine_libs.sh
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            COMMENT "Bundling all static libraries into a single libcpdn_zip.a"
 )
 
 # --- Install Rules ---
@@ -121,16 +121,16 @@ add_custom_command(
 
 #  Install the final combined static library
 install(TARGETS cpdn_zip
-    ARCHIVE DESTINATION lib
+        ARCHIVE DESTINATION lib
 )
 
 # Install the public header file for our library
 install(FILES cpdn_zip.h
-    DESTINATION include
+        DESTINATION include
 )
 
 # Install the necessary header files from ZipLib, which are a public dependency
 install(DIRECTORY ZipLib/
-    DESTINATION include/ZipLib
-    FILES_MATCHING PATTERN "*.h"
+        DESTINATION include/ZipLib
+        FILES_MATCHING PATTERN "*.h"
 )

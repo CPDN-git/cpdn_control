@@ -2,6 +2,15 @@
 build
 zip/build
 zip/install
+tools/fmt/build
+tools/fmt/install
+
+# Ignore test model directories
+**/projects
+**/slots
+
+# Python caches
+**/__pycache__
 
 # Prerequisites
 *.d

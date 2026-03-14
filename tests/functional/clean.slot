@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+cd slots/0
+set -x
+/bin/rm trickle_*.xml
+/bin/rm boinc_finish_called
+/bin/rm boinc_lockfile
+/bin/rm fort.4
+/bin/rm rcf
+/bin/rm progress_file*
+/bin/rm stderr.txt
+/bin/rm -rf ifsdata
+/bin/rm ICM*+*
+set +x

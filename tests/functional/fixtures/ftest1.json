@@ -1,0 +1,12 @@
+{
+    "test_name": "test1",
+    "forecast_length": 24,
+    "experiment_id": "EXPT",
+    "member_id": "NNNN",
+    "batch_id": "d000",
+    "wu_name": "0",
+    "upload_interval": 12,
+    "timestep": 3600,
+    "nfrres": 12,
+    "nfrpos": 6
+}

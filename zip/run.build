@@ -1,7 +1,7 @@
 #! /usr/bin/env bash
 #
 #  Runs the commands to build the cpdn_zip library,
-#  ready for linking against CPDN_control_code.
+#  ready for linking against cpdn_control.
 
 set -x
 set -e
@@ -19,3 +19,5 @@ make install
 # run the short test
 echo "Running short test of cpdn_zip..."
 ./test_zip
+
+set +x

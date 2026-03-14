@@ -6,12 +6,14 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <charconv>    // for std::from_chars
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -19,13 +21,92 @@
 #if defined( _WIN32 ) || defined( _WIN64 )
 #include <Windows.h>    // for SetFileAttributes
 #else
+#include <csignal>
+#include <sys/wait.h>
 #include <unistd.h>    // for access
 #endif
 #include <sys/stat.h>    // for chmod
 
 #include "cpdn_cpu_time.h"
+#include "utils.h"
 
 namespace fs = std::filesystem;
+
+// Anonymous namespacw to give file-local internal linkage to helper functions: get_file_mtime, file_was_updated, and
+// terminate_child_process in lib/utils.cpp. Without it, those functions would have external linkage by default,
+// meaning they would be visible outside that translation unit and could collide with similarly named helpers
+// elsewhere.The anonymous namespace makes it explicit that they are private implementation details of utils.cpp.
+
+namespace {
+
+std::optional<fs::file_time_type> get_file_mtime( const fs::path& path )
+{
+    std::error_code ec;
+    if ( !fs::exists( path, ec ) || ec ) {
+        return std::nullopt;
+    }
+
+    auto write_time = fs::last_write_time( path, ec );
+    if ( ec ) {
+        return std::nullopt;
+    }
+    return write_time;
+}
+
+bool file_was_updated( const fs::path& path, const std::optional<fs::file_time_type>& previous_mtime )
+{
+    auto current_mtime = get_file_mtime( path );
+    if ( !current_mtime.has_value() ) {
+        return false;
+    }
+
+    if ( !previous_mtime.has_value() ) {
+        return true;
+    }
+
+    return current_mtime.value() != previous_mtime.value();
+}
+
+#if !defined( _WIN32 ) && !defined( _WIN64 )
+bool terminate_child_process( pid_t pid )
+{
+    int status = 0;
+    pid_t wait_result = waitpid( pid, &status, WNOHANG );
+    if ( wait_result == pid ) {
+        return true;
+    }
+    if ( wait_result == -1 ) {
+        return false;
+    }
+
+    constexpr auto kGracePeriod = std::chrono::seconds( 2 );
+    auto deadline = std::chrono::steady_clock::now() + kGracePeriod;
+
+    if ( kill( pid, SIGTERM ) != 0 && errno != ESRCH ) {
+        return false;
+    }
+
+    while ( std::chrono::steady_clock::now() < deadline ) {
+        wait_result = waitpid( pid, &status, WNOHANG );
+        if ( wait_result == pid ) {
+            return true;
+        }
+        if ( wait_result == -1 ) {
+            return false;
+        }
+        std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
+    }
+
+    if ( kill( pid, SIGKILL ) != 0 && errno != ESRCH ) {
+        return false;
+    }
+
+    wait_result = waitpid( pid, &status, 0 );
+    return wait_result == pid || ( wait_result == -1 && errno == ECHILD );
+}
+#endif
+
+}    // namespace
 
 
 /** 
@@ -451,4 +532,106 @@ bool parse_int( std::string& value )
     int out;
     std::string err_msg;
     return parse_int( value, out, err_msg );
+}
+
+/**
+ * @brief Run an external executable with a timeout and optional output-file freshness check.
+ *        The child is started in the requested working directory with the supplied arguments and is terminated if it exceeds the timeout.
+ */
+TimedProcessResult run_process_with_timeout( const std::string& executable, const std::vector<std::string>& args,
+                                             const std::string& working_dir, int timeout_seconds,
+                                             const std::filesystem::path& expected_output_file )
+{
+    TimedProcessResult result;
+
+#if defined( _WIN32 ) || defined( _WIN64 )
+    (void)executable;
+    (void)args;
+    (void)working_dir;
+    (void)timeout_seconds;
+    (void)expected_output_file;
+    return result;
+#else
+    if ( executable.empty() || timeout_seconds <= 0 ) {
+        return result;
+    }
+
+    auto previous_output_mtime = get_file_mtime( expected_output_file );
+
+    pid_t pid = fork();
+    if ( pid == -1 ) {
+        return result;
+    }
+
+    if ( pid == 0 ) {
+        if ( !working_dir.empty() && chdir( working_dir.c_str() ) != 0 ) {
+            _exit( 126 );
+        }
+
+        std::vector<char*> argv;
+        argv.reserve( args.size() + 2 );
+        argv.push_back( const_cast<char*>( executable.c_str() ) );
+        for ( const auto& arg : args ) {
+            argv.push_back( const_cast<char*>( arg.c_str() ) );
+        }
+        argv.push_back( nullptr );
+
+        execv( executable.c_str(), argv.data() );
+        _exit( 127 );
+    }
+
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds( timeout_seconds );
+    int status = 0;
+
+    while ( true ) {
+        pid_t wait_result = waitpid( pid, &status, WNOHANG );
+        if ( wait_result == pid ) {
+            if ( WIFEXITED( status ) ) {
+                result.exit_code = WEXITSTATUS( status );
+                result.status = ( result.exit_code == 0 ) ? TimedProcessStatus::success : TimedProcessStatus::child_failed;
+            } else {
+                result.status = TimedProcessStatus::child_failed;
+            }
+            break;
+        }
+
+        if ( wait_result == -1 ) {
+            result.status = TimedProcessStatus::wait_failed;
+            return result;
+        }
+
+        if ( std::chrono::steady_clock::now() >= deadline ) {
+            terminate_child_process( pid );
+            result.status = TimedProcessStatus::timed_out;
+            return result;
+        }
+
+        std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
+    }
+
+    result.output_updated = expected_output_file.empty() ? true : file_was_updated( expected_output_file, previous_output_mtime );
+    return result;
+#endif
+}
+
+/**
+ * @brief Return a short string describing a TimedProcessStatus value.
+ *        This is intended for logging and test diagnostics rather than user-facing messages.
+ */
+const char* timed_process_status_to_string( TimedProcessStatus status )
+{
+    switch ( status ) {
+    case TimedProcessStatus::success:
+        return "success";
+    case TimedProcessStatus::spawn_failed:
+        return "spawn_failed";
+    case TimedProcessStatus::wait_failed:
+        return "wait_failed";
+    case TimedProcessStatus::timed_out:
+        return "timed_out";
+    case TimedProcessStatus::child_failed:
+        return "child_failed";
+    }
+
+    return "unknown";
 }

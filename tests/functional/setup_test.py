@@ -11,6 +11,7 @@ if __name__ == "__main__":
     import os, secrets, zipfile, shutil, platform
     import sys, json
     from pathlib import Path
+    from typing import Optional
 
     def detect_platform() -> str:
         env_platform = os.environ.get("CPDN_PLATFORM")
@@ -31,7 +32,7 @@ if __name__ == "__main__":
     def write_file(path: Path, content: str):
         path.write_text(content)
 
-    def zip_single_file(src: Path, dst: Path | None = None, arcname: str | None = None):
+    def zip_single_file(src: Path, dst: Optional[Path] = None, arcname: Optional[str] = None):
         """Zip one file into dst (defaults to src+'.zip')."""
         dst = dst or src.with_name(src.name + ".zip")
         with zipfile.ZipFile(dst, "w") as zf:

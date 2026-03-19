@@ -164,6 +164,7 @@ target_include_directories(cpdn_control PUBLIC ${LOCAL_INCLUDE_DIRS})
 target_link_libraries(cpdn_control PUBLIC
                     ${BOINC_API} ${BOINC_LIB}
                     ${CPDNZIP_LIB}
+                    Threads::Threads
                     fmt::fmt
 )
 

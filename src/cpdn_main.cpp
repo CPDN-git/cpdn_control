@@ -78,7 +78,7 @@ static std::unique_ptr<ModelControl> create_model_control( std::string_view mode
     if ( model_name == "test_model" ) {
         model = std::make_unique<OpenIFSControl>( "CPDN", model_name, model_version, "test_model", "fort.4" );
 
-    } else if ( model_name == "oifs_43r3_omp_l159" || model_name == "oifs_43r3_omp_l319" || model_name == "oifs_43r3_parest_omp_l319 " ) {
+    } else if ( model_name == "oifs_43r3_omp_l159" || model_name == "oifs_43r3_omp_l319" || model_name == "oifs_43r3_parest_omp_l319" ) {
         model = std::make_unique<OpenIFSControl>( "ECMWF", model_name, model_version, "oifs_43r3_omp_model.exe", "fort.4" );
     }
 
@@ -351,7 +351,9 @@ int main( int argc, char** argv )
     }
     std::cerr << "Working slot directory is: " << bconfig.slot_path << '\n';
     std::cerr << "Project directory is: " << bconfig.project_dir << '\n';
-    std::cerr << "Running in standalone mode" << '\n';
+    if ( bconfig.standalone ) {
+        std::cerr << "Running in standalone mode" << '\n';
+    }
 
     // Say who we are.
     banner( bconfig.app_name, bconfig.app_version, CODE_VERSION );
@@ -364,7 +366,7 @@ int main( int argc, char** argv )
 
     // Check for existence of model_config.xml in current directory (task) and fail if not found.
     if ( !path_exists( MODEL_CONFIG_FILE ) ) {
-        std::cerr << ".. DEV NOTE: The model config.xml file does not exist in the current directory: " << MODEL_CONFIG_FILE << std::endl;
+        std::cerr << ".. DEV NOTE: The model config does not yet exist in the current directory: " << MODEL_CONFIG_FILE << std::endl;
         //GC. Testing only; return task_finish(1);        // should terminate, the model won't run.
     }
 

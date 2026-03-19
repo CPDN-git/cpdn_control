@@ -110,9 +110,13 @@ configure_cpdnzip()
 # Other packages required
 find_package(Threads REQUIRED)
 
-# --- CONFIGURATION FOR FMT LIBRARY (headers only, vendored)
-include(cmake/fmtConfig.cmake)
-configure_fmt()
+# --- CONFIGURATION FOR FMT LIBRARY (vendored source)
+# Vendored fmt includes a small local CMake compatibility patch so it still
+# configures on hosts limited to CMake 3.16.
+set(FMT_DOC OFF CACHE BOOL "Disable fmt documentation targets." FORCE)
+set(FMT_TEST OFF CACHE BOOL "Disable fmt test targets." FORCE)
+set(FMT_INSTALL OFF CACHE BOOL "Disable fmt install targets." FORCE)
+add_subdirectory(tools/fmt)
 
 #--------------------------- Include paths -----------------------------------
 
@@ -160,6 +164,7 @@ target_include_directories(cpdn_control PUBLIC ${LOCAL_INCLUDE_DIRS})
 target_link_libraries(cpdn_control PUBLIC
                     ${BOINC_API} ${BOINC_LIB}
                     ${CPDNZIP_LIB}
+                    Threads::Threads
                     fmt::fmt
 )
 

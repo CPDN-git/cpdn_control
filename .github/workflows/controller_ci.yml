@@ -1,6 +1,9 @@
 name: Controller CI
 
-on: [ push, pull_request ]
+on:
+  pull_request:
+    branches:
+      - main
 
 env:
   BOINC_VERSION: client_release/8.0/8.0.2

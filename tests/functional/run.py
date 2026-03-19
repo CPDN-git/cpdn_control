@@ -33,6 +33,10 @@ def running_in_github_actions() -> bool:
     return os.environ.get("GITHUB_ACTIONS", "").lower() == "true"
 
 
+def valgrind_available() -> bool:
+    return shutil.which("valgrind") is not None
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Run functional test workunit.")
 
@@ -184,8 +188,10 @@ def main():
 
     if running_in_github_actions():
         print("[run] GitHub Actions detected; running controller without valgrind")
-    else:
+    elif valgrind_available():
         controller_cmd = ["valgrind", "--leak-check=full", *controller_cmd]
+    else:
+        print("[run] Valgrind not found; running controller without valgrind")
 
     print(f"[run] Launching controller: {' '.join(controller_cmd)}")
     try:

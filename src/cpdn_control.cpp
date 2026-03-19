@@ -21,12 +21,16 @@
 
 #include <cstdio>
 #include <cstdlib>
+
+#ifndef _WIN32
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/resource.h>
 #include <sys/stat.h>    // for mkdir
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 #include "boinc/boinc_api.h"
 #include "boinc/diagnostics.h"

@@ -4,7 +4,6 @@ on:
   pull_request:
     branches:
       - main
-      - develop
 
 env:
   BOINC_VERSION: client_release/8.0/8.0.2

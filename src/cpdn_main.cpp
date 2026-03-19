@@ -53,7 +53,7 @@ constexpr std::string_view MODEL_CONFIG_FILE = "model_config.xml";
 constexpr int LOOP_DELAY_DEFAULT = 7;
 constexpr int LOOP_DELAY_FAST = 1;
 constexpr int DIAGNOSTICS_TIMEOUT_SECONDS = 30;
-constexpr std::string_view DIAGNOSTICS_INPUT_PREFIX = "ICMSH";
+constexpr std::string_view DIAGNOSTICS_INPUT_PREFIX = "ICMSH";    // experimental
 constexpr std::string_view TRICKLE_DATA_FILE = "trickle_data";
 
 
@@ -62,7 +62,8 @@ constexpr std::string_view TRICKLE_DATA_FILE = "trickle_data";
 
 /**
  * @brief Factory function to create ModelControl instance based on model name.
- *        Note that we specify the *model* name here and not the app name though they may be the same.
+ *        Note that we specify the *model* name here and not the app name though 
+ *        they may be the same as the app_name is typically passed to the controller.
  * 
  * @param modelName The name of the model.
  * @return A unique pointer to the created ModelControl instance. Maybe nullptr if model not supported.
@@ -76,7 +77,8 @@ static std::unique_ptr<ModelControl> create_model_control( std::string_view mode
 
     if ( model_name == "test_model" ) {
         model = std::make_unique<OpenIFSControl>( "CPDN", model_name, model_version, "test_model", "fort.4" );
-    } else if ( model_name == "oifs_43r3" ) {
+
+    } else if ( model_name == "oifs_43r3_omp_l159" || model_name == "oifs_43r3_omp_l319" || model_name == "oifs_43r3_parest_omp_l319 " ) {
         model = std::make_unique<OpenIFSControl>( "ECMWF", model_name, model_version, "oifs_43r3_omp_model.exe", "fort.4" );
     }
 
@@ -362,7 +364,7 @@ int main( int argc, char** argv )
 
     // Check for existence of model_config.xml in current directory (task) and fail if not found.
     if ( !path_exists( MODEL_CONFIG_FILE ) ) {
-        std::cerr << "..The model config.xml file does not exist in the current directory: " << MODEL_CONFIG_FILE << std::endl;
+        std::cerr << ".. DEV NOTE: The model config.xml file does not exist in the current directory: " << MODEL_CONFIG_FILE << std::endl;
         //GC. Testing only; return task_finish(1);        // should terminate, the model won't run.
     }
 

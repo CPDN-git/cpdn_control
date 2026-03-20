@@ -145,7 +145,10 @@ if __name__ == "__main__":
     # NFRRES = Frequency of restart file output in model time steps
     # NFRPOS = Frequency of post-processed output in model time steps
 
-    fort_file_string = "!WU_TEMPLATE_VERSION=43r3-seasonal-20250801\n"+\
+    fort_file_string = "&NAMFPC\n"+\
+                         " CFPFMT=\"MODEL\",\n" +\
+                         "/\n\n" +\
+                         "!WU_TEMPLATE_VERSION=43r3-seasonal-20250801\n"+\
                          f"!EXPTID={experiment_id}\n"+\
                          f"!UNIQUE_MEMBER_ID={member_id}\n"+\
                          "!IC_ANCIL_FILE=ic_ancil_0\n" +\
@@ -155,7 +158,7 @@ if __name__ == "__main__":
                          "!VERT_RESOLUTION=91\n" +\
                          "!GRID_TYPE=l_2\n" +\
                          f"!UPLOAD_INTERVAL={upload_interval}\n" +\
-                         "\n\n"+\
+                         "\n"+\
                          "&NAMARG\n"+\
                          f" UTSTEP={timestep:.1f},\n" +\
                          f" CUSTOP={forecast_length},\n" +\

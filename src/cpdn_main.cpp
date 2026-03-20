@@ -534,21 +534,17 @@ int main( int argc, char** argv )
     // header variables and normal model namelist variables. It's a bit clumsy but works for now.
     // It's not my code and I'm tidying the data flow to be more consistent.
 
-    // The header_keys are the CPDN injected task related parameters always at the
-    // top of the namelist file. It's not a tidy solution as they are prefixed with
+    // The header_keys are the CPDN injected task related parameters carried in
+    // comment-style lines within the namelist file. It's not a tidy solution as they are prefixed with
     // '!' making them normal format comments. This causes issues parsing them as if we
     // allow commented key/value pairs to be parsed, the code picks up other commented
     // out namelist variables which has caused errors. Ideally it would have been
     // better to prefix with something unique such as !TASK but as this involves
     // changing the oifs_workgen repo and I plan to tidy this whole area up by
     // reducing the usage of header parameters like this, for now we will simply
-    // look for these specific keys only in the header block and eliminate them
-    // as they become redundant.
-    // The rather hacky code below assumes reading header variables until it hits the
-    // first true namelist.
+    // look for these specific keys anywhere in the file and eliminate them as they
+    // become redundant.
     //    Glenn   Jan 2026.
-
-    bool in_header = true;    // goes false when we reach the first namelist '&' line.
 
     // These are the keys injected by CPDN into the namelist header. Other variables
     // searched for come from the namelist itself.
@@ -568,18 +564,12 @@ int main( int argc, char** argv )
         bool have_kv = false;
         std::string header_line = namelist_line;
 
-        if ( in_header ) {
-            if ( header_line.front() == '&' ) {
-                in_header = false;
-                continue;
-            }
-            if ( header_line.front() == '!' ) {    // possible header key/value pair
-                header_line.erase( 0, 1 );
+        if ( header_line.front() == '!' ) {    // possible CPDN task metadata key/value pair
+            header_line.erase( 0, 1 );
 
-                if ( parse_key_value( header_line, parsed_key, parsed_value ) &&
-                     header_keys.find( parsed_key ) != header_keys.end() ) {    // ignore any keys not in the header list above
-                    have_kv = true;
-                }
+            if ( parse_key_value( header_line, parsed_key, parsed_value ) &&
+                 header_keys.find( parsed_key ) != header_keys.end() ) {    // ignore any keys not in the allow-list above
+                have_kv = true;
             }
         } else {    // normal namelist parsing
             if ( !parse_namelist_key_value( namelist_line, parsed_key, parsed_value ) ) {
@@ -637,20 +627,30 @@ int main( int argc, char** argv )
     }
     namelist_filestream.close();
 
-    // Check for any empty variables in case parsing failed.
-    // These might cause the task to fail later, or they might be deliberate for testing.
+    // These metadata values are required to locate the model input files.
+    // Abort here rather than continuing into broken path construction later on.
+    std::vector<std::string> missing_namelist_fields;
     if ( ifsdata_file.empty() )
-        std::cerr << ".. Warning. Unable to parse ifs_data_file from namelist.\n";
+        missing_namelist_fields.push_back( "IFSDATA_FILE" );
     if ( ic_ancil_file.empty() )
-        std::cerr << ".. Warning. Unable to parse ic_ancil_file from namelist.\n";
+        missing_namelist_fields.push_back( "IC_ANCIL_FILE" );
     if ( climate_data_file.empty() )
-        std::cerr << ".. Warning. Unable to parse climate_data_file from namelist.\n";
+        missing_namelist_fields.push_back( "CLIMATE_DATA_FILE" );
     if ( horiz_resolution.empty() )
-        std::cerr << ".. Warning. Unable to parse horiz_resolution from namelist.\n";
+        missing_namelist_fields.push_back( "HORIZ_RESOLUTION" );
     if ( vert_resolution.empty() )
-        std::cerr << ".. Warning. Unable to parse vert_resolution from namelist.\n";
+        missing_namelist_fields.push_back( "VERT_RESOLUTION" );
     if ( grid_type.empty() )
-        std::cerr << ".. Warning. Unable to parse grid_type from namelist.\n";
+        missing_namelist_fields.push_back( "GRID_TYPE" );
+
+    if ( !missing_namelist_fields.empty() ) {
+        std::cerr << "..Error. Required fort.4 metadata missing:";
+        for ( const auto& field : missing_namelist_fields ) {
+            std::cerr << ' ' << field;
+        }
+        std::cerr << '\n';
+        return task_finish( 1 );
+    }
 
     std::cerr << "Values read from model namelist are: \n"
               << " ifsdata_file: " << ifsdata_file << '\n'

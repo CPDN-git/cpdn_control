@@ -201,25 +201,32 @@ Not ported.
 In order for OpenIFS to run, its ancillary inpur files need to be installed correctly from the
 download directory on the client. This is the responsibility of the controller process.
 
-The command to run the control in standalone mode with OpenIFS on Linux is:
-```
-    ./oifs_43r3_1.00_x86_64-pc-linux-gnu 2000010100 gw3a 0001 1 00001 1
+The command line interface is still being refined as the controller code is migrated away
+from the older positional-argument approach. The current implementation expects named
+long-form options for the CPDN task metadata it uses during startup.
+
+An example controller invocation is:
+```bash
+./cpdn_control_1.0.0_x86_64-pc-linux-gnu \
+    --startdate=2000010100 \
+    --memberid=0001 \
+    --batch=1 \
+    --workunit=00001 \
+    --fcast_len=1
 ```
 
 ### Command line parameters
 
-The command line parameters are:
-```
-0 : controller compiled executable, 
-1 : model start date in YYYYMMDDHH format, 
-2 : model experiment id, 
-3 : model unique member id, 
-4 : CPDN batch id, 
-5 : CPDN workunit id, 
-6 : model forecast length (days: FCLEN), 
-7 : CPDN app name, 
-```
-Other information about the workunit comes from the BOINC supplied init_data.xml file.
+The currently required controller arguments are:
+
+- `--startdate`: model start date in `YYYYMMDDHH` format
+- `--memberid`: CPDN unique member id
+- `--batch`: CPDN batch id
+- `--workunit`: CPDN workunit id
+- `--fcast_len`: model forecast length in days
+
+Other information about the workunit, including the application name and version, comes
+from the BOINC-supplied `init_data.xml` data read during controller startup.
 
 ## Testing
 

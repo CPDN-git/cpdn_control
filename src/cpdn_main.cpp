@@ -274,7 +274,7 @@ static int add_upload_files( const fs::path& dir, std::vector<fs::path>& out, co
  * @param tconfig TaskConfig structure to populate.
  * @return 0 on success, non-zero on failure.
  */
-static void process_args( const ParseResult& parse_result, TaskConfig& tconfig )
+static bool process_args( const ParseResult& parse_result, TaskConfig& tconfig, std::string& err_msg )
 {
     // Read the exptid, umid, batchid, wuid, fclen from the parsed command line
     tconfig.startdate = parse_result.startdate;    // simulation start date : needed for filename before model starts.
@@ -292,6 +292,43 @@ static void process_args( const ParseResult& parse_result, TaskConfig& tconfig )
               << "  batch: " << tconfig.batch << '\n'
               << "  workunit: " << tconfig.workunit << '\n'
               << "  fcast_len: " << tconfig.fclen << '\n';
+
+    std::vector<std::string> missing_args;
+    if ( tconfig.startdate.empty() ) {
+        missing_args.push_back( "--startdate" );
+    }
+    if ( tconfig.memberid.empty() ) {
+        missing_args.push_back( "--memberid" );
+    }
+    if ( tconfig.batch.empty() ) {
+        missing_args.push_back( "--batch" );
+    }
+    if ( tconfig.workunit.empty() ) {
+        missing_args.push_back( "--workunit" );
+    }
+    if ( tconfig.fclen.empty() ) {
+        missing_args.push_back( "--fcast_len" );
+    }
+
+    if ( !missing_args.empty() ) {
+        std::ostringstream oss;
+        oss << "Missing required controller argument";
+        if ( missing_args.size() > 1 ) {
+            oss << "s";
+        }
+        oss << ": ";
+        for ( auto it = missing_args.begin(); it != missing_args.end(); ++it ) {
+            if ( it != missing_args.begin() ) {
+                oss << ", ";
+            }
+            oss << *it;
+        }
+        err_msg = oss.str();
+        return false;
+    }
+
+    err_msg.clear();
+    return true;
 }
 
 
@@ -388,7 +425,10 @@ int main( int argc, char** argv )
     }
 
     // Process parsed arguments into the data structures used by the rest of the code.
-    process_args( parse_result, tconfig );
+    if ( !process_args( parse_result, tconfig, err_msg ) ) {
+        std::cerr << ".." << err_msg << '\n';
+        return task_finish( 1 );
+    }
 
     // Check for optional '--nthreads <value>' at end of arg list optionally set by app_config.xml on user's machine.
     // TODO: look at removing string copy of nthreads and use int bconfig.ncpus throughout code. DRY.

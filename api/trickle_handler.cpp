@@ -142,12 +142,12 @@ int TrickleHandler::process_trickle( double current_cpu_time, int timestep )
  */
 int TrickleHandler::get_trickle_frequency( int timestep, int total_timesteps )
 {
-    //GC. Oct/25. Trickles are now fixed at every 10% of the model run with a final trickle at the end of the run.
+    //GC. Oct/25. Trickles are now at a fixed frequnency and not changeable by the user.
 
     int freq_min = ( 24 * 3600 ) / timestep;    // minimum of a trickle every 24 model hrs.
-    int fraction = 10;
+    int trickle_percent = 6;                    // trickle every 6% of the model run, i.e. 17 trickles in total.
 
-    int trickle_freq = int( total_timesteps ) / fraction;
+    int trickle_freq = total_timesteps / trickle_percent;
     if ( trickle_freq < freq_min ) {
         trickle_freq = freq_min;
     }

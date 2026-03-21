@@ -20,6 +20,10 @@
 #include <unordered_set>
 #include <vector>
 
+#if !defined( _WIN32 ) && !defined( _WIN64 )
+#include <unistd.h>
+#endif
+
 #include "boinc/boinc_api.h"
 
 #include "cpdn_control.h"
@@ -372,6 +376,14 @@ int main( int argc, char** argv )
     TaskConfig tconfig;     // CPDN task settings from command line.
     int retval = 0;
     std::string err_msg;
+
+#if !defined( _WIN32 ) && !defined( _WIN64 )
+    // BOINC launches the app with stdout redirected away from the slot log.
+    // Merge stdout into stderr so any controller or diagnostics child stdout is captured in stderr.txt.
+    if ( dup2( STDERR_FILENO, STDOUT_FILENO ) == -1 ) {
+        std::cerr << "Warning: failed to redirect stdout to stderr\n";
+    }
+#endif
 
     // ------------- BOINC Initialisation -----------------
 

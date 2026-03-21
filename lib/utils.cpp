@@ -537,6 +537,7 @@ bool parse_int( std::string& value )
 /**
  * @brief Run an external executable with a timeout and optional output-file freshness check.
  *        The child is started in the requested working directory with the supplied arguments and is terminated if it exceeds the timeout.
+ *        Child stdout/stderr are inherited from the parent process; this helper does not add any extra redirection or capture.
  */
 TimedProcessResult run_process_with_timeout( const std::string& executable, const std::vector<std::string>& args,
                                              const std::string& working_dir, int timeout_seconds,

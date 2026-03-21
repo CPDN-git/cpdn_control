@@ -91,8 +91,8 @@ bool OpenIFSControl::get_current_step( std::string& current_step, const int tota
  */
 std::vector<std::string> OpenIFSControl::get_output_filenames( std::string_view step, std::string_view exptid ) const
 {
+    // TODO: exptid should come from the model instance, not via the args
     std::string suffix = oifs_get_filename_part( std::string( step ), std::string( exptid ) );
-    std::cerr << "get_output_filename: exptid should come from the model instance, not via the args\n";
     return { "ICMGG" + suffix, "ICMSH" + suffix, "ICMUA" + suffix };
 }
 

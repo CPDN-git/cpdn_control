@@ -58,7 +58,6 @@ constexpr int LOOP_DELAY_DEFAULT = 7;
 constexpr int LOOP_DELAY_FAST = 1;
 constexpr int DIAGNOSTICS_TIMEOUT_SECONDS = 30;
 constexpr std::string_view DIAGNOSTICS_INPUT_PREFIX = "ICMSH";    // experimental
-constexpr std::string_view TRICKLE_DATA_FILE = "trickle_data";
 
 
 // ------------------------------------------
@@ -135,7 +134,7 @@ static bool run_step_diagnostics( const fs::path& diag_exe, const fs::path& slot
     // -n   : do not truncate output field.
     // -p ./rtables/ : path for resolution tables.
 
-    fs::path trickle_data_path = slot_path / TRICKLE_DATA_FILE;
+    fs::path trickle_data_path = slot_path / TrickleHandler::TRICKLE_DATA_FILE;
     std::vector<std::string> diag_args = { "-s", diagnostics_input, "-G", diagnostics_input + ".diag", "-t", "f", "-l", "-f", "131", "-n",
                                            "-p", "./rtables/" };
     std::error_code ec;

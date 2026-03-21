@@ -16,6 +16,8 @@ class TrickleHandler {
     friend int t_trickle_handler();    // Allow unit test in 'test/unit/' to access private members
 
   public:
+    static constexpr std::string_view TRICKLE_DATA_FILE = "trickle_data";
+
     TrickleHandler( const std::string& wu_name, const std::string& result_base_name, const std::string& slot_path );
 
     ~TrickleHandler() = default;
@@ -39,7 +41,7 @@ class TrickleHandler {
     int process_trickle( double current_cpu_time, int timestep );
 
   private:
-    // Read and sanitize trickle data from 'trickle_data' file in current working directory.
+    // Read and sanitize trickle data from the trickle data file in current working directory.
     std::string read_trickle_data_file() const;
     const size_t MAX_DATA_LEN = 511;
 

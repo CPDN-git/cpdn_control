@@ -38,7 +38,7 @@ TrickleHandler::TrickleHandler( const std::string& wu, const std::string& result
  */
 std::string TrickleHandler::read_trickle_data_file() const
 {
-    std::ifstream trickle_file( "trickle_data", std::ios::binary );
+    std::ifstream trickle_file( std::string( TRICKLE_DATA_FILE ), std::ios::binary );
 
     // File doesn't exist - silently return empty string
     if ( !trickle_file.is_open() ) {

@@ -114,8 +114,8 @@ int t_trickle_handler()
         TrickleHandler handler( "test_wu", "test_result", "test_slot" );
         std::string result = handler.read_trickle_data_file();
 
-        // Expected: dots will be sanitized away, leaving digits, commas, and minus signs
-        std::string expected = "15,-23,314159,-05,420";
+        // Expected: decimal points, commas, and minus signs are preserved
+        std::string expected = "1.5,-2.3,3.14159,-0.5,42.0";
         if ( result == expected ) {
             test_passed++;
         } else {
@@ -141,8 +141,8 @@ int t_trickle_handler()
         TrickleHandler handler( "test_wu", "test_result", "test_slot" );
         std::string result = handler.read_trickle_data_file();
 
-        // Trailing comma should be removed, then sanitized (dots stripped)
-        std::string expected = "12,34,56";
+        // Trailing comma should be removed while preserving decimal points
+        std::string expected = "1.2,3.4,5.6";
         if ( result == expected ) {
             test_passed++;
         } else {
@@ -168,8 +168,8 @@ int t_trickle_handler()
         TrickleHandler handler( "test_wu", "test_result", "test_slot" );
         std::string result = handler.read_trickle_data_file();
 
-        // Minus signs should be preserved, dots stripped, commas preserved
-        std::string expected = "-123456,789012,-01,999999";
+        // Minus signs, decimal points, and commas should be preserved
+        std::string expected = "-123.456,789.012,-0.1,999.999";
         if ( result == expected ) {
             test_passed++;
         } else {
@@ -195,9 +195,9 @@ int t_trickle_handler()
         TrickleHandler handler( "test_wu", "test_result", "test_slot" );
         std::string result = handler.read_trickle_data_file();
 
-        // Invalid chars (! @ # ;) should be stripped, dots stripped, commas preserved
-        // Note: 5.6;6.7 becomes 5667 (dot and semicolon removed, no comma to separate them)
-        std::string expected = "12,34,5667";
+        // Invalid chars (! @ # ;) should be stripped while preserving decimal points and commas
+        // Note: 5.6;6.7 becomes 5.66.7 because the semicolon is removed and there is no comma separator
+        std::string expected = "1.2,3.4,5.66.7";
         if ( result == expected ) {
             test_passed++;
         } else {

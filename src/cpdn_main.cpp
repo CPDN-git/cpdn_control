@@ -282,8 +282,7 @@ static bool process_args( const ParseResult& parse_result, TaskConfig& tconfig, 
 {
     // Read the exptid, umid, batchid, wuid, fclen from the parsed command line
     tconfig.startdate = parse_result.startdate;    // simulation start date : needed for filename before model starts.
-    tconfig.exptid = "NSET";                       // Model experiment id : TODO. this should come from the model instance via the namelist.
-    std::cerr << "Experiment ID (exptid) is set to: " << tconfig.exptid << " (TODO. this should come from the model instance via the namelist.)\n";
+    tconfig.exptid.clear();                      // Model experiment id is read later from CNMEXP in fort.4.
     tconfig.memberid = parse_result.memberid;    // CPDN's unique member id (umid)
     tconfig.batch = parse_result.batch;          // batch id
     tconfig.workunit = parse_result.workunit;    // workunit id
@@ -291,7 +290,6 @@ static bool process_args( const ParseResult& parse_result, TaskConfig& tconfig, 
 
     std::cerr << "Parsed arguments:\n"
               << "  startdate: " << tconfig.startdate << '\n'
-              << "  exptid: " << tconfig.exptid << '\n'
               << "  memberid: " << tconfig.memberid << '\n'
               << "  batch: " << tconfig.batch << '\n'
               << "  workunit: " << tconfig.workunit << '\n'
@@ -635,6 +633,12 @@ int main( int argc, char** argv )
                 std::cerr << "..Failed to parse restart interval from namelist: " << err_msg << '\n';
                 return task_finish( 1 );
             }
+        } else if ( parsed_key == "CNMEXP" ) {
+            tconfig.exptid = parsed_value;
+            if ( tconfig.exptid.length() != 4 ) {
+                std::cerr << "..Invalid CNMEXP value in fort.4. Expected a 4-character experiment ID, got: '" << tconfig.exptid << "'\n";
+                return task_finish( 1 );
+            }
         }
     }
     namelist_filestream.close();
@@ -654,6 +658,8 @@ int main( int argc, char** argv )
         missing_namelist_fields.push_back( "VERT_RESOLUTION" );
     if ( grid_type.empty() )
         missing_namelist_fields.push_back( "GRID_TYPE" );
+    if ( tconfig.exptid.empty() )
+        missing_namelist_fields.push_back( "CNMEXP" );
 
     if ( !missing_namelist_fields.empty() ) {
         std::cerr << "..Error. Required fort.4 metadata missing:";
@@ -671,6 +677,7 @@ int main( int argc, char** argv )
               << " horiz_resolution: " << horiz_resolution << '\n'
               << " vert_resolution: " << vert_resolution << '\n'
               << " grid_type: " << grid_type << '\n'
+              << " exptid (CNMEXP): " << tconfig.exptid << '\n'
               << " Upload_interval: " << upload_interval << '\n'
               << " UTSTEP (timestep interval): " << timestep << '\n'
               << " NFRPOS (frequency of model output): " << ICM_file_interval << '\n'

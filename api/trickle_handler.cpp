@@ -60,12 +60,13 @@ std::string TrickleHandler::read_trickle_data_file() const
         raw_data.pop_back();
     }
 
-    // Sanitize: keep only digits, commas, and minus signs
+    // Sanitize: keep only digits, commas, decimal points and minus signs
+    // white space is removed to avoid excess length.
     std::string sanitized;
     bool had_invalid = false;
 
     for ( char c : raw_data ) {
-        if ( isdigit( c ) || c == ',' || c == '-' ) {
+        if ( isdigit( c ) || c == ',' || c == '-' || c == '.' ) {
             sanitized += c;
         } else {
             had_invalid = true;
@@ -74,7 +75,7 @@ std::string TrickleHandler::read_trickle_data_file() const
 
     // Warn if invalid characters were found and removed
     if ( had_invalid ) {
-        std::cerr << "Warning: trickle_data file contained invalid characters; stripped non-numeric/comma content\n";
+        std::cerr << "Warning: trickle_data file contained invalid characters; stripped whitespace and any invalid chars\n";
     }
 
     // Check size limit (511 chars + 1 null terminator = 512 max)

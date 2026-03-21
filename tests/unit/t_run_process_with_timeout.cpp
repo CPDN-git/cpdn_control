@@ -81,9 +81,34 @@ int t_run_process_with_timeout()
         std::cerr << "  Expected timed_out status, got status=" << timed_process_status_to_string( timeout_result.status ) << "\n";
     }
 
+    // Child environment variables should be applied in the forked child before exec.
+    set_test_env( "CPDN_TIMED_PROCESS_SLEEP_MS", "0" );
+    clear_test_env( "CPDN_TIMED_PROCESS_WRITE_FILE" );
+    set_test_env( "CPDN_TIMED_PROCESS_EXIT_CODE", "0" );
+    set_test_env( "CPDN_TIMED_PROCESS_CHECK_VAR_NAME", "CPDN_TEST_CHILD_ENV" );
+    set_test_env( "CPDN_TIMED_PROCESS_CHECK_VAR_VALUE", "expected_value" );
+    clear_test_env( "CPDN_TEST_CHILD_ENV" );
+
+    test_count++;
+    TimedProcessResult child_env_result = run_process_with_timeout( TIMED_PROCESS_HELPER,
+                                                                    {},
+                                                                    tmp_dir.string(),
+                                                                    2,
+                                                                    output_path,
+                                                                    { { "CPDN_TEST_CHILD_ENV", "expected_value" } } );
+    if ( child_env_result.status == TimedProcessStatus::success && child_env_result.exit_code == 0 ) {
+        test_passed++;
+    } else {
+        std::cerr << "  Expected successful child environment setup, got status="
+                  << timed_process_status_to_string( child_env_result.status ) << ", exit_code=" << child_env_result.exit_code << "\n";
+    }
+
     clear_test_env( "CPDN_TIMED_PROCESS_SLEEP_MS" );
     clear_test_env( "CPDN_TIMED_PROCESS_WRITE_FILE" );
     clear_test_env( "CPDN_TIMED_PROCESS_EXIT_CODE" );
+    clear_test_env( "CPDN_TIMED_PROCESS_CHECK_VAR_NAME" );
+    clear_test_env( "CPDN_TIMED_PROCESS_CHECK_VAR_VALUE" );
+    clear_test_env( "CPDN_TEST_CHILD_ENV" );
 
     fs::remove_all( tmp_dir, ec );
 

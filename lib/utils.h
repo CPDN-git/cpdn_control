@@ -4,6 +4,7 @@
 #pragma once
 
 #include <filesystem>
+#include <utility>
 #include <string>
 #include <vector>
 
@@ -47,14 +48,16 @@ bool parse_int( std::string& value );
 
 /**
  * @brief Run an executable in a given working directory and wait up to a timeout.
- *        Accepts optional argv-style arguments and can check whether an expected output file was created or updated.
+ *        Accepts optional argv-style arguments, can set child environment variables before exec,
+ *        and can check whether an expected output file was created or updated.
  */
 TimedProcessResult run_process_with_timeout(
     const std::string& executable,
     const std::vector<std::string>& args,
     const std::string& working_dir,
     int timeout_seconds,
-    const std::filesystem::path& expected_output_file = {} );
+    const std::filesystem::path& expected_output_file = {},
+    const std::vector<std::pair<std::string, std::string>>& child_env_vars = {} );
 
 /**
  * @brief Convert a TimedProcessStatus value to a short log-friendly string.

@@ -135,6 +135,7 @@ static bool run_step_diagnostics( const fs::path& diag_exe, const fs::path& slot
     // -p ./rtables/ : path for resolution tables.
 
     fs::path trickle_data_path = slot_path / TrickleHandler::TRICKLE_DATA_FILE;
+    auto diag_env_vars = oifs_get_grib_env_vars( slot_path.string() );
     std::vector<std::string> diag_args = { "-s", diagnostics_input, "-G", diagnostics_input + ".diag", "-t", "f", "-l", "-f", "131", "-n",
                                            "-p", "./rtables/" };
     std::error_code ec;
@@ -146,7 +147,7 @@ static bool run_step_diagnostics( const fs::path& diag_exe, const fs::path& slot
 
     std::cerr << "Running external diagnostics program: " << diag_exe << " with input file: " << diagnostics_input << '\n';
     TimedProcessResult diag_result =
-        run_process_with_timeout( diag_exe.string(), diag_args, slot_path.string(), DIAGNOSTICS_TIMEOUT_SECONDS, trickle_data_path );
+        run_process_with_timeout( diag_exe.string(), diag_args, slot_path.string(), DIAGNOSTICS_TIMEOUT_SECONDS, trickle_data_path, diag_env_vars );
 
     if ( diag_result.status != TimedProcessStatus::success ) {
         std::cerr << "Warning: diagnostics program failed with status " << timed_process_status_to_string( diag_result.status );

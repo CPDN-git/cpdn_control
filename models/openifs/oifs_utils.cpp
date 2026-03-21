@@ -18,6 +18,18 @@
 
 
 /**
+ * @brief Return the OpenIFS GRIB environment variables derived from the slot directory.
+ */
+std::vector<std::pair<std::string, std::string>> oifs_get_grib_env_vars( const std::string& slot_path )
+{
+    std::vector<std::pair<std::string, std::string>> env_vars;
+    env_vars.emplace_back( "GRIB_SAMPLES_PATH", slot_path + "/eccodes/ifs_samples/grib1_mlgrib2" );
+    env_vars.emplace_back( "GRIB_DEFINITION_PATH", slot_path + "/eccodes/definitions" );
+    return env_vars;
+}
+
+
+/**
  * @brief Set the required OpenIFS environment variables.
  *        OMP_NUM_THREADS uses the incoming nthreads value; other values are fixed.
  */
@@ -48,11 +60,8 @@ bool oifs_setenvs( const std::string& slot_path, const std::string& nthreads )
     env_vars.emplace_back( "EC_PROFILE_MEM", "0" );         // disable memory stats; does not work with CPDN version.
     env_vars.emplace_back( "OMP_STACKSIZE", "128M" );       // OpenIFS needs more stack per thread
 
-    // Paths depend on the slot directory.
-    std::string grib_samples = slot_path + "/eccodes/ifs_samples/grib1_mlgrib2";
-    std::string grib_defs = slot_path + "/eccodes/definitions";
-    env_vars.emplace_back( "GRIB_SAMPLES_PATH", grib_samples );
-    env_vars.emplace_back( "GRIB_DEFINITION_PATH", grib_defs );
+    auto grib_env_vars = oifs_get_grib_env_vars( slot_path );
+    env_vars.insert( env_vars.end(), grib_env_vars.begin(), grib_env_vars.end() );
 
     for ( const auto& [name, value] : env_vars ) {
         if ( !set_env_var( name, value ) ) {

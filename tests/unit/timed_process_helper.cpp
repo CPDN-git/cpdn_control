@@ -20,6 +20,18 @@ int get_env_int( const char* name, int default_value )
 
 int main()
 {
+    const char* check_var_name = std::getenv( "CPDN_TIMED_PROCESS_CHECK_VAR_NAME" );
+    if ( check_var_name != nullptr && std::string( check_var_name ).empty() == false ) {
+        const char* expected_value = std::getenv( "CPDN_TIMED_PROCESS_CHECK_VAR_VALUE" );
+        const char* actual_value = std::getenv( check_var_name );
+        if ( actual_value == nullptr ) {
+            return 9;
+        }
+        if ( expected_value != nullptr && std::string( actual_value ) != expected_value ) {
+            return 10;
+        }
+    }
+
     std::this_thread::sleep_for( std::chrono::milliseconds( get_env_int( "CPDN_TIMED_PROCESS_SLEEP_MS", 0 ) ) );
 
     const char* output_name = std::getenv( "CPDN_TIMED_PROCESS_WRITE_FILE" );

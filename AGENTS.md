@@ -119,3 +119,5 @@ Typical steps:
 - When changing controller behavior, add/adjust a unit test where practical; use functional tests for end-to-end behavior.
 - The debug controller binary enables ASan; prefer it for test runs and bug hunting.
 - When touching the experimental diagnostics path, keep the change narrowly scoped unless the task is explicitly to migrate it into the model classes.
+- AI-authored commits should prefix the commit subject with the model/version identifier, for example `GPT-5.4: ...`, so repository history clearly records the source of the change.
+- Any reference to `ACTION.md` or `ACTIONS.md` should be treated as a reference to `AGENTS.md`; those filenames are common typos.

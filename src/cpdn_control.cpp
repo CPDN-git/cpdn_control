@@ -197,7 +197,7 @@ int move_and_unzip_app_file( const std::string& app_name, const std::string& ver
     app_source /= app_file;
     fs::path app_destination = slot_path;
     app_destination /= app_file;
-    std::cerr << "Copying: " << app_source << " to: " << app_destination << "\n";
+    std::cerr << "Copying: " << app_source << "\n     to: " << app_destination << "\n";
 
     // GC. Replace boinc copy with modern C++17 filesystem copy.  Overwrite to match boinc_copy behaviour.
     try {
@@ -604,7 +604,7 @@ int copy_and_unzip( const std::string& zipfile, const std::string& destination, 
     if ( std::string source = get_tag( zipfile ); !source.empty() ) {
         // Copy the 'jf_' file to the working directory and rename
         if ( path_exists( source ) ) {
-            std::cerr << "Copying the " << type << " file from: " << source << " to: " << destination << '\n';
+            std::cerr << "Copying the " << type << " file from: " << source << "\n     to: " << destination << '\n';
             try {
                 fs::copy_file( source, destination, fs::copy_options::overwrite_existing );
             } catch ( const fs::filesystem_error& e ) {

@@ -282,11 +282,11 @@ static bool process_args( const ParseResult& parse_result, TaskConfig& tconfig, 
 {
     // Read the exptid, umid, batchid, wuid, fclen from the parsed command line
     tconfig.startdate = parse_result.startdate;    // simulation start date : needed for filename before model starts.
-    tconfig.exptid.clear();                      // Model experiment id is read later from CNMEXP in fort.4.
-    tconfig.memberid = parse_result.memberid;    // CPDN's unique member id (umid)
-    tconfig.batch = parse_result.batch;          // batch id
-    tconfig.workunit = parse_result.workunit;    // workunit id
-    tconfig.fclen = parse_result.fcast_len;      // forecast length in days. Needed before model runs for filenames.
+    tconfig.exptid.clear();                        // Model experiment id is read later from CNMEXP in fort.4.
+    tconfig.memberid = parse_result.memberid;      // CPDN's unique member id (umid)
+    tconfig.batch = parse_result.batch;            // batch id
+    tconfig.workunit = parse_result.workunit;      // workunit id
+    tconfig.fclen = parse_result.fcast_len;        // forecast length in days. Needed before model runs for filenames.
 
     std::cerr << "Parsed arguments:\n"
               << "  startdate: " << tconfig.startdate << '\n'
@@ -341,7 +341,7 @@ static void banner( const std::string& model_name, const std::string& model_vers
 {
     fprintf( stderr, "\n\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n" );
     fprintf( stderr, "|  CPDN task controller starting: version %s \n", code_version.c_str() );
-    fprintf( stderr, "|  Model name: %s. Model version: %s \n", model_name.c_str(), model_version.c_str() );
+    fprintf( stderr, "|  Model name: %s. App version: %s \n", model_name.c_str(), model_version.c_str() );
     fprintf( stderr, "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n" );
 }
 

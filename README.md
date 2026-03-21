@@ -117,6 +117,15 @@ Alternatively, if you have already cloned this repository and the `tools/fmt/` d
 run the same git clone command from within that directory. The CMake build system will automatically detect
 and configure fmt for use in the build.
 
+### Prerequisite: RapidXML
+
+[ Note: RapidXML will be needed for future development. It's not currently used]
+
+If not already present, obtain the RapidXml code (as a header) for parsing XML files. 
+This is downloaded from the site: [RapidXml](http://rapidxml.sourceforge.net/).
+We only need the files: 'rapidxml.hpp' and the license.txt file. 
+Download this file into the directory `tools/RapidXML`.
+
 ## Models
 
 The `models` folder contains the model specific code for this application.
@@ -137,13 +146,6 @@ more details.
 The test model is built when the control application is built using CMake (see below).
 
 ## Build CPDN Controller
-
-### RapidXML
-
-If not already present, obtain the RapidXml code (as a header) for parsing XML files. 
-This is downloaded from the site: [RapidXml](http://rapidxml.sourceforge.net/).
-We only need the files: 'rapidxml.hpp' and the license.txt file. 
-Download this file into the directory `tools/RapidXML`.
 
 ### Linux
 

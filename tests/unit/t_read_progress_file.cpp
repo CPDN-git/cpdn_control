@@ -34,7 +34,8 @@ int t_read_progress_file()
 
     // Test setup - taken from a real batch progress file
     TaskState task;
-    task.last_cpu_time = 76828;
+    task.prior_acc_cpu_time = 76828.0;
+    task.current_cpu_time = 76828.5;
     task.upload_file_number = 3;
     task.last_step = "1055";
     task.last_upload = 1036800;
@@ -99,10 +100,10 @@ int t_read_progress_file()
         std::cout << "Failed to read progress file: " << err_msg << "\n";
         return EXIT_FAILURE;
     }
-    if ( taskin.last_step.empty() || taskin.last_cpu_time != 76828 || taskin.upload_file_number != 3 || taskin.last_upload != 1036800 ||
+    if ( taskin.last_step.empty() || taskin.prior_acc_cpu_time != 76828.5 || taskin.upload_file_number != 3 || taskin.last_upload != 1036800 ||
          taskin.model_completed != 0 ) {
         FAIL;
-        std::cout << "last_step = " << taskin.last_step << ", last_cpu_time = " << taskin.last_cpu_time
+        std::cout << "last_step = " << taskin.last_step << ", prior_acc_cpu_time = " << taskin.prior_acc_cpu_time
                   << ", upload_number = " << taskin.upload_file_number << ", last_upload = " << taskin.last_upload
                   << ", completed = " << taskin.model_completed << "\n";
         return EXIT_FAILURE;
@@ -145,7 +146,7 @@ int t_read_progress_file()
     const std::string invalid_content = "! CPDN controller progress file & fortran namelist\n"
                                         "&CPDN\n"
                                         "control_pid=123\n"
-                                        "last_cpu_time=foo\n"
+                                        "prior_acc_cpu_time=foo\n"
                                         "upload_file_number=3\n"
                                         "last_step=1055\n"
                                         "last_upload=1036800\n"
@@ -167,7 +168,7 @@ int t_read_progress_file()
     const std::string truncated_content = "! CPDN controller progress file & fortran namelist\n"
                                           "&CPDN\n"
                                           "control_pid=123\n"
-                                          "last_cpu_time=1\n"
+                                          "prior_acc_cpu_time=1.0\n"
                                           "/\n";
     if ( !write_text_file( tmp_handler.path(), truncated_content ) ) {
         FAIL;

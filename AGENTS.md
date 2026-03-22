@@ -111,6 +111,19 @@ Typical steps:
 - If you are extending or refactoring this area, prefer moving the diagnostics decision-making and argument construction into model-specific code rather than growing more OpenIFS-specific logic in `main()`.
 - The diagnostics path currently depends on `TrickleHandler` consuming `trickle_data` from the slot directory, so any redesign that stages work elsewhere must either copy `trickle_data` back or update that contract deliberately.
 
+## CPU Time And Progress File Semantics
+
+- `TaskState::prior_acc_cpu_time` is the accumulated CPU time restored from `cpdn_progressfile.txt` when a controller restarts after an interrupted run.
+- `TaskState::current_cpu_time` is the live total CPU time for the task during the current controller run. It should be treated as:
+  - `current_cpu_time = prior_acc_cpu_time + cpdn_cpu_time(child_pid)`
+- On a fresh run, both values start at zero.
+- On a restart, the progress file is read first, `prior_acc_cpu_time` is restored, and `current_cpu_time` must be seeded from it before the first progress-file write.
+- The progress file stores the accumulated total CPU time so far, not just the prior-run baseline.
+- `prior_acc_cpu_time` must remain the restored baseline for the lifetime of the current controller process; do not update it inside the main loop.
+- If this area is refactored, preserve the distinction:
+  - `prior_acc_cpu_time` = accumulated CPU time from earlier controller runs
+  - `current_cpu_time` = total accumulated CPU time including the currently running child process
+
 ## Repo conventions for AI-assisted changes
 
 - Prefer small, focused patches; avoid drive-by refactors/formatting.
@@ -121,3 +134,14 @@ Typical steps:
 - When touching the experimental diagnostics path, keep the change narrowly scoped unless the task is explicitly to migrate it into the model classes.
 - AI-authored commits should prefix the commit subject with the model/version identifier, for example `GPT-5.4: ...`, so repository history clearly records the source of the change.
 - Any reference to `ACTION.md` or `ACTIONS.md` should be treated as a reference to `AGENTS.md`; those filenames are common typos.
+
+## Functional Test Limits
+
+- The current functional test harness is suitable for checking controller startup, file movement, and basic end-to-end execution, but it is not a strong test of `current_cpu_time` behaviour.
+- `models/test/test_model.cpp` spends much of its runtime sleeping, so wall-clock runtime in the functional test is not a reliable proxy for process CPU time.
+- A lightweight functional validation may check that the progress file contains a parsable non-negative accumulated CPU time value, but that does not prove restart accumulation logic.
+- A proper end-to-end test for CPU accounting should:
+  - force an interrupted controller run,
+  - restart from the saved progress file and model restart state,
+  - and verify that the accumulated CPU time after restart is greater than the value saved before interruption.
+- Defer implementing that stronger restart-based functional test until the surrounding development work stabilizes.

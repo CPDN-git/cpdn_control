@@ -169,6 +169,18 @@ static bool run_step_diagnostics( const fs::path& diag_exe, const fs::path& slot
     return true;
 }
 
+/**
+ * @brief Refresh the accumulated CPU time for the running model process.
+ *        Leaves the previous value intact if the process CPU time cannot be read.
+ */
+static void refresh_current_cpu_time( TaskState& tstate )
+{
+    double child_cpu_time = cpdn_cpu_time( tstate.pid );
+    if ( child_cpu_time > 0.0 ) {
+        tstate.current_cpu_time = tstate.prior_acc_cpu_time + child_cpu_time;
+    }
+}
+
 
 /**
  * @brief Parse and validate the --nthreads argument from app_config.xml.
@@ -867,6 +879,8 @@ int main( int argc, char** argv )
         return task_finish( 1 );
     }
 
+    tstate.current_cpu_time = tstate.prior_acc_cpu_time;
+
     // Update progress file with current values
     if ( !progress_file.write( tstate, err_msg ) ) {
         std::cerr << "..Failed to write progress file: " << err_msg << '\n';
@@ -971,6 +985,7 @@ int main( int argc, char** argv )
         sleep_seconds( 1 );    // Time delay to reduce overhead
 
         delay_count++;
+        refresh_current_cpu_time( tstate );
 
         // Check whether an upload point has been reached
         // GC. 09/25. reduced to 7 secs as testing shows 10secs can miss a timestep.
@@ -1090,6 +1105,7 @@ int main( int argc, char** argv )
             }    // end of if it's a new timestep block.
 
             tstate.last_step = step;
+
             delay_count = 0;
 
             // Update progress file with current values
@@ -1097,11 +1113,6 @@ int main( int argc, char** argv )
                 std::cerr << "..Failed to write progress file: " << err_msg << '\n';
                 return task_finish( 1 );
             }
-        }
-
-        // Calculate current_cpu_time, only update if cpu_time returns a value
-        if ( cpdn_cpu_time( tstate.pid ) > 0 ) {
-            tstate.current_cpu_time = tstate.last_cpu_time + cpdn_cpu_time( tstate.pid );
         }
 
         // Calculate the fraction done
@@ -1218,6 +1229,7 @@ int main( int argc, char** argv )
 
             // Produce final trickle it's the same timestep as the last main loop trickle
             if ( tstate.current_step > tstate.last_trickle_step ) {
+                refresh_current_cpu_time( tstate );
                 trickler.process_trickle( tstate.current_cpu_time, tstate.current_step );
             }
         }

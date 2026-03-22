@@ -3,6 +3,8 @@
 //
 //     Glenn Carver, CPDN, 2026
 
+#include <cerrno>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>    // testing only; to include std::cerr/cout
@@ -15,6 +17,32 @@
 #include "../lib/utils.h"
 #include "../src/cpdn_control.h"    // for TaskState struct
 #include "progressfile_handler.h"
+
+namespace {
+
+bool parse_double_value( const std::string& value, double& out, std::string& err_msg )
+{
+    const char* begin = value.c_str();
+    char* end = nullptr;
+    errno = 0;
+    out = std::strtod( begin, &end );
+
+    if ( begin == end ) {
+        err_msg = "invalid floating-point value";
+        return false;
+    }
+    if ( errno == ERANGE ) {
+        err_msg = "floating-point value out of range";
+        return false;
+    }
+    if ( end == nullptr || *end != '\0' ) {
+        err_msg = "unexpected trailing characters in floating-point value";
+        return false;
+    }
+    return true;
+}
+
+}    // namespace
 
 
 ProgressFileHandler::ProgressFileHandler( const std::string& slot_path )
@@ -47,7 +75,7 @@ bool ProgressFileHandler::write( const TaskState& task, std::string& err_msg ) c
     progress_file_out << "! CPDN controller progress file & fortran namelist\n"
                       << "&CPDN\n"
                       << "control_pid=" << std::to_string( getpid() ) << '\n'
-                      << "last_cpu_time=" << std::to_string( task.last_cpu_time ) << '\n'
+                      << "prior_acc_cpu_time=" << std::to_string( task.current_cpu_time ) << '\n'
                       << "upload_file_number=" << std::to_string( task.upload_file_number ) << '\n'
                       << "last_step=" << task.last_step << '\n'
                       << "last_upload=" << std::to_string( task.last_upload ) << '\n'
@@ -135,10 +163,10 @@ bool ProgressFileHandler::read( TaskState& task, std::string& err_msg ) const
             if ( !parse_int( value, pid_value, err_msg ) ) {
                 err_msg = "control_pid: " + err_msg;
             }
-        } else if ( key == "last_cpu_time" ) {
+        } else if ( key == "prior_acc_cpu_time" ) {
             counter++;
-            if ( !parse_int( value, task.last_cpu_time, err_msg ) ) {
-                err_msg = "last_cpu_time: " + err_msg;
+            if ( !parse_double_value( value, task.prior_acc_cpu_time, err_msg ) ) {
+                err_msg = "prior_acc_cpu_time: " + err_msg;
             }
         } else if ( key == "upload_file_number" ) {
             counter++;

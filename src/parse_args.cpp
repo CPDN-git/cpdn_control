@@ -29,14 +29,19 @@ ParseResult parse_args( int argc, char** argv )
         ->expected( -1 )
         ->capture_default_str();
 
+    // Output command line to stderr for remote debugging
+    std::cerr << "Command line arguments:\n";
+    for ( int i = 0; i < argc; ++i ) {
+        std::cerr << "  argv[" << i << "] = " << argv[i] << '\n';
+    }
+
+    // Attempt to parse the command line arguments
     try {
         app.parse( argc, argv );
     } catch ( const CLI::ParseError& e ) {
         result.exit_code = app.exit( e );
         result.ok = false;
     }
-    std::cerr << "DEBUG: startdate = " << result.startdate << "\n";
-    std::cerr << "DEBUG: fcast_len = " << result.fcast_len << "\n";
-    std::cerr << "DEBUG: batch = " << result.batch << "\n";
+
     return result;
 }

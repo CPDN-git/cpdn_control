@@ -352,10 +352,10 @@ int print_last_lines( const std::string& filename, const int maxlines )
  *     Glenn Carver, CPDN, 2025.
  * 
  * @param fname   The name of the file to read.
- * @param logline Last line read from file; stored between calls.
- * @return        True if a new line was read; returns false and logline unchanged
- *                if no new line was read; returns false and empty logline
- *                if the file does not exist.
+ * @param logline Last line read from file; updated with the current cached last line whenever available.
+ * @return        True if a new line was read; returns false and logline set to the
+ *                current cached last line if no new line was read; returns false and
+ *                empty logline if the file does not exist.
  */
 bool fread_last_line( const std::string& fname, std::string& logline )
 {
@@ -402,12 +402,13 @@ bool fread_last_line( const std::string& fname, std::string& logline )
 
     logfile.close();
 
-    // Only return true and update logline if we actually read a new line
+    // Always return the current cached last line if we have one, even when no new line was read.
+    logline = last_line;
+
     if ( new_line_read ) {
-        logline = last_line;
         return true;
     }
-    return false;    // no new line read and arg logline unchanged
+    return false;    // no new line read; logline contains current cached last line if available
 }
 
 

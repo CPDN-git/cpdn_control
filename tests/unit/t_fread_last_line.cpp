@@ -71,16 +71,14 @@ int t_fread_last_line()
 
     // Test 3: Second read of same file (no new lines)
     // When there's no new content since last read, the function should return false
-    // and logline should remain unchanged.
+    // and logline should still report the current cached last line.
     test_count++;
-    std::string saved_line = result_line;    // Save the value from Test 2
     result_line.clear();
-    if ( !fread_last_line( test_file, result_line ) && result_line.empty() ) {
-        // logline was cleared before the call, so it should still be empty (unchanged)
+    if ( !fread_last_line( test_file, result_line ) && result_line == "First line of output" ) {
         test_passed++;
     } else {
         std::cerr << "  Test 3 FAILED: Second read with no new content should return false, "
-                  << "got return=" << fread_last_line( test_file, result_line ) << " logline='" << result_line << "'\n";
+                  << "and return the cached last line, got logline='" << result_line << "'\n";
     }
 
     // Test 4: Append new line and read again (should get new line)
@@ -202,17 +200,14 @@ int t_fread_last_line()
 
     // Test 12: No new line added
     // When there's no new content since last read, the function should return false
-    // and logline should remain unchanged (not cleared).
+    // and logline should still report the current cached last line.
     test_count++;
-    std::string prev_line = result_line;    // Save the current value
     result_line.clear();
-    result_line = prev_line;    // Restore it to test that it remains unchanged
-    if ( !fread_last_line( test_file, result_line ) && result_line == prev_line ) {
-        // Function returned false and logline remains unchanged
+    if ( !fread_last_line( test_file, result_line ) && result_line == "Special: !@#$%^&*()_+-=" ) {
         test_passed++;
     } else {
-        std::cerr << "  Test 12 FAILED: No new content should return false and leave logline unchanged, "
-                  << "got return=true, logline='" << result_line << "'\n";
+        std::cerr << "  Test 12 FAILED: No new content should return false and leave logline set to the cached last line, "
+                  << "got logline='" << result_line << "'\n";
     }
 
     // Test 13: File truncation handling

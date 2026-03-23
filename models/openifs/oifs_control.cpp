@@ -29,7 +29,7 @@ bool OpenIFSControl::check_model_success() const
 
         fread_last_line( ifs_stat.string(), stat_lastline );    // at some point, these will all be fs::path..
         oifs_parse_stat( stat_lastline, ifs_word, 3 );
-        std::cerr << "Last line of ifs.stat, ifs_word: " << stat_lastline << ", " << ifs_word << '\n';
+        std::cerr << "Last line of ifs.stat, ifs_word: '" << stat_lastline << "', '" << ifs_word << "'\n";
         if ( ifs_word == "CNT0" ) {
             success = true;
         } else {

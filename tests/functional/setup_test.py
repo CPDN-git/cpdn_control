@@ -46,6 +46,16 @@ if __name__ == "__main__":
                 path.unlink()
         path.mkdir(exist_ok=True)
 
+    def ensure_not_repo_root(workdir: Path):
+        repo_root = Path(__file__).resolve().parents[2]
+        if workdir.resolve() == repo_root:
+            print(
+                f"[setup] Refusing to create projects/ and slots/ in the repository root: {repo_root}",
+                file=sys.stderr,
+            )
+            print("[setup] Run the functional harness from a dedicated test work directory.", file=sys.stderr)
+            sys.exit(2)
+
     if len(sys.argv) < 2:
         print("Usage: setup_test.py <config.json>")
         sys.exit(1)
@@ -67,6 +77,7 @@ if __name__ == "__main__":
     nfrpos = config["nfrpos"]
 
     current_path = Path.cwd()
+    ensure_not_repo_root(current_path)
     print(f"[setup] Running in directory: {current_path}")
 
     platform_triplet = detect_platform()

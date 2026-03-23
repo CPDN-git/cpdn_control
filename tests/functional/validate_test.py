@@ -22,8 +22,18 @@ def read_progress_value(progress_path: Path, key: str) -> str | None:
     return None
 
 
+def ensure_not_repo_root(workdir: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    if workdir.resolve() == repo_root:
+        raise SystemExit(
+            f"[validate] Refusing to run the functional harness from the repository root: {repo_root}\n"
+            "[validate] Use a dedicated test work directory instead."
+        )
+
+
 def main():
     workdir = Path.cwd()
+    ensure_not_repo_root(workdir)
     progress_path = workdir / "slots" / "0" / "cpdn_progressfile.txt"
     config_path = Path(sys.argv[1]) if len(sys.argv) > 1 else None
 

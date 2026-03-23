@@ -116,6 +116,15 @@ def dump_slot_stderr(slot0_dir: Path) -> None:
     print(f"[run] --- End {stderr_path} ---")
 
 
+def ensure_not_repo_root(workdir: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    if workdir.resolve() == repo_root:
+        raise SystemExit(
+            f"[run] Refusing to run the functional harness from the repository root: {repo_root}\n"
+            "[run] Use a dedicated test work directory instead."
+        )
+
+
 def main():
     args = parse_args()
     platform_triplet = detect_platform()
@@ -125,6 +134,7 @@ def main():
     config = load_config(config_path)
 
     workdir = Path.cwd()
+    ensure_not_repo_root(workdir)
     projects_dir = workdir / "projects"
     slot0_dir = workdir / "slots" / "0"
     print(f"[run] Working directory: {workdir}")

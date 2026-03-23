@@ -229,110 +229,100 @@ int move_and_unzip_app_file( const std::string& app_name, const std::string& ver
 /**
  * @brief Checks the status of a child process.
  * 
- * @param handleProcess The process handle of the child process.
- * @param process_status The current status of the process.
+ * @param processid The process ID of the child process.
+ * @param child_status The current status of the child process.
  * @param exit_code The exit code of the child process (set on normal exit).
- * @return The updated process status, unchanged if still running.
+ * @return The updated child status, unchanged if still running.
  */
-int check_child_status( pid_t processid, int process_status, int& exit_code )
+int check_child_status( pid_t processid, int child_status, int& exit_code )
 {
     int stat = 0;
 
-    // Check whether child processed has exited
+    // Check whether child process has exited
     // waitpid will return process id of zombie (finished) process; zero if still running
     if ( pid_t pid; ( pid = waitpid( processid, &stat, WNOHANG ) ) > 0 ) {
-        process_status = 1;
+        child_status = 1;
         // Child exited normally but model might still have failed
         if ( WIFEXITED( stat ) ) {
-            process_status = 1;
+            child_status = 1;
             exit_code = WEXITSTATUS( stat );
             std::cerr << "..The child process terminated with status: " << WEXITSTATUS( stat ) << '\n';
         }
         // Child process has exited due to signal that was not caught
         // n.b. OpenIFS has its own signal handler.
         else if ( WIFSIGNALED( stat ) ) {
-            process_status = 3;
+            child_status = 3;
             exit_code = -1;
             std::cerr << "..The child process has been killed with signal: " << WTERMSIG( stat ) << '\n';
         }
         // Child is stopped
         else if ( WIFSTOPPED( stat ) ) {
-            process_status = 4;
+            child_status = 4;
             exit_code = -1;
             std::cerr << "..The child process has stopped with signal: " << WSTOPSIG( stat ) << '\n';
         }
     } else if ( pid == -1 ) {
         // should not get here, it means the child could not be found
-        process_status = 5;
+        child_status = 5;
         exit_code = -1;
         std::cerr << "..Unable to retrieve status of child process " << '\n';
         perror( "waitpid() error" );
     }
-    return process_status;
+    return child_status;
 }
 
 
 /**
- * @brief Checks the BOINC client status and handles suspend, quit, and abort requests.
+ * @brief Applies the latest BOINC client status to the child process.
  * 
- * @param handleProcess The process handle of the child process.
- * @param process_status The current status of the process.
- * @return The updated process status.
+ * @param processid The process ID of the child process.
+ * @param runtime Holds the latest BOINC runtime status snapshot.
+ * @return True if the controller should continue running, false on quit/abort/no-heartbeat.
  */
-int check_boinc_status( pid_t processid, int process_status )
+bool handle_boinc_client_status( pid_t processid, BoincRuntime& runtime )
 {
-    BOINC_STATUS status;
-    boinc_get_status( &status );
-
     // If a quit, abort or no heartbeat has been received from the BOINC client, end child process
-    if ( status.quit_request ) {
+    if ( runtime.client_status.quit_request ) {
         std::cerr << "Quit request received from BOINC client, ending the child process" << '\n';
         kill( processid, SIGKILL );
-        process_status = 2;
-        return process_status;
-    } else if ( status.abort_request ) {
+        return false;
+    } else if ( runtime.client_status.abort_request ) {
         std::cerr << "Abort request received from BOINC client, ending the child process" << '\n';
         kill( processid, SIGKILL );
-        process_status = 1;
-        return process_status;
-    } else if ( status.no_heartbeat ) {
+        return false;
+    } else if ( runtime.client_status.no_heartbeat ) {
         std::cerr << "No heartbeat received from BOINC client, ending the child process" << '\n';
         kill( processid, SIGKILL );
-        process_status = 1;
-        return process_status;
+        return false;
     }
-    // Else if BOINC client is suspended, suspend child process and periodically check BOINC client status
+    // Else if BOINC client is suspended, suspend child process and periodically refresh BOINC client status
     else {
-        if ( status.suspended ) {
+        if ( runtime.client_status.suspended ) {
             std::cerr << "Suspend request received from the BOINC client, suspending the child process" << '\n';
             kill( processid, SIGSTOP );
 
-            while ( status.suspended ) {
-                boinc_get_status( &status );
-                if ( status.quit_request ) {
+            while ( runtime.client_status.suspended ) {
+                boinc_get_status( &runtime.client_status );
+                if ( runtime.client_status.quit_request ) {
                     std::cerr << "Quit request received from the BOINC client, ending the child process" << '\n';
                     kill( processid, SIGKILL );
-                    process_status = 2;
-                    return process_status;
-                } else if ( status.abort_request ) {
+                    return false;
+                } else if ( runtime.client_status.abort_request ) {
                     std::cerr << "Abort request received from the BOINC client, ending the child process" << '\n';
                     kill( processid, SIGKILL );
-                    process_status = 1;
-                    return process_status;
-                } else if ( status.no_heartbeat ) {
+                    return false;
+                } else if ( runtime.client_status.no_heartbeat ) {
                     std::cerr << "No heartbeat received from the BOINC client, ending the child process" << '\n';
                     kill( processid, SIGKILL );
-                    process_status = 1;
-                    return process_status;
+                    return false;
                 }
                 sleep_seconds( 1 );
             }
             // Resume child process
             std::cerr << "Resuming the child process" << "\n";
             kill( processid, SIGCONT );
-            process_status = 0;
         }
-        return process_status;
+        return true;
     }
 }
 

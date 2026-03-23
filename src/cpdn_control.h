@@ -9,7 +9,10 @@
 
 #include <filesystem>
 #include <string>
+#include <sys/types.h>
 #include <vector>
+
+#include "boinc/boinc_api.h"
 
 
 // GC. TODO. Consider splitting these sturcts into separate header files.
@@ -29,7 +32,7 @@ struct TaskState {
     int current_step = 0;               // Current model step (in seconds) ? really secs?
     int last_trickle_step = 0;          // Last model step when trickle was sent
     pid_t pid = 0;                      // Process ID of the child model process
-    int process_status = 1;             // Child process status: 0=running, 1=stopped, etc.
+    int child_status = 1;               // Child process status: 0=running, 1=exited normally, 3=signaled, 4=stopped, 5=not found.
     int exit_code = 0;                  // Child process exit code (valid for normal exit)
     double current_cpu_time = 0.0;      // Current accumulated CPU time
     double fraction_done = 0.0;         // Fraction of model run completed (0.0-1.0)
@@ -70,11 +73,19 @@ struct BoincConfig {
     bool standalone = false;    // Standalone mode flag
 };
 
+/**
+ * @struct BoincRuntime
+ * @brief Holds the latest live BOINC runtime status snapshot.
+ */
+struct BoincRuntime {
+    BOINC_STATUS client_status{};
+};
+
 
 int init_boinc( BoincConfig& );
 int move_and_unzip_app_file( const std::string&, const std::string&, const std::string&, const std::string& );
 int check_child_status( pid_t, int, int& );
-int check_boinc_status( pid_t, int );
+bool handle_boinc_client_status( pid_t, BoincRuntime& );
 pid_t launch_process( const std::string&, const std::string&, const std::string&, const std::string& );
 std::string get_tag( const std::string& str );
 double model_frac_done( double, double, int );

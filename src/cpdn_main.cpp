@@ -181,6 +181,54 @@ static void refresh_current_cpu_time( TaskState& tstate )
     }
 }
 
+static int get_task_finish_code( const TaskState& tstate, const BoincRuntime& bruntime )
+{
+    if ( bruntime.client_status.quit_request ) {
+        return 0;
+    }
+    if ( bruntime.client_status.abort_request || bruntime.client_status.no_heartbeat ) {
+        return 1;
+    }
+    if ( tstate.child_status == 1 ) {
+        return 0;
+    }
+    return 1;
+}
+
+/**
+ * @brief Sleep in short chunks and poll BOINC state between chunks.
+ *        Returns false if BOINC status changed and the caller should handle it.
+ *
+ * @note This function only polls BOINC. It does not stop, resume, or kill the child.
+ */
+static bool sleep_with_boinc_poll( BoincRuntime& bruntime, const bool standalone, const int total_seconds )
+{
+    if ( total_seconds <= 0 ) {
+        return true;
+    }
+
+    auto deadline = chrono::steady_clock::now() + chrono::seconds( total_seconds );
+    constexpr auto poll_interval = chrono::seconds( 5 );
+
+    while ( chrono::steady_clock::now() < deadline ) {
+        auto remaining = chrono::duration_cast<chrono::seconds>( deadline - chrono::steady_clock::now() );
+        auto sleep_chunk = std::min( poll_interval, remaining );
+        sleep_seconds( static_cast<double>( sleep_chunk.count() ) );
+
+        if ( standalone ) {
+            continue;
+        }
+
+        boinc_get_status( &bruntime.client_status );
+        if ( bruntime.client_status.suspended || bruntime.client_status.quit_request || bruntime.client_status.abort_request ||
+             bruntime.client_status.no_heartbeat ) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 
 /**
  * @brief Parse and validate the --nthreads argument from app_config.xml.
@@ -388,8 +436,8 @@ int main( int argc, char** argv )
     std::string err_msg;
 
 #if !defined( _WIN32 ) && !defined( _WIN64 )
-    // BOINC launches the app with stdout redirected away from the slot log.
-    // Merge stdout into stderr so any controller or diagnostics child stdout is captured in stderr.txt.
+    // BOINC launches the app with stdout redirected to /dev/null and stderr redirected to stderr.txt.
+    // Merge stdout into stderr so any controller or diagnostics child stdout is captured in stderr.txt as well.
     if ( dup2( STDERR_FILENO, STDOUT_FILENO ) == -1 ) {
         std::cerr << "Warning: failed to redirect stdout to stderr\n";
     }
@@ -402,7 +450,7 @@ int main( int argc, char** argv )
     retval = init_boinc( bconfig );
     if ( retval ) {
         std::cerr << "..BOINC initialisation failed" << "\n";
-        return retval;
+        return task_finish( retval );
     }
     if ( bconfig.slot_path.empty() ) {
         std::cerr << "..Error. Can't determine slot path: current_path() returned empty" << std::endl;
@@ -954,7 +1002,7 @@ int main( int argc, char** argv )
     tstate.pid = launch_process( bconfig.project_dir, bconfig.slot_path, model_exe.string(), nthreads );
 
     if ( tstate.pid > 0 ) {
-        tstate.process_status = 0;
+        tstate.child_status = 0;
     } else if ( tstate.pid == -1 ) {
         std::cerr << "..Error launching model process, return value: " << tstate.pid << std::endl;
         return task_finish( 1 );
@@ -963,12 +1011,11 @@ int main( int argc, char** argv )
     boinc_end_critical_section();
 
 
-    // process_status = 0 running
-    // process_status = 1 stopped normally
-    // process_status = 2 stopped with quit request from BOINC
-    // process_status = 3 stopped with child process being killed
-    // process_status = 4 stopped with child process being stopped
-    // process_status = 5 child process not found by waitpid()
+    // child_status = 0 running
+    // child_status = 1 exited normally
+    // child_status = 3 child process killed by signal
+    // child_status = 4 child process stopped
+    // child_status = 5 child process not found by waitpid()
 
 
     //----------------------------------------Main loop------------------------------------------------------
@@ -976,12 +1023,13 @@ int main( int argc, char** argv )
     // Periodically check the process status and the BOINC client status
 
     std::vector<fs::path> zfl;
+    BoincRuntime bruntime;
 
     int delay_count = 0;
     int delay_max = LOOP_DELAY_DEFAULT;
     std::string step = "0";
 
-    while ( tstate.process_status == 0 && tstate.model_completed == 0 ) {
+    while ( tstate.child_status == 0 && tstate.model_completed == 0 ) {
         sleep_seconds( 1 );    // Time delay to reduce overhead
 
         delay_count++;
@@ -1071,7 +1119,11 @@ int main( int argc, char** argv )
                             std::string upload_file_name = "upload_file_" + std::to_string( tstate.upload_file_number ) + ".zip";
                             std::cerr << "Uploading the intermediate file: " << upload_file_name << '\n';
 
-                            std::this_thread::sleep_until( chrono::system_clock::now() + chrono::seconds( 20 ) );
+                            if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 20 ) ) {
+                                if ( !handle_boinc_client_status( tstate.pid, bruntime ) ) {
+                                    return task_finish( get_task_finish_code( tstate, bruntime ) );
+                                }
+                            }
                             retval = boinc_upload_file( upload_file_name );
                             if ( retval ) {
                                 std::cerr << "..boinc_upload_file failed for file: " << upload_file_name << std::endl;
@@ -1137,21 +1189,26 @@ int main( int argc, char** argv )
             // Provide the fraction done to the BOINC client, necessary for the percentage bar on the client
             boinc_fraction_done( tstate.fraction_done );
 
-            tstate.process_status = check_boinc_status( tstate.pid, tstate.process_status );
+            boinc_get_status( &bruntime.client_status );
+            (void)handle_boinc_client_status( tstate.pid, bruntime );    // Child status is refreshed immediately below.
         }
 
-        tstate.process_status = check_child_status( tstate.pid, tstate.process_status, tstate.exit_code );
+        tstate.child_status = check_child_status( tstate.pid, tstate.child_status, tstate.exit_code );
     }
 
     //----- End of main loop ---------------------------------------------------------------------------
 
     // Do NOT execute a return until the final upload is done after the boinc_end_critical_section() below.
 
-    // GC. I probably don't need this; use the task_process_status variable & model_success instead in main loop?
+    // GC. I probably don't need this; use the child_status variable and model_success instead in main loop?
     tstate.model_completed = 1;
 
     // Time delay to ensure model files are all flushed to disk
-    sleep_seconds( 60 );
+    if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 60 ) ) {
+        if ( !handle_boinc_client_status( tstate.pid, bruntime ) ) {
+            return task_finish( get_task_finish_code( tstate, bruntime ) );
+        }
+    }
 
     tstate.model_success = model_ctrl->check_model_success();
 
@@ -1216,7 +1273,11 @@ int main( int argc, char** argv )
             std::string upload_file_name = "upload_file_" + std::to_string( tstate.upload_file_number ) + ".zip";
             std::cerr << "Uploading the final file: " << upload_file_name << '\n';
 
-            std::this_thread::sleep_until( chrono::system_clock::now() + chrono::seconds( 20 ) );
+            if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 20 ) ) {
+                if ( !handle_boinc_client_status( tstate.pid, bruntime ) ) {
+                    return task_finish( get_task_finish_code( tstate, bruntime ) );
+                }
+            }
             retval = boinc_upload_file( upload_file_name );
             if ( retval ) {
                 std::cerr << "..boinc_upload_file failed for file: " << upload_file_name << std::endl;
@@ -1244,13 +1305,12 @@ int main( int argc, char** argv )
 
     // Delay to ensure all files are flushed to disk before exiting
     std::cerr << "Waiting for all file operations to complete..." << std::endl;
-    sleep_seconds( 90 );
+    if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 90 ) ) {
+        if ( !handle_boinc_client_status( tstate.pid, bruntime ) ) {
+            return task_finish( get_task_finish_code( tstate, bruntime ) );
+        }
+    }
     std::cerr << "Task finished." << std::endl;
 
-    // if finished normally
-    if ( tstate.process_status == 1 || tstate.process_status == 2 ) {
-        return task_finish( 0 );
-    } else {
-        return task_finish( 1 );    // I could return the task return code here?
-    }
+    return task_finish( get_task_finish_code( tstate, bruntime ) );    // I could return the task return code here?
 }

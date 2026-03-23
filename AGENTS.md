@@ -124,6 +124,30 @@ Typical steps:
   - `prior_acc_cpu_time` = accumulated CPU time from earlier controller runs
   - `current_cpu_time` = total accumulated CPU time including the currently running child process
 
+## BOINC And Child Status Semantics
+
+- Keep BOINC runtime state and child-process state separate.
+- `TaskState::child_status` is only for the model child lifecycle:
+  - `0` = running
+  - `1` = exited normally
+  - `3` = terminated by signal
+  - `4` = stopped
+  - `5` = not found by `waitpid()`
+- `BoincRuntime::client_status` stores the latest `BOINC_STATUS` snapshot returned by `boinc_get_status()`.
+- Do not overload `child_status` with BOINC meanings such as quit, abort, suspend, or no-heartbeat.
+- `sleep_with_boinc_poll(...)` in `src/cpdn_main.cpp` is intended to poll BOINC state only. It should not directly stop, resume, or kill the child process.
+- `handle_boinc_client_status(...)` in `src/cpdn_control.cpp` is the side-effecting BOINC handler. It may stop, resume, or kill the child based on `BoincRuntime::client_status`.
+- In `main()`, prefer the explicit sequence:
+  - call `boinc_get_status(&bruntime.client_status)`
+  - inspect or poll for a BOINC state change
+  - call `handle_boinc_client_status(...)` if action is required
+  - derive the controller exit via `task_finish(...)`, which calls `boinc_finish(...)`
+- If this area is refactored further, preserve the separation of responsibilities:
+  - polling BOINC state
+  - applying BOINC-driven process control
+  - tracking child exit state
+  - deciding the final controller exit code
+
 ## Repo conventions for AI-assisted changes
 
 - Prefer small, focused patches; avoid drive-by refactors/formatting.

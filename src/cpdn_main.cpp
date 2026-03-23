@@ -173,13 +173,8 @@ static bool run_step_diagnostics( const fs::path& diag_exe, const fs::path& slot
     }
 
     std::cerr << "Running external diagnostics program: " << diag_exe << " with input file: " << diagnostics_input << '\n';
-    TimedProcessResult diag_result = run_process_with_timeout( diag_exe.string(),
-                                                               diag_args,
-                                                               slot_path.string(),
-                                                               DIAGNOSTICS_TIMEOUT_SECONDS,
-                                                               trickle_data_path,
-                                                               diag_env_vars,
-                                                               diagnostics_log_path );
+    TimedProcessResult diag_result = run_process_with_timeout( diag_exe.string(), diag_args, slot_path.string(), DIAGNOSTICS_TIMEOUT_SECONDS,
+                                                               trickle_data_path, diag_env_vars, diagnostics_log_path );
     replay_diagnostics_output_to_stderr( diagnostics_log_path );
 
     if ( diag_result.status != TimedProcessStatus::success ) {
@@ -1144,6 +1139,7 @@ int main( int argc, char** argv )
                             std::string upload_file_name = "upload_file_" + std::to_string( tstate.upload_file_number ) + ".zip";
                             std::cerr << "Uploading the intermediate file: " << upload_file_name << '\n';
 
+                            std::cerr << "Waiting for file operations to complete...(20 secs)" << std::endl;
                             if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 20 ) ) {
                                 if ( !handle_boinc_client_status( tstate.pid, bruntime ) ) {
                                     return task_finish( get_task_finish_code( tstate, bruntime ) );
@@ -1229,6 +1225,7 @@ int main( int argc, char** argv )
     tstate.model_completed = 1;
 
     // Time delay to ensure model files are all flushed to disk
+    std::cerr << "Waiting for file operations to complete...(60 secs)" << std::endl;
     if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 60 ) ) {
         if ( !handle_boinc_client_status( tstate.pid, bruntime ) ) {
             return task_finish( get_task_finish_code( tstate, bruntime ) );
@@ -1298,6 +1295,7 @@ int main( int argc, char** argv )
             std::string upload_file_name = "upload_file_" + std::to_string( tstate.upload_file_number ) + ".zip";
             std::cerr << "Uploading the final file: " << upload_file_name << '\n';
 
+            std::cerr << "Waiting for file operations to complete...(20 secs)" << std::endl;
             if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 20 ) ) {
                 if ( !handle_boinc_client_status( tstate.pid, bruntime ) ) {
                     return task_finish( get_task_finish_code( tstate, bruntime ) );
@@ -1329,7 +1327,7 @@ int main( int argc, char** argv )
     boinc_end_critical_section();
 
     // Delay to ensure all files are flushed to disk before exiting
-    std::cerr << "Waiting for all file operations to complete..." << std::endl;
+    std::cerr << "Waiting for file operations to complete...(90 secs)" << std::endl;
     if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 90 ) ) {
         if ( !handle_boinc_client_status( tstate.pid, bruntime ) ) {
             return task_finish( get_task_finish_code( tstate, bruntime ) );

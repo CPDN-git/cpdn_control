@@ -20,10 +20,6 @@
 #include <unordered_set>
 #include <vector>
 
-#if !defined( _WIN32 ) && !defined( _WIN64 )
-#include <unistd.h>
-#endif
-
 #include "boinc/boinc_api.h"
 
 #include "cpdn_control.h"
@@ -108,6 +104,31 @@ static std::string get_diagnostics_input_file( const fs::path& slot_path, const 
     return "";
 }
 
+static void replay_diagnostics_output_to_stderr( const fs::path& combined_output_path )
+{
+    if ( combined_output_path.empty() || !fs::exists( combined_output_path ) ) {
+        return;
+    }
+
+    std::ifstream diagnostics_log( combined_output_path );
+    if ( !diagnostics_log ) {
+        std::cerr << "Warning: failed to open diagnostics output log: " << combined_output_path << '\n';
+    } else {
+        std::cerr << "Diagnostics stdout/stderr follows from " << combined_output_path.filename().string() << ":\n";
+        std::cerr << diagnostics_log.rdbuf();
+        if ( !std::cerr.good() ) {
+            std::cerr.clear();
+            std::cerr << "Warning: failed while replaying diagnostics output to controller stderr\n";
+        }
+    }
+
+    std::error_code ec;
+    fs::remove( combined_output_path, ec );
+    if ( ec ) {
+        std::cerr << "Warning: failed to remove diagnostics output log: " << combined_output_path << ": " << ec.message() << '\n';
+    }
+}
+
 
 /**
  * @brief Run diagnostics.exe synchronously in the slot directory for the completed step.
@@ -135,6 +156,7 @@ static bool run_step_diagnostics( const fs::path& diag_exe, const fs::path& slot
     // -p ./rtables/ : path for resolution tables.
 
     fs::path trickle_data_path = slot_path / TrickleHandler::TRICKLE_DATA_FILE;
+    fs::path diagnostics_log_path = slot_path / "diagnostics_output.log";
     auto diag_env_vars = oifs_get_grib_env_vars( slot_path.string() );
     std::vector<std::string> diag_args = { "-s", diagnostics_input, "-G", diagnostics_input + ".diag", "-t", "f", "-l", "-f", "131", "-n",
                                            "-p", "./rtables/" };
@@ -144,10 +166,21 @@ static bool run_step_diagnostics( const fs::path& diag_exe, const fs::path& slot
         std::cerr << "Warning: failed to remove stale trickle_data before diagnostics run: " << ec.message() << '\n';
         ec.clear();
     }
+    fs::remove( diagnostics_log_path, ec );
+    if ( ec ) {
+        std::cerr << "Warning: failed to remove stale diagnostics output log before diagnostics run: " << ec.message() << '\n';
+        ec.clear();
+    }
 
     std::cerr << "Running external diagnostics program: " << diag_exe << " with input file: " << diagnostics_input << '\n';
-    TimedProcessResult diag_result =
-        run_process_with_timeout( diag_exe.string(), diag_args, slot_path.string(), DIAGNOSTICS_TIMEOUT_SECONDS, trickle_data_path, diag_env_vars );
+    TimedProcessResult diag_result = run_process_with_timeout( diag_exe.string(),
+                                                               diag_args,
+                                                               slot_path.string(),
+                                                               DIAGNOSTICS_TIMEOUT_SECONDS,
+                                                               trickle_data_path,
+                                                               diag_env_vars,
+                                                               diagnostics_log_path );
+    replay_diagnostics_output_to_stderr( diagnostics_log_path );
 
     if ( diag_result.status != TimedProcessStatus::success ) {
         std::cerr << "Warning: diagnostics program failed with status " << timed_process_status_to_string( diag_result.status );
@@ -434,14 +467,6 @@ int main( int argc, char** argv )
     TaskConfig tconfig;     // CPDN task settings from command line.
     int retval = 0;
     std::string err_msg;
-
-#if !defined( _WIN32 ) && !defined( _WIN64 )
-    // BOINC launches the app with stdout redirected to /dev/null and stderr redirected to stderr.txt.
-    // Merge stdout into stderr so any controller or diagnostics child stdout is captured in stderr.txt as well.
-    if ( dup2( STDERR_FILENO, STDOUT_FILENO ) == -1 ) {
-        std::cerr << "Warning: failed to redirect stdout to stderr\n";
-    }
-#endif
 
     // ------------- BOINC Initialisation -----------------
 

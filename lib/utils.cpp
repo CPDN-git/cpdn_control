@@ -9,6 +9,7 @@
 #include <cerrno>
 #include <charconv>    // for std::from_chars
 #include <chrono>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -537,12 +538,13 @@ bool parse_int( std::string& value )
 /**
  * @brief Run an external executable with a timeout and optional output-file freshness check.
  *        The child is started in the requested working directory with the supplied arguments and is terminated if it exceeds the timeout.
- *        Child stdout/stderr are inherited from the parent process; this helper does not add any extra redirection or capture.
+ *        Child stdout/stderr are inherited from the parent process unless a combined output file is supplied.
  */
 TimedProcessResult run_process_with_timeout( const std::string& executable, const std::vector<std::string>& args,
                                              const std::string& working_dir, int timeout_seconds,
                                              const std::filesystem::path& expected_output_file,
-                                             const std::vector<std::pair<std::string, std::string>>& child_env_vars )
+                                             const std::vector<std::pair<std::string, std::string>>& child_env_vars,
+                                             const std::filesystem::path& combined_output_file )
 {
     TimedProcessResult result;
 
@@ -553,6 +555,7 @@ TimedProcessResult run_process_with_timeout( const std::string& executable, cons
     (void)timeout_seconds;
     (void)expected_output_file;
     (void)child_env_vars;
+    (void)combined_output_file;
     return result;
 #else
     if ( executable.empty() || timeout_seconds <= 0 ) {
@@ -569,6 +572,16 @@ TimedProcessResult run_process_with_timeout( const std::string& executable, cons
     if ( pid == 0 ) {
         if ( !working_dir.empty() && chdir( working_dir.c_str() ) != 0 ) {
             _exit( 126 );
+        }
+
+        if ( !combined_output_file.empty() ) {
+            FILE* combined_stdout = freopen( combined_output_file.c_str(), "a", stdout );
+            if ( combined_stdout == nullptr ) {
+                _exit( 124 );
+            }
+            if ( freopen( combined_output_file.c_str(), "a", stderr ) == nullptr ) {
+                _exit( 123 );
+            }
         }
 
         for ( const auto& [name, value] : child_env_vars ) {

@@ -49,7 +49,8 @@ bool parse_int( std::string& value );
 /**
  * @brief Run an executable in a given working directory and wait up to a timeout.
  *        Accepts optional argv-style arguments, can set child environment variables before exec,
- *        and can check whether an expected output file was created or updated.
+ *        can check whether an expected output file was created or updated,
+ *        and can optionally redirect child stdout/stderr to a combined log file.
  */
 TimedProcessResult run_process_with_timeout(
     const std::string& executable,
@@ -57,7 +58,8 @@ TimedProcessResult run_process_with_timeout(
     const std::string& working_dir,
     int timeout_seconds,
     const std::filesystem::path& expected_output_file = {},
-    const std::vector<std::pair<std::string, std::string>>& child_env_vars = {} );
+    const std::vector<std::pair<std::string, std::string>>& child_env_vars = {},
+    const std::filesystem::path& combined_output_file = {} );
 
 /**
  * @brief Convert a TimedProcessStatus value to a short log-friendly string.

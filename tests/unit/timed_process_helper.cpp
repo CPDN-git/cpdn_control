@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <string>
 #include <thread>
 
@@ -39,6 +40,16 @@ int main()
         fs::path output_path = fs::current_path() / output_name;
         std::ofstream output_file( output_path );
         output_file << "timed_process_helper output\n";
+    }
+
+    const char* stdout_text = std::getenv( "CPDN_TIMED_PROCESS_STDOUT_TEXT" );
+    if ( stdout_text != nullptr && std::string( stdout_text ).empty() == false ) {
+        std::cout << stdout_text << '\n';
+    }
+
+    const char* stderr_text = std::getenv( "CPDN_TIMED_PROCESS_STDERR_TEXT" );
+    if ( stderr_text != nullptr && std::string( stderr_text ).empty() == false ) {
+        std::cerr << stderr_text << '\n';
     }
 
     return get_env_int( "CPDN_TIMED_PROCESS_EXIT_CODE", 0 );

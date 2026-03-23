@@ -103,12 +103,43 @@ int t_run_process_with_timeout()
                   << timed_process_status_to_string( child_env_result.status ) << ", exit_code=" << child_env_result.exit_code << "\n";
     }
 
+    // Child stdout/stderr should be capturable into a combined log file when requested.
+    clear_test_env( "CPDN_TIMED_PROCESS_CHECK_VAR_NAME" );
+    clear_test_env( "CPDN_TIMED_PROCESS_CHECK_VAR_VALUE" );
+    clear_test_env( "CPDN_TEST_CHILD_ENV" );
+    set_test_env( "CPDN_TIMED_PROCESS_STDOUT_TEXT", "helper stdout line" );
+    set_test_env( "CPDN_TIMED_PROCESS_STDERR_TEXT", "helper stderr line" );
+    fs::path combined_output_path = tmp_dir / "combined_output.log";
+    fs::remove( combined_output_path, ec );
+
+    test_count++;
+    TimedProcessResult combined_output_result = run_process_with_timeout( TIMED_PROCESS_HELPER,
+                                                                         {},
+                                                                         tmp_dir.string(),
+                                                                         2,
+                                                                         output_path,
+                                                                         {},
+                                                                         combined_output_path );
+    std::ifstream combined_output_file( combined_output_path );
+    std::string combined_output_contents( ( std::istreambuf_iterator<char>( combined_output_file ) ), std::istreambuf_iterator<char>() );
+    if ( combined_output_result.status == TimedProcessStatus::success && combined_output_result.exit_code == 0 &&
+         combined_output_contents.find( "helper stdout line" ) != std::string::npos &&
+         combined_output_contents.find( "helper stderr line" ) != std::string::npos ) {
+        test_passed++;
+    } else {
+        std::cerr << "  Expected captured combined child stdout/stderr output, got status="
+                  << timed_process_status_to_string( combined_output_result.status ) << ", exit_code=" << combined_output_result.exit_code
+                  << ", contents=" << combined_output_contents << "\n";
+    }
+
     clear_test_env( "CPDN_TIMED_PROCESS_SLEEP_MS" );
     clear_test_env( "CPDN_TIMED_PROCESS_WRITE_FILE" );
     clear_test_env( "CPDN_TIMED_PROCESS_EXIT_CODE" );
     clear_test_env( "CPDN_TIMED_PROCESS_CHECK_VAR_NAME" );
     clear_test_env( "CPDN_TIMED_PROCESS_CHECK_VAR_VALUE" );
     clear_test_env( "CPDN_TEST_CHILD_ENV" );
+    clear_test_env( "CPDN_TIMED_PROCESS_STDOUT_TEXT" );
+    clear_test_env( "CPDN_TIMED_PROCESS_STDERR_TEXT" );
 
     fs::remove_all( tmp_dir, ec );
 

@@ -3,9 +3,10 @@
 
 import sys
 from pathlib import Path
+from typing import Optional
 
 
-def read_progress_value(progress_path: Path, key: str) -> str | None:
+def read_progress_value(progress_path: Path, key: str) -> Optional[str]:
     if not progress_path.exists():
         print(f"[validate] Progress file not found: {progress_path}", file=sys.stderr)
         return None

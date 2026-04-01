@@ -147,7 +147,8 @@ int TrickleHandler::get_trickle_frequency( int timestep, int total_timesteps )
     int freq_min = ( 24 * 3600 ) / timestep;    // minimum of a trickle every 24 model hrs.
     int trickle_percent = 6;                    // trickle every 6% of the model run, i.e. 17 trickles in total.
 
-    int trickle_freq = total_timesteps / trickle_percent;
+    double freq = static_cast<double>( total_timesteps ) * static_cast<double>( trickle_percent ) / 100.0;
+    auto trickle_freq = static_cast<int>( freq );
     if ( trickle_freq < freq_min ) {
         trickle_freq = freq_min;
     }

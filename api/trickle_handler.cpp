@@ -99,12 +99,15 @@ int TrickleHandler::process_trickle( double current_cpu_time, int timestep )
     std::string vr = "";
     std::string data = read_trickle_data_file();
     std::string trickle_msg;
+    const int trickle_cpu_time = static_cast<int>( current_cpu_time );
     int retval = 0;
 
     if ( variety == "orig" ) {
-        trickle_msg = fmt::format( ORIG_TRICKLE_FORMAT, wu_name, result_base_name, ph, timestep, current_cpu_time, vr );
+        // cpdn_credit parses <cp> with BOINC's integer XML parser, so emit an
+        // integer CPU time even though the controller tracks it as a double.
+        trickle_msg = fmt::format( ORIG_TRICKLE_FORMAT, wu_name, result_base_name, ph, timestep, trickle_cpu_time, vr );
     } else if ( variety == "general" ) {
-        trickle_msg = fmt::format( GENERAL_TRICKLE_FORMAT, wu_name, result_base_name, ph, timestep, current_cpu_time, vr, data );
+        trickle_msg = fmt::format( GENERAL_TRICKLE_FORMAT, wu_name, result_base_name, ph, timestep, trickle_cpu_time, vr, data );
     } else {
         std::cerr << "Error: Unrecognized trickle variety: " << variety << "\n";
         return -1;

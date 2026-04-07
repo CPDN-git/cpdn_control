@@ -606,6 +606,9 @@ int main( int argc, char** argv )
 
     //----------------------------------------------------------------------------------------------
     // Parse the fort.4 namelist for controller scheduling values and the remaining OpenIFS metadata.
+    // Glenn C. Note the fort.4 file comes out of the app_bundle. This is OIFS specific, so parsing this
+    // file should be done generically with the implementation of the model control class,
+    // but for now we parse the values we need here and thread
 
     std::string namelist_file = bconfig.slot_path + "/" + namelist;
     std::string namelist_line;

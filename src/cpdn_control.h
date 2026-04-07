@@ -9,10 +9,13 @@
 
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <sys/types.h>
 #include <vector>
 
 #include "boinc/boinc_api.h"
+
+#include "api/model_input_manifest.h"
 
 
 // GC. TODO. Consider splitting these sturcts into separate header files.
@@ -81,15 +84,34 @@ struct BoincRuntime {
     BOINC_STATUS client_status{};
 };
 
+/**
+ * @struct InputStageResult
+ * @brief Structured result for BOINC/model input staging so main() can report the
+ *        exact logical file, resolved project file and failure step when staging
+ *        fails on a remote host.
+ */
+struct InputStageResult {
+    bool ok = false;
+    std::filesystem::path logical_file;
+    std::filesystem::path resolved_project_file;
+    std::filesystem::path destination_archive;
+    std::string step;
+    std::string message;
+};
+
 
 int init_boinc( BoincConfig& );
 int move_and_unzip_app_file( const std::string&, const std::string&, const std::string&, const std::string& );
 int check_child_status( pid_t, int, int& );
 bool handle_boinc_client_status( pid_t, BoincRuntime& );
 pid_t launch_process( const std::string&, const std::string&, const std::string&, const std::string& );
-std::string get_tag( const std::string& str );
 double model_frac_done( double, double, int );
 int move_result_file( const std::string&, const std::string&, const std::string& );
-int copy_and_unzip( const std::string&, const std::string&, const std::string&, const std::string& );
 bool process_env_overrides( const std::filesystem::path& );
 int zip_and_delete( const std::string&, const std::vector<std::filesystem::path>& );
+bool resolve_boinc_input_file( const std::filesystem::path&, std::filesystem::path&, std::string* error_msg = nullptr );
+bool verify_project_zip_md5( const std::filesystem::path&, std::string* error_msg = nullptr );
+bool ensure_directory( const std::filesystem::path&, std::string* error_msg = nullptr );
+InputStageResult stage_model_input_archive( const std::filesystem::path&, const std::filesystem::path&, const std::filesystem::path&, std::string_view );
+InputStageResult stage_boinc_input_file( const std::filesystem::path&, const std::filesystem::path&, const std::filesystem::path&, std::string_view );
+InputStageResult stage_model_input_manifest( const ModelInputManifest&, const std::filesystem::path& );

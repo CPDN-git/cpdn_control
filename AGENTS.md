@@ -7,14 +7,18 @@ This repository builds the **CPDN controller** executable used to run/manage cli
 - `src/cpdn_main.cpp`
   - Program entry point (`main`) and high-level flow: BOINC init, argument parsing, model selection, run loop.
   - Contains the model factory `create_model_control(...)` mapping `app_name/model_name -> ModelControl`.
+  - Now stages model input archives through a model-owned manifest rather than hardcoded OpenIFS filename handling in `main()`.
   - Currently also contains **experimental** step-diagnostics glue that runs `diagnostics.exe` before result files are moved out of the slot directory. This is a temporary integration and is expected to move under model-class control later.
 - `src/parse.h`, `src/parse.cpp`
   - CLI11-based command-line parsing for `--cpdn_*` and `--model_*` arguments.
   - Uses vendored CLI11 headers under `tools/CLI11/`.
 - `src/cpdn_control.cpp`, `src/cpdn_control.h`
   - Core controller logic used by the release/debug executables and unit tests.
+- `api/model_input_manifest.h`
+  - Shared manifest/context types for model-declared BOINC input archives.
 - `api/model_control.h`
   - Abstract interface for model-specific controllers (`ModelControl`).
+  - Includes the model input manifest hook used to describe logical BOINC filenames and slot unzip destinations.
 - `models/`
   - Model-specific helpers/implementations.
   - `models/test/` contains the `test_model` and controller glue used by functional tests.
@@ -29,9 +33,11 @@ This repository builds the **CPDN controller** executable used to run/manage cli
 - `tests/unit/`
   - CTest-driven unit tests (single `unit_tests` executable invoked with different arguments).
   - Includes `t_run_process_with_timeout.cpp` plus `timed_process_helper.cpp` for exercising timed external-process execution.
+  - Includes staging/checksum coverage for BOINC project archives such as `t_verify_project_zip_md5.cpp` and `t_stage_model_input_archive.cpp`.
 - `tests/functional/`
   - End-to-end/“workunit style” tests driven by Python scripts:
-  - `setup_test.py` creates a fake BOINC directory layout (`projects/`, `slots/0/`, input zips, `init_data.xml`, etc).
+  - `setup_test.py` creates a fake BOINC directory layout (`projects/climateprediction.net/`, `slots/0/`, input zips, `init_data.xml`, etc).
+  - The harness now models BOINC logical input files as `<soft_link>...</soft_link>` files in the slot that resolve to `jf_*` archives in the project directory.
   - `run.py` copies built binaries into the test workdir and launches the controller.
   - `validate_test.py` checks outputs.
 
@@ -100,9 +106,14 @@ Notes:
 Typical steps:
 
 - Implement a new `ModelControl` subclass (see `api/model_control.h`).
+- Implement `get_input_manifest(...)` for the new model so `main()` does not need model-specific BOINC input naming or unpack rules.
 - Add sources under `models/<your_model>/...` and include them in `models/CMakeLists.txt` (object library `cpdn_models`).
 - Update the model factory in `src/cpdn_main.cpp` (`create_model_control`) to return your new class for the appropriate model/app name.
 - Add targeted unit tests in `tests/unit/` and/or a functional fixture in `tests/functional/fixtures/`.
+
+Notes:
+- `ModelInputManifestContext` is currently a temporary bridge from `fort.4`-derived metadata into model-specific manifest generation.
+- Do not assume future models will use a Fortran namelist. A new model may populate the same manifest from a different source.
 
 ## Current experimental area
 
@@ -110,6 +121,26 @@ Typical steps:
 - The current implementation only looks for the `ICMSH...` file from `get_output_filenames(...)` and builds a hard-coded experimental argument list for diagnostics. Treat this as provisional, not as a stable interface.
 - If you are extending or refactoring this area, prefer moving the diagnostics decision-making and argument construction into model-specific code rather than growing more OpenIFS-specific logic in `main()`.
 - The diagnostics path currently depends on `TrickleHandler` consuming `trickle_data` from the slot directory, so any redesign that stages work elsewhere must either copy `trickle_data` back or update that contract deliberately.
+
+## BOINC Input Staging Semantics
+
+- BOINC logical input files in the slot, such as `ic_ancil_*.zip`, `ifsdata_*.zip`, and `clim_data_*.zip`, are read-only controller inputs and must not be overwritten.
+- The controller should resolve those logical files through `boinc_resolve_filename_s(...)`, validate the resolved `jf_*` project archive, copy that `jf_*` archive into the slot, and unzip from the copied archive.
+- Preserve the BOINC logical file on both first run and restart so BOINC resolution still works after a restart.
+- `src/cpdn_main.cpp` should stay generic here. Model-specific filename construction and unzip destinations belong in the model manifest, not in `main()`.
+- OpenIFS currently still depends on `fort.4` metadata for part of its manifest context. Keep that dependency clearly commented as a temporary bridge rather than baking OpenIFS-specific directory logic back into controller code.
+
+## Failure Reporting Requirements
+
+- For operational failures that can occur on remote volunteer hosts, do not collapse the result to a bare `bool` unless no better option exists.
+- Prefer structured results that carry enough context for `main()` to emit a high-signal error:
+  - logical BOINC filename
+  - resolved physical `jf_*` file when available
+  - destination slot archive/path when available
+  - failed step such as resolve, checksum, copy, mkdir, or unzip
+  - human-readable failure message
+- Low-level helpers may still log locally, but the caller should be able to produce a single summary error line with the exact file and failure step.
+- This is especially important for BOINC input staging and other startup failures where the task is executing remotely and reproducing the environment may be difficult.
 
 ## CPU Time And Progress File Semantics
 
@@ -169,3 +200,13 @@ Typical steps:
   - restart from the saved progress file and model restart state,
   - and verify that the accumulated CPU time after restart is greater than the value saved before interruption.
 - Defer implementing that stronger restart-based functional test until the surrounding development work stabilizes.
+
+## Future Work
+
+- The current manifest refactor creates a clean seam for a future external model configuration file, but it does not implement one yet.
+- See the future-work discussion in [docs/input_file_refactor_plan.md](/home/glenn/github/cpdn_control/docs/input_file_refactor_plan.md).
+- Short version:
+  - for one additional similar model, hardcoded model manifests may still be acceptable
+  - for several substantially different models, especially if they do not share a Fortran namelist pattern, a `model.xml` or similar model-owned config file becomes more attractive
+- If `model.xml` is introduced later, prefer using it to populate the existing manifest/config seam rather than pushing more model-specific rules back into `main()`.
+- A future `model.xml` would likely describe input archives, unpack destinations, control-file names, output patterns, restart files, and model-specific setup dependencies.

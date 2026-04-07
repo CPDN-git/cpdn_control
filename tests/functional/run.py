@@ -135,7 +135,7 @@ def main():
 
     workdir = Path.cwd()
     ensure_not_repo_root(workdir)
-    projects_dir = workdir / "projects"
+    project_dir = workdir / "projects" / "climateprediction.net"
     slot0_dir = workdir / "slots" / "0"
     print(f"[run] Working directory: {workdir}")
 
@@ -157,7 +157,7 @@ def main():
     model_name = with_exe(model_name)
 
     controller_src = args.build_dir / controller_name
-    controller_dst = projects_dir / controller_name
+    controller_dst = project_dir / controller_name
     copy_binary(controller_src, controller_dst, "controller")
 
     model_src = args.build_dir / model_name

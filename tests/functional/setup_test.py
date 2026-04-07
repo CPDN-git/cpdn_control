@@ -8,6 +8,7 @@
 
 if __name__ == "__main__":
 
+    import hashlib
     import os, secrets, zipfile, shutil, platform
     import sys, json
     from pathlib import Path
@@ -30,13 +31,32 @@ if __name__ == "__main__":
         return f"{arch}-pc-linux-gnu"
 
     def write_file(path: Path, content: str):
-        path.write_text(content)
+        path.write_text(content, encoding="utf-8")
 
     def zip_single_file(src: Path, dst: Optional[Path] = None, arcname: Optional[str] = None):
         """Zip one file into dst (defaults to src+'.zip')."""
         dst = dst or src.with_name(src.name + ".zip")
         with zipfile.ZipFile(dst, "w") as zf:
             zf.write(src, arcname=arcname or src.name)
+
+    def md5_hex(path: Path) -> str:
+        digest = hashlib.md5()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(8192), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def create_project_zip(src: Path, project_dir: Path, arcname: Optional[str] = None) -> Path:
+        temp_zip = project_dir / f"{src.name}.zip.tmp"
+        zip_single_file(src, temp_zip, arcname=arcname)
+        jf_path = project_dir / f"jf_{md5_hex(temp_zip)}"
+        if jf_path.exists():
+            jf_path.unlink()
+        temp_zip.replace(jf_path)
+        return jf_path
+
+    def write_soft_link(path: Path, target: Path):
+        write_file(path, f"<soft_link>{target.as_posix()}</soft_link>\n")
 
     def ensure_dir(path: Path):
         if path.exists() or path.is_symlink():
@@ -82,9 +102,11 @@ if __name__ == "__main__":
 
     platform_triplet = detect_platform()
 
-    projects_dir = current_path / "projects"
-    ensure_dir(projects_dir)
-    print(f"[setup] Ensured projects dir: {projects_dir}")
+    projects_root = current_path / "projects"
+    ensure_dir(projects_root)
+    project_dir = projects_root / "climateprediction.net"
+    ensure_dir(project_dir)
+    print(f"[setup] Ensured project dir: {project_dir}")
 
     slots_dir = current_path / "slots"
     ensure_dir(slots_dir)
@@ -94,7 +116,7 @@ if __name__ == "__main__":
 
     # Produce fake test_app file in projects directory
     # Fake because we put the test_model exe directly in the slot
-    test_app = projects_dir / f"test_model_app_1.00_{platform_triplet}"
+    test_app = project_dir / f"test_model_app_1.00_{platform_triplet}"
     with open(test_app, 'a') as test_app_file:
       test_app_file.write(secrets.token_hex(4000) + '\n')
     zip_single_file(test_app)
@@ -110,7 +132,7 @@ if __name__ == "__main__":
                        "     <hostid>0</hostid>\n" +\
                        "     <app_name>test_model</app_name>\n" +\
                        "     <project_preferences></project_preferences>\n" +\
-                       f"    <project_dir>{projects_dir}</project_dir>\n" +\
+                       f"    <project_dir>{project_dir}</project_dir>\n" +\
                        f"    <boinc_dir>{current_path}</boinc_dir>\n" +\
                        f"    <wu_name>test_model_{member_id}_yyyymmddhh_1_{batch_id}_0</wu_name>\n" +\
                        "     <shm_key>0</shm_key>\n" +\
@@ -162,9 +184,6 @@ if __name__ == "__main__":
                          "!WU_TEMPLATE_VERSION=43r3-seasonal-20250801\n"+\
                          f"!EXPTID={experiment_id}\n"+\
                          f"!UNIQUE_MEMBER_ID={member_id}\n"+\
-                         "!IC_ANCIL_FILE=ic_ancil_0\n" +\
-                         "!IFSDATA_FILE=ifsdata_0\n" +\
-                         "!CLIMATE_DATA_FILE=clim_data_0\n" +\
                          "!HORIZ_RESOLUTION=159\n" +\
                          "!VERT_RESOLUTION=91\n" +\
                          "!GRID_TYPE=l_2\n" +\
@@ -184,9 +203,9 @@ if __name__ == "__main__":
 
     fort4_path = slot0_dir / "fort.4"
     write_file(fort4_path, fort_file_string)
-    zip_single_file(fort4_path, slot0_dir / "jf_namelist", arcname="fort.4")
+    jf_namelist_path = create_project_zip(fort4_path, project_dir, arcname="fort.4")
     os.remove(fort4_path)   # remove unzipped version
-    print("[setup] Wrote fort.4 and jf_namelist")
+    print(f"[setup] Wrote fort.4 and {jf_namelist_path.name}")
 
     # The OpenIFS BOINC implementation uses mapped logical filenames to
     # identify the various input files.  Here we create the files with
@@ -196,51 +215,35 @@ if __name__ == "__main__":
     # filenames are not descriptive.
 
     # Create logical namelist file
-    namelist_string = ">jf_namelist<\n"
     namelist_path = slot0_dir / f"test_model_{member_id}_yyyymmddhh_{forecast_length}_{batch_id}_{wu_name}.zip"
-    write_file(namelist_path, namelist_string)
+    write_soft_link(namelist_path, Path(os.path.relpath(jf_namelist_path, slot0_dir)))
     print(f"[setup] Wrote logical namelist {namelist_path.name}")
 
     # Create ic_ancil file
-    ic_ancil_string = ">jf_ic_ancil<\n"
-    write_file(slot0_dir / "ic_ancil_0.zip", ic_ancil_string)
-    print("[setup] Wrote ic_ancil_0.zip")
-
-    # Produce jf_ic_ancil file
-    jf_ic_ancil_path = slot0_dir / 'jf_ic_ancil'
-    with open(jf_ic_ancil_path, 'a') as jf_ic_ancil_file:
+    ic_ancil_payload = slot0_dir / "jf_ic_ancil"
+    with open(ic_ancil_payload, 'a') as jf_ic_ancil_file:
       jf_ic_ancil_file.write(secrets.token_hex(4000) + '\n')
-    jf_ic_ancil_zip = slot0_dir / 'jf_ic_ancil.zip'
-    zip_single_file(jf_ic_ancil_path, jf_ic_ancil_zip, arcname='jf_ic_ancil')
-    shutil.move(jf_ic_ancil_zip, jf_ic_ancil_path)
-    print("[setup] Created jf_ic_ancil logical file")
+    jf_ic_ancil_path = create_project_zip(ic_ancil_payload, project_dir, arcname='jf_ic_ancil')
+    os.remove(ic_ancil_payload)
+    write_soft_link(slot0_dir / f"ic_ancil_{wu_name}.zip", Path(os.path.relpath(jf_ic_ancil_path, slot0_dir)))
+    print(f"[setup] Wrote logical ic_ancil_{wu_name}.zip")
 
     # Create ifsdata file
-    ifsdata_string = ">jf_ifsdata<\n"
-    write_file(slot0_dir / "ifsdata_0.zip", ifsdata_string)
-    print("[setup] Wrote ifsdata_0.zip")
-
-    # Produce jf_ifsdata file
-    jf_ifsdata_path = slot0_dir / 'jf_ifsdata'
-    with open(jf_ifsdata_path, 'a') as jf_ifsdata_file:
+    ifsdata_payload = slot0_dir / 'jf_ifsdata'
+    with open(ifsdata_payload, 'a') as jf_ifsdata_file:
       jf_ifsdata_file.write(secrets.token_hex(4000) + '\n')
-    jf_ifsdata_zip = slot0_dir / 'jf_ifsdata.zip'
-    zip_single_file(jf_ifsdata_path, jf_ifsdata_zip, arcname='jf_ifsdata')
-    shutil.move(jf_ifsdata_zip, jf_ifsdata_path)
-    print("[setup] Created jf_ifsdata logical file")
+    jf_ifsdata_path = create_project_zip(ifsdata_payload, project_dir, arcname='jf_ifsdata')
+    os.remove(ifsdata_payload)
+    write_soft_link(slot0_dir / f"ifsdata_{wu_name}.zip", Path(os.path.relpath(jf_ifsdata_path, slot0_dir)))
+    print(f"[setup] Wrote logical ifsdata_{wu_name}.zip")
 
     # Create clim_data file
-    clim_data_string = ">jf_clim_data<\n"
-    write_file(slot0_dir / "clim_data_0.zip", clim_data_string)
-    print("[setup] Wrote clim_data_0.zip")
-
-    # Produce jf_clim_data file
-    jf_clim_data_path = slot0_dir / 'jf_clim_data'
-    with open(jf_clim_data_path, 'a') as jf_clim_data_file:
+    clim_data_payload = slot0_dir / 'jf_clim_data'
+    with open(clim_data_payload, 'a') as jf_clim_data_file:
       jf_clim_data_file.write(secrets.token_hex(4000) + '\n')
-    jf_clim_data_zip = slot0_dir / 'jf_clim_data.zip'
-    zip_single_file(jf_clim_data_path, jf_clim_data_zip, arcname='jf_clim_data')
-    shutil.move(jf_clim_data_zip, jf_clim_data_path)
-    print("[setup] Created jf_clim_data logical file")
+    jf_clim_data_path = create_project_zip(clim_data_payload, project_dir, arcname='jf_clim_data')
+    os.remove(clim_data_payload)
+    write_soft_link(slot0_dir / f"clim_data_{wu_name}.zip", Path(os.path.relpath(jf_clim_data_path, slot0_dir)))
+    print(f"[setup] Wrote logical clim_data_{wu_name}.zip")
 
     print("[setup] Test fixture generation complete")

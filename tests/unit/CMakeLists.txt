@@ -16,7 +16,6 @@ add_executable(unit_tests unit_tests.cpp
                         t_cputime_comparison.cpp
                         t_parse_key_value.cpp
                         t_parse_namelist_key_value.cpp
-                        t_get_tag.cpp
                         t_check_parse_int.cpp
                         t_fread_last_line.cpp
                         t_model_frac_done.cpp
@@ -28,6 +27,8 @@ add_executable(unit_tests unit_tests.cpp
                         t_launch_process.cpp
                         t_trickle_handler.cpp
                         t_run_process_with_timeout.cpp
+                        t_verify_project_zip_md5.cpp
+                        t_stage_model_input_archive.cpp
 )
 
 # Helper executable used by launch_process tests
@@ -48,7 +49,6 @@ add_test( NAME ProgressTest  COMMAND unit_tests "Read Progress File" )
 add_test( NAME CPUTimeComparisonTest COMMAND unit_tests "CPU Time Comparison" )
 add_test( NAME ParseKeyValueTest COMMAND unit_tests "Parse Key Value" )
 add_test( NAME ParseNamelistKeyValueTest COMMAND unit_tests "Parse Namelist Key Value" )
-add_test( NAME GetTagTest COMMAND unit_tests "Get Tag" )
 add_test( NAME ParseIntTest COMMAND unit_tests "Parse Int" )
 add_test( NAME FreadLastLineTest COMMAND unit_tests "Fread Last Line" )
 add_test( NAME ModelFracDoneTest COMMAND unit_tests "Model Frac Done" )
@@ -60,3 +60,5 @@ add_test( NAME GetOutFilesTest COMMAND unit_tests "Get Out Files" )
 add_test( NAME LaunchProcessTest COMMAND unit_tests "Launch Process" )
 add_test( NAME TrickleHandlerTest COMMAND unit_tests "Trickle Handler" )
 add_test( NAME RunProcessWithTimeoutTest COMMAND unit_tests "Run Process With Timeout" )
+add_test( NAME VerifyProjectZipMD5Test COMMAND unit_tests "Verify Project Zip MD5" )
+add_test( NAME StageModelInputArchiveTest COMMAND unit_tests "Stage Model Input Archive" )

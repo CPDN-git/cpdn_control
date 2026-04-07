@@ -23,7 +23,6 @@ int main( int argc, char* argv[] )
         { "CPU Time Comparison", t_cputime_comparison },
         { "Parse Key Value", t_parse_key_value },
         { "Parse Namelist Key Value", t_parse_namelist_key_value },
-        { "Get Tag", t_get_tag },
         { "Parse Int", t_check_parse_int },
         { "Fread Last Line", t_fread_last_line },
         { "Model Frac Done", t_model_frac_done },
@@ -35,6 +34,8 @@ int main( int argc, char* argv[] )
         { "Launch Process", t_launch_process },
         { "Trickle Handler", t_trickle_handler },
         { "Run Process With Timeout", t_run_process_with_timeout },
+        { "Verify Project Zip MD5", t_verify_project_zip_md5 },
+        { "Stage Model Input Archive", t_stage_model_input_archive },
         // Add new test functions here! Remember previous trailing comma!
     };
 

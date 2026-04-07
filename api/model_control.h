@@ -11,6 +11,9 @@
 #include <regex>
 #include <string>
 #include <string_view>
+#include <vector>
+
+#include "model_input_manifest.h"
 
 namespace fs = std::filesystem;
 
@@ -66,6 +69,7 @@ class ModelControl {
     virtual std::string get_model_version() const { return model_version; }
     virtual std::string get_executable_name() const { return executable; }
     virtual std::string get_parameter_input_file() const { return parameter_input_file; }
+    virtual ModelInputManifest get_input_manifest( const ModelInputManifestContext& ctx ) const = 0;
 
     // Determine the current model step; return true if successful, false otherwise.
     virtual bool get_current_step( std::string& current_step, const int total_steps ) const = 0;

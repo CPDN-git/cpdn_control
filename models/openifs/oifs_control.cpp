@@ -41,6 +41,26 @@ bool OpenIFSControl::check_model_success() const
     return success;
 }
 
+
+/**
+ * @brief Get list of model input files to unpack from the project directory.
+ * 
+ * @param ctx Model configuration context containing metadata for determining the required input files.
+ * @return ModelInputManifest List of model input archives with logical names and unzip directories.
+ */
+ModelInputManifest OpenIFSControl::get_input_manifest( const ModelInputManifestContext& ctx ) const
+{
+    // The controller keeps BOINC resolution, checksum verification, copying, and unzip generic.
+    // OpenIFS only declares the logical BOINC files it needs and where each archive unpacks.
+    return {
+        { "ic_ancil_" + ctx.workunit_id + ".zip", fs::path( "." ) },
+        { "ifsdata_" + ctx.workunit_id + ".zip", fs::path( "ifsdata" ) },
+        // OpenIFS still derives the climate-data directory from fort.4 metadata threaded through context.
+        { "clim_data_" + ctx.workunit_id + ".zip", fs::path( ctx.horiz_resolution + ctx.grid_type ) },
+    };
+}
+
+
 /**
  * @brief Print the last n lines of key log files produced by the model.
  * @param nlines Number of lines to print from end of each log file.
@@ -56,6 +76,7 @@ void OpenIFSControl::print_logs( const int nlines ) const
 
 /**
  * @brief Get the current model step from the status file.
+ * 
  * @param status_file Path to the model status file.
  * @param current_step Reference to an integer to store the current step. Updated on success.
  * @returns True if the current step was successfully retrieved, false otherwise.
@@ -82,9 +103,11 @@ bool OpenIFSControl::get_current_step( std::string& current_step, const int tota
     return result;
 }
 
+
 /**
  * @brief Returns list of model output filenames at a model step.
  *        Used to determine which files to upload at each step.
+ * 
  * @param step The model step (string) of files to return.
  * @param id The experiment ID or general experiment identifier (string).
  * @returns A vector of output filenames to be uploaded.

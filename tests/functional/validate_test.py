@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validation for functional tests."""
 
+import json
 import sys
 from pathlib import Path
 from typing import Optional
@@ -35,7 +36,8 @@ def ensure_not_repo_root(workdir: Path) -> None:
 def main():
     workdir = Path.cwd()
     ensure_not_repo_root(workdir)
-    progress_path = workdir / "slots" / "0" / "cpdn_progressfile.txt"
+    slot0_dir = workdir / "slots" / "0"
+    progress_path = slot0_dir / "cpdn_progressfile.txt"
     config_path = Path(sys.argv[1]) if len(sys.argv) > 1 else None
 
     cpu_time_text = read_progress_value(progress_path, "prior_acc_cpu_time")
@@ -54,6 +56,21 @@ def main():
         return 1
 
     if config_path:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        logical_files = [
+            slot0_dir / f"ic_ancil_{config['wu_name']}.zip",
+            slot0_dir / f"ifsdata_{config['wu_name']}.zip",
+            slot0_dir / f"clim_data_{config['wu_name']}.zip",
+        ]
+        for logical_file in logical_files:
+            if not logical_file.exists():
+                print(f"[validate] Logical BOINC file missing after run: {logical_file}", file=sys.stderr)
+                return 1
+            content = logical_file.read_text(encoding="utf-8", errors="replace").strip()
+            if not content.startswith("<soft_link>"):
+                print(f"[validate] Logical BOINC file was overwritten: {logical_file}", file=sys.stderr)
+                return 1
+
         print(f"[validate] prior_acc_cpu_time is present and non-negative for config: {config_path}")
     else:
         print("[validate] prior_acc_cpu_time is present and non-negative")

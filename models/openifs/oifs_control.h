@@ -34,6 +34,7 @@ class OpenIFSControl : public ModelControl {
 
     // Getters and setters
 
+    ModelInputManifest get_input_manifest( const ModelInputManifestContext& ctx ) const override;
     bool get_current_step( std::string& step, const int total_steps ) const override;
     std::vector<std::string> get_output_filenames( std::string_view step, std::string_view id ) const override;
     std::vector<std::string> get_log_filenames() const override;

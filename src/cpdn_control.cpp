@@ -7,6 +7,8 @@
 // Original code: Andy Bowery (Oxford eResearch Centre, Oxford University) May 2023
 //
 
+#include <algorithm>
+#include <cctype>
 #include <cerrno>
 #include <chrono>
 #include <cstring>
@@ -34,6 +36,7 @@
 
 #include "boinc/boinc_api.h"
 #include "boinc/diagnostics.h"
+#include "boinc/md5_file.h"
 #include "boinc/util.h"
 
 #include "cpdn_control.h"
@@ -44,6 +47,45 @@
 
 namespace chrono = std::chrono;
 namespace fs = std::filesystem;
+
+static std::string lowercase_copy( std::string value )
+{
+    std::transform( value.begin(), value.end(), value.begin(), []( unsigned char ch ) { return static_cast<char>( std::tolower( ch ) ); } );
+    return value;
+}
+
+static bool extract_expected_md5( const fs::path& project_file, std::string& expected_md5 )
+{
+    std::string filename = project_file.filename().string();
+    if ( filename.size() != 35 || filename.rfind( "jf_", 0 ) != 0 ) {
+        return false;
+    }
+
+    expected_md5 = filename.substr( 3 );
+    if ( !std::all_of( expected_md5.begin(), expected_md5.end(), []( unsigned char ch ) { return std::isxdigit( ch ) != 0; } ) ) {
+        expected_md5.clear();
+        return false;
+    }
+
+    expected_md5 = lowercase_copy( expected_md5 );
+    return true;
+}
+
+static InputStageResult make_stage_success()
+{
+    InputStageResult result;
+    result.ok = true;
+    return result;
+}
+
+static InputStageResult make_stage_error( std::string_view step, std::string message )
+{
+    InputStageResult result;
+    result.ok = false;
+    result.step = step;
+    result.message = std::move( message );
+    return result;
+}
 
 
 /**
@@ -405,73 +447,229 @@ pid_t launch_process( const std::string& project_path, const std::string& slot_p
 }
 
 
-// Open a file and return the "jf_*" string contained between the arrow tags else empty string
-// Explanation for Glenn's benefit :).  First run of task the filename contains a 'reference'
-// to the real zip file stored in the projects directory.  The reference is in the form of a
-// single line e.g. ">../../projects/climateprediction.net/jf_ic_ancil_1234<".
-// This function extracts the strings between the delimiters, so the real zip
-// file can be copied to overwrite the file containing the 'jf_' file reference (yes, it's odd and not a good idea).
-// On the subsequent runs, what should happen is the client restores the original
-// 'reference' (jf_ic_ancil_1234) file. However, some clients do not do this which
-// means the real zip file is there instead. In this case get_tag returns an empty string.
-
-// GC. Modified to avoid reading the entire zip file if it's not a jf_ file reference.
-//     Otherwise we end up with a very big string in memory!
-std::string get_tag( const std::string& filename )
+/**
+ * @brief Resolves a BOINC logical input file to its physical path on disk.
+ * 
+ * @param logical_file The path to the logical BOINC file.
+ * @param physical_path Output parameter to hold the resolved physical path.
+ * @return true if the file was successfully resolved, false otherwise.
+ */
+bool resolve_boinc_input_file( const fs::path& logical_file, fs::path& physical_path, std::string* error_msg )
 {
-
-    constexpr auto MAX_READ_BYTES = 256;
-    std::string buffer( MAX_READ_BYTES, '\0' );
-
-    std::ifstream file( filename, std::ios::in );
-
-    if ( !file.is_open() ) {
-        std::cerr << "..get_tag. Failed to open file: " << filename << std::endl;
-        return std::string();
+    if ( !fs::exists( logical_file ) ) {
+        if ( error_msg ) {
+            *error_msg = "logical BOINC file does not exist: " + logical_file.string();
+        }
+        return false;
     }
 
-    // Read up to MAX_READ_BYTES directly into the string's underlying buffer
-    file.read( buffer.data(), MAX_READ_BYTES - 1 );    // Leave space for final null terminator set above
-
-    // Get the actual number of bytes read
-    std::streamsize chars_read = file.gcount();
-
-    if ( chars_read == 0 ) {
-        return std::string();    // File is empty
+    std::string resolved = logical_file.string();
+    int retval = boinc_resolve_filename_s( logical_file.string().c_str(), resolved );
+    if ( retval ) {
+        if ( error_msg ) {
+            *error_msg = "boinc_resolve_filename_s() failed: " + std::string( boincerror( retval ) );
+        }
+        return false;
     }
 
-    // Check for the "magic number" for zipfiles in case zipfile has already been copied.
-    if ( chars_read > 2 && buffer[0] == 'P' && buffer[1] == 'K' ) {
-        return std::string();
+    fs::path candidate = resolved;
+#ifndef _WIN32
+    if ( candidate == logical_file && fs::is_symlink( logical_file ) ) {
+        candidate = fs::read_symlink( logical_file );
+    }
+#endif
+    if ( candidate.is_relative() ) {
+        candidate = logical_file.parent_path() / candidate;
+    }
+    candidate = candidate.lexically_normal();
+
+    if ( !fs::exists( candidate ) ) {
+        if ( error_msg ) {
+            *error_msg = "resolved BOINC file does not exist: " + candidate.string();
+        }
+        return false;
     }
 
-    // Resize string to actual number of chars read
-    buffer.resize( chars_read );
+    physical_path = candidate;
+    return true;
+}
 
-    // Look for the delimiters to find the file reference
-    // We could still be unlucky here and have a binary file which might just
-    // have a > and < in our buffer with garbage in. Negligible risk.
-    const char START_TAG = '>';
-    const char END_TAG = '<';
 
-    auto start_pos = buffer.find( START_TAG );
-
-    if ( start_pos == std::string::npos ) {
-        return std::string();
+/**
+ * @brief Verifies that the MD5 checksum of the project file matches the expected value extracted from the filename.
+ * 
+ * @param project_file The path to the project file.
+ * @return true if the MD5 checksum matches the expected value, false otherwise.
+ */
+bool verify_project_zip_md5( const fs::path& project_file, std::string* error_msg )
+{
+    std::string expected_md5;
+    if ( !extract_expected_md5( project_file, expected_md5 ) ) {
+        if ( error_msg ) {
+            *error_msg = "project file name is not of the form jf_<md5>: " + project_file.string();
+        }
+        return false;
     }
 
-    auto tag_start = start_pos + 1;
-    auto tag_end = buffer.find( END_TAG, tag_start );
-
-    if ( tag_end == std::string::npos ) {
-        return std::string();
+    char actual_md5[MD5_LEN] = { 0 };    // MD5_LEN comes from boinc include header.
+    double nbytes = 0.0;
+    int retval = md5_file( project_file.string().c_str(), actual_md5, nbytes );
+    if ( retval ) {
+        if ( error_msg ) {
+            *error_msg = "failed to compute MD5: " + std::string( boincerror( retval ) );
+        }
+        return false;
     }
 
-    // Extract the file reference
-    // The length is (position of '<') - (position after '>')
-    auto length = tag_end - tag_start;
+    std::string actual = lowercase_copy( actual_md5 );
+    if ( actual != expected_md5 ) {
+        if ( error_msg ) {
+            *error_msg = "md5 mismatch: expected " + expected_md5 + ", got " + actual;
+        }
+        return false;
+    }
 
-    return buffer.substr( tag_start, length );
+    return true;
+}
+
+
+/**
+ * @brief Ensures that a directory exists, creating it if necessary.
+ * 
+ * @param dir The path to the directory.
+ * @return true if the directory exists or was successfully created, false otherwise.
+ */
+bool ensure_directory( const fs::path& dir, std::string* error_msg )
+{
+    std::error_code ec;
+    if ( fs::exists( dir, ec ) ) {
+        if ( ec ) {
+            if ( error_msg ) {
+                *error_msg = "failed to inspect directory " + dir.string() + ": " + ec.message();
+            }
+            return false;
+        }
+        if ( !fs::is_directory( dir, ec ) ) {
+            if ( error_msg ) {
+                *error_msg = "path exists but is not a directory: " + dir.string();
+            }
+            return false;
+        }
+        return true;
+    }
+
+    if ( !fs::create_directories( dir, ec ) && ec ) {
+        if ( error_msg ) {
+            *error_msg = "failed to create directory " + dir.string() + ": " + ec.message();
+        }
+        return false;
+    }
+    return true;
+}
+
+
+/**
+ * @brief Stages a model input archive by copying from the project directory to the slot directory and unzipping.
+ * 
+ * @param source_project_file The path to the source archive file in the project directory.
+ * @param slot_path The path to the slot directory.
+ * @param unzip_relative_dir The relative directory within the slot to unzip the file to.
+ * @param type_label A label for the type of file being staged, used in logging messages.
+ * @return true if the file was successfully staged, false otherwise.
+ */
+InputStageResult stage_model_input_archive( const fs::path& source_project_file, const fs::path& slot_path, const fs::path& unzip_relative_dir,
+                                            std::string_view type_label )
+{
+    fs::path unzip_dir = unzip_relative_dir.empty() || unzip_relative_dir == "." ? slot_path : ( slot_path / unzip_relative_dir ).lexically_normal();
+    fs::path destination_archive = unzip_dir / source_project_file.filename();
+
+    std::string error_msg;
+    if ( !ensure_directory( unzip_dir, &error_msg ) ) {
+        auto result = make_stage_error( "ensure_directory", std::move( error_msg ) );
+        result.resolved_project_file = source_project_file;
+        result.destination_archive = destination_archive;
+        return result;
+    }
+
+    std::cerr << "Copying " << type_label << " from: " << source_project_file << "\n     to: " << destination_archive << '\n';
+    try {
+        fs::copy_file( source_project_file, destination_archive, fs::copy_options::overwrite_existing );
+    } catch ( const fs::filesystem_error& e ) {
+        auto result = make_stage_error( "copy_file", e.what() );
+        result.resolved_project_file = source_project_file;
+        result.destination_archive = destination_archive;
+        return result;
+    }
+
+    std::cerr << "Unzipping " << type_label << " archive: " << destination_archive << '\n';
+    if ( !cpdn_unzip( destination_archive, unzip_dir ) ) {
+        auto result = make_stage_error( "cpdn_unzip", "failed to unzip archive into " + unzip_dir.string() );
+        result.resolved_project_file = source_project_file;
+        result.destination_archive = destination_archive;
+        return result;
+    }
+
+    auto result = make_stage_success();
+    result.resolved_project_file = source_project_file;
+    result.destination_archive = destination_archive;
+    return result;
+}
+
+
+/**
+ * @brief Stages a BOINC input file by resolving the logical filename, verifying the MD5, copying to the slot directory and unzipping.
+ * 
+ * @param logical_file The logical filename of the BOINC input file.
+ * @param slot_path The path to the slot directory.
+ * @param unzip_relative_dir The relative directory within the slot to unzip the file to.
+ * @param type_label A label for the type of file being staged, used in logging messages.
+ * @return true if the file was successfully staged, false otherwise.
+ */
+InputStageResult stage_boinc_input_file( const fs::path& logical_file, const fs::path& slot_path, const fs::path& unzip_relative_dir,
+                                         std::string_view type_label )
+{
+    fs::path project_file;
+    std::string error_msg;
+    if ( !resolve_boinc_input_file( logical_file, project_file, &error_msg ) ) {
+        auto result = make_stage_error( "resolve_boinc_input_file", std::move( error_msg ) );
+        result.logical_file = logical_file;
+        return result;
+    }
+
+    if ( !verify_project_zip_md5( project_file, &error_msg ) ) {
+        auto result = make_stage_error( "verify_project_zip_md5", std::move( error_msg ) );
+        result.logical_file = logical_file;
+        result.resolved_project_file = project_file;
+        return result;
+    }
+
+    auto result = stage_model_input_archive( project_file, slot_path, unzip_relative_dir, type_label );
+    result.logical_file = logical_file;
+    if ( result.resolved_project_file.empty() ) {
+        result.resolved_project_file = project_file;
+    }
+    return result;
+}
+
+
+/**
+ * @brief Stages the model input files as specified in the manifest by copying from the 
+ *        project directory to the slot directory and unzipping.
+ * 
+ * @param manifest The manifest specifying the model input files to stage.
+ * @param slot_path The path to the slot directory.
+ * @return true if all files were successfully staged, false otherwise.
+ */
+InputStageResult stage_model_input_manifest( const ModelInputManifest& manifest, const fs::path& slot_path )
+{
+    for ( const auto& archive : manifest ) {
+        fs::path logical_file = slot_path / archive.logical_name;
+        auto result = stage_boinc_input_file( logical_file, slot_path, archive.unzip_relative_dir, archive.logical_name );
+        if ( !result.ok ) {
+            return result;
+        }
+    }
+    return make_stage_success();
 }
 
 
@@ -573,58 +771,6 @@ int move_result_file( const std::string& slot_path, const std::string& temp_path
  * @return int Returns 0 on success, non-zero on failure.
  */
 // GC. TODO. Convert this to accept  fs::path args.
-int copy_and_unzip( const std::string& zipfile, const std::string& destination, const std::string& unzip_path, const std::string& type )
-{
-    int retval = 0;
-
-    // Check for the existence of the zip file
-    if ( !path_exists( zipfile ) ) {
-        std::cerr << "..The " << type << " zip file does not exist: " << zipfile << std::endl;
-        return 1;    // should terminate, the model won't run.
-    }
-
-    // Check whether the zip file is empty
-    if ( file_is_empty( zipfile ) ) {
-        std::cerr << "..The " << type << " zip file is empty: " << zipfile << std::endl;
-        return 1;    // should terminate, the model won't run.
-    }
-
-    // Copy and unzip the zip file only if the zip file contains a string between tags.
-    // If it doesn't, the real zip file is likely already in the working directory from a previous run.
-    if ( std::string source = get_tag( zipfile ); !source.empty() ) {
-        // Copy the 'jf_' file to the working directory and rename
-        if ( path_exists( source ) ) {
-            std::cerr << "Copying the " << type << " file from: " << source << "\n     to: " << destination << '\n';
-            try {
-                fs::copy_file( source, destination, fs::copy_options::overwrite_existing );
-            } catch ( const fs::filesystem_error& e ) {
-                std::cerr << "..copy_and_unzip: Error copying file: " << source << " to: " << destination << ",\nError: " << e.what() << "\n";
-                return 1;
-            }
-        } else {
-            std::cerr << "..The " << type << " file retrieved from get_tag does not exist: " << source << std::endl;
-            return 1;    // GC what should we do here -- return or carry on and check destination exists from a previous run?
-        }
-    }
-
-    // If 'source' is empty, the 'jf_' link wasn't there so we assume the real zip file is already in the working directory.
-    // We could assume that the real zip file has already been unzipped, but to be safe unzip it if found.
-    if ( path_exists( destination ) ) {
-        std::cerr << "Unzipping the " << type << " zip file: " << destination << '\n';
-        if ( !cpdn_unzip( destination, unzip_path ) ) {
-            std::cerr << "..Unzipping the " << type << " file failed" << std::endl;
-            return 1;
-        }
-    } else {
-        std::cerr << "..The " << type << " file does not exist in the working directory: " << destination << std::endl;
-        return 1;
-    }
-
-    // Success, retval is 0
-    return retval;
-}
-
-
 /**
  * @brief Zips the upload files and deletes the original files upon success.
  * 

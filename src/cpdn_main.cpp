@@ -129,6 +129,27 @@ static void replay_diagnostics_output_to_stderr( const fs::path& combined_output
     }
 }
 
+static void report_input_stage_failure( std::string_view context, const InputStageResult& result )
+{
+    std::cerr << "..Failed to stage " << context;
+    if ( !result.logical_file.empty() ) {
+        std::cerr << " for logical file '" << result.logical_file << "'";
+    }
+    if ( !result.resolved_project_file.empty() ) {
+        std::cerr << " resolved to '" << result.resolved_project_file << "'";
+    }
+    if ( !result.destination_archive.empty() ) {
+        std::cerr << " via slot archive '" << result.destination_archive << "'";
+    }
+    if ( !result.step.empty() ) {
+        std::cerr << " at step '" << result.step << "'";
+    }
+    if ( !result.message.empty() ) {
+        std::cerr << ": " << result.message;
+    }
+    std::cerr << '\n';
+}
+
 
 /**
  * @brief Run diagnostics.exe synchronously in the slot directory for the completed step.
@@ -567,25 +588,25 @@ int main( int argc, char** argv )
         return task_finish( retval );
     }
 
-    //------------------------------------------Process the namelist-----------------------------------------
-    // GC. Note, this is not the 'model fort.4' namelist file being referred to here. Needs renaming to avoid confusion.
-    // This should really be part of a general piece of code to process the model ancil files. Needs refactoring later.
+    //------------------------------------------Stage & unpack the app bundle---------------------------
+    // This bundle is a BOINC logical input file in the slot. Resolve its jf_* source, copy that source
+    // into the slot, and unzip it without overwriting the BOINC logical file itself.
 
-    fs::path namelist_zip_path = bconfig.slot_path;
-    namelist_zip_path /= std::string( bconfig.app_name ) + "_" + tconfig.memberid + "_" + tconfig.startdate + "_" + std::to_string( (int)num_days ) +
-                         "_" + tconfig.batch + "_" + tconfig.workunit + ".zip";
-    std::string namelist_zip = namelist_zip_path.string();    // nb this is a const string.
+    fs::path app_bundle_path = bconfig.slot_path;
+    app_bundle_path /= std::string( bconfig.app_name ) + "_" + tconfig.memberid + "_" + tconfig.startdate + "_" + std::to_string( (int)num_days ) +
+                       "_" + tconfig.batch + "_" + tconfig.workunit + ".zip";
+    std::string app_bundle = app_bundle_path.string();
 
-    // Copy the namelist_zip to the slot directory and unzip
-    if ( copy_and_unzip( namelist_zip, namelist_zip, bconfig.slot_path, "namelist_zip" ) ) {
-        std::cerr << "..Copying and unzipping the namelist_zip failed: " << namelist_zip << std::endl;
+    auto app_bundle_stage = stage_boinc_input_file( app_bundle_path, bconfig.slot_path, fs::path( "." ), "app_bundle" );
+    if ( !app_bundle_stage.ok ) {
+        report_input_stage_failure( "app bundle", app_bundle_stage );
+        std::cerr << "..App bundle logical path was: " << app_bundle << std::endl;
         return task_finish( 1 );    // should terminate, the model won't run.
     }
 
-    // Parse the fort.4 namelist for the filenames and variables
-    std::string ifsdata_file;
-    std::string ic_ancil_file;
-    std::string climate_data_file;
+    //----------------------------------------------------------------------------------------------
+    // Parse the fort.4 namelist for controller scheduling values and the remaining OpenIFS metadata.
+
     std::string namelist_file = bconfig.slot_path + "/" + namelist;
     std::string namelist_line;
     std::string horiz_resolution;
@@ -638,8 +659,7 @@ int main( int argc, char** argv )
 
     // These are the keys injected by CPDN into the namelist header. Other variables
     // searched for come from the namelist itself.
-    const std::unordered_set<std::string> header_keys = { "IC_ANCIL_FILE",   "IFSDATA_FILE", "CLIMATE_DATA_FILE", "HORIZ_RESOLUTION",
-                                                          "VERT_RESOLUTION", "GRID_TYPE",    "UPLOAD_INTERVAL" };
+    const std::unordered_set<std::string> header_keys = { "HORIZ_RESOLUTION", "VERT_RESOLUTION", "GRID_TYPE", "UPLOAD_INTERVAL" };
 
     while ( std::getline( namelist_filestream, namelist_line ) ) {
         tmpstr.clear();
@@ -672,13 +692,7 @@ int main( int argc, char** argv )
             continue;
         }
 
-        if ( parsed_key == "IFSDATA_FILE" ) {
-            ifsdata_file = parsed_value;
-        } else if ( parsed_key == "IC_ANCIL_FILE" ) {
-            ic_ancil_file = parsed_value;
-        } else if ( parsed_key == "CLIMATE_DATA_FILE" ) {
-            climate_data_file = parsed_value;
-        } else if ( parsed_key == "HORIZ_RESOLUTION" ) {
+        if ( parsed_key == "HORIZ_RESOLUTION" ) {
             horiz_resolution = parsed_value;
         } else if ( parsed_key == "VERT_RESOLUTION" ) {
             vert_resolution = parsed_value;
@@ -723,15 +737,8 @@ int main( int argc, char** argv )
     }
     namelist_filestream.close();
 
-    // These metadata values are required to locate the model input files.
-    // Abort here rather than continuing into broken path construction later on.
+    // These metadata values are still required for scheduling and for the temporary OpenIFS manifest context.
     std::vector<std::string> missing_namelist_fields;
-    if ( ifsdata_file.empty() )
-        missing_namelist_fields.push_back( "IFSDATA_FILE" );
-    if ( ic_ancil_file.empty() )
-        missing_namelist_fields.push_back( "IC_ANCIL_FILE" );
-    if ( climate_data_file.empty() )
-        missing_namelist_fields.push_back( "CLIMATE_DATA_FILE" );
     if ( horiz_resolution.empty() )
         missing_namelist_fields.push_back( "HORIZ_RESOLUTION" );
     if ( vert_resolution.empty() )
@@ -751,9 +758,6 @@ int main( int argc, char** argv )
     }
 
     std::cerr << "Values read from model namelist are: \n"
-              << " ifsdata_file: " << ifsdata_file << '\n'
-              << " ic_ancil_file: " << ic_ancil_file << '\n'
-              << " climate_data_file: " << climate_data_file << '\n'
               << " horiz_resolution: " << horiz_resolution << '\n'
               << " vert_resolution: " << vert_resolution << '\n'
               << " grid_type: " << grid_type << '\n'
@@ -783,56 +787,14 @@ int main( int argc, char** argv )
               << " days.\n";
 
     //-------------------------------------------------------------------------------------------------------
-    //    Unpack the task's input files into the slot directory
+    // Unpack remaining model input files through model instance manifest context so main() stays generic.
 
-    // Process the ic_ancil_file:
-    std::string ic_ancil_zip = bconfig.slot_path + "/" + ic_ancil_file + ".zip";
+    ModelInputManifestContext input_manifest_context{ tconfig.workunit, horiz_resolution, grid_type };
 
-    // Copy the ic_ancil_zip to the slot directory and unzip
-    if ( copy_and_unzip( ic_ancil_zip, ic_ancil_zip, bconfig.slot_path, "ic_ancil_zip" ) ) {
-        std::cerr << "..Copying and unzipping the ic_ancil_zip failed: " << ic_ancil_zip << std::endl;
-        return task_finish( 1 );    // should terminate, the model won't run.
-    }
-
-    // Process the ifsdata_file:
-    // Make the ifsdata directory and set the required paths
-    std::string ifsdata_folder = bconfig.slot_path + "/ifsdata";
-    std::string ifsdata_zip = bconfig.slot_path + "/" + ifsdata_file + ".zip";
-    std::string ifsdata_destination = ifsdata_folder + "/" + ifsdata_file + ".zip";
-
-    // Check if ifsdata folder does not already exists or is empty
-    if ( !path_exists( ifsdata_folder ) ) {
-        if ( mkdir( ifsdata_folder.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH ) != 0 ) {
-            std::cerr << "..mkdir for ifsdata folder failed" << std::endl;
-            return task_finish( 1 );    // should terminate, the model won't run.
-        }
-    }
-
-    // Copy the ifsdata_zip to the slot directory and unzip
-    // GC TODO. convert to fs::path and get rid of handling '/'
-    std::string ifsdata_check = ifsdata_folder + "/";
-    if ( copy_and_unzip( ifsdata_zip, ifsdata_destination, ifsdata_check, "ifsdata_zip" ) ) {
-        std::cerr << "..Copying and unzipping the ifsdata_zip failed: " << ifsdata_zip << std::endl;
-        return task_finish( 1 );    // should terminate, the model won't run.
-    }
-
-    // Process the climate_data_file:
-    // Make the climate data directory and set the required paths
-    std::string climate_data_path = bconfig.slot_path + "/" + horiz_resolution + grid_type;
-    std::string climate_data_zip = bconfig.slot_path + "/" + climate_data_file + ".zip";
-    std::string climate_data_destination = climate_data_path + "/" + climate_data_file + ".zip";
-
-    // Check if climate_data folder does not already exists or is empty
-    if ( !path_exists( climate_data_path ) ) {
-        if ( mkdir( climate_data_path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH ) != 0 ) {
-            std::cerr << "..mkdir for the climate data folder failed" << std::endl;
-            return task_finish( 1 );
-        }
-    }
-
-    // Copy the climate_data_zip to the slot directory and unzip
-    if ( copy_and_unzip( climate_data_zip, climate_data_destination, climate_data_path, "climate_data_zip" ) ) {
-        std::cerr << "..Copying and unzipping the climate_data_zip failed: " << climate_data_zip << std::endl;
+    auto input_manifest = model_ctrl->get_input_manifest( input_manifest_context );
+    auto manifest_stage = stage_model_input_manifest( input_manifest, bconfig.slot_path );
+    if ( !manifest_stage.ok ) {
+        report_input_stage_failure( "model input archive", manifest_stage );
         return task_finish( 1 );    // should terminate, the model won't run.
     }
 

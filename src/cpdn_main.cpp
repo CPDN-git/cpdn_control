@@ -104,6 +104,10 @@ static std::string get_diagnostics_input_file( const fs::path& slot_path, const 
     return "";
 }
 
+
+/**
+ * @brief Replay the diagnostics program output log to stderr and remove the log file.
+ */
 static void replay_diagnostics_output_to_stderr( const fs::path& combined_output_path )
 {
     if ( combined_output_path.empty() || !fs::exists( combined_output_path ) ) {
@@ -129,6 +133,10 @@ static void replay_diagnostics_output_to_stderr( const fs::path& combined_output
     }
 }
 
+
+/**
+ * @brief Report failure to stage an input file with as much context as possible.
+ */
 static void report_input_stage_failure( std::string_view context, const InputStageResult& result )
 {
     std::cerr << "..Failed to stage " << context;
@@ -230,6 +238,12 @@ static void refresh_current_cpu_time( TaskState& tstate )
     }
 }
 
+
+/**
+ * @brief Determine the appropriate exit code for the task based on the child process status and BOINC runtime status.
+ *       Returns 0 for normal completion or if a quit request was made, 
+ *       and 1 for abort/no heartbeat or if the child process did not exit normally.
+ */
 static int get_task_finish_code( const TaskState& tstate, const BoincRuntime& bruntime )
 {
     if ( bruntime.client_status.quit_request ) {
@@ -595,12 +609,11 @@ int main( int argc, char** argv )
     fs::path app_bundle_path = bconfig.slot_path;
     app_bundle_path /= std::string( bconfig.app_name ) + "_" + tconfig.memberid + "_" + tconfig.startdate + "_" + std::to_string( (int)num_days ) +
                        "_" + tconfig.batch + "_" + tconfig.workunit + ".zip";
-    std::string app_bundle = app_bundle_path.string();
 
     auto app_bundle_stage = stage_boinc_input_file( app_bundle_path, bconfig.slot_path, fs::path( "." ), "app_bundle" );
     if ( !app_bundle_stage.ok ) {
         report_input_stage_failure( "app bundle", app_bundle_stage );
-        std::cerr << "..App bundle logical path was: " << app_bundle << std::endl;
+        std::cerr << "..App bundle logical path was: " << app_bundle_path.string() << std::endl;
         return task_finish( 1 );    // should terminate, the model won't run.
     }
 

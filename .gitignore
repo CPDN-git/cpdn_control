@@ -47,3 +47,4 @@ tools/fmt/install
 
 # Editors
 .vscode
+.codex

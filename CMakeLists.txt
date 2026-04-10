@@ -138,6 +138,7 @@ add_subdirectory(models)
 # Unit tests need just these source files; create a library for them to link against.
 add_library(cpdn_control 
         ./src/cpdn_control.cpp
+        ./src/external_diagnostics.cpp
         ./src/parse_args.cpp
         ./lib/utils.cpp
         ./lib/cpdn_cpu_time.cpp

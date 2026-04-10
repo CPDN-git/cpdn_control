@@ -13,12 +13,12 @@
 #include <sys/types.h>
 #include <vector>
 
-#include "boinc/boinc_api.h"
+#include "boinc/boinc_api.h"    // for BOINC_STATUS and BOINC_OPTIONS structs and boinc API function declarations
 
 #include "api/model_input_manifest.h"
 
 
-// GC. TODO. Consider splitting these sturcts into separate header files.
+// GC. TODO. Consider splitting these structs into separate header files.
 
 /**
  * @struct TaskState

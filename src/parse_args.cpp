@@ -24,13 +24,6 @@ ParseResult parse_args( int argc, char** argv )
     cpdn->add_option( "--upload_interval", result.upload_interval, "Upload interval in seconds" )
         ->check( CLI::NonNegativeNumber )
         ->capture_default_str();
-    cpdn->add_option( "--cpdn_ancil_files", result.ancil_files, "Comma-delimited list of ancillary files" )->delimiter( ',' )->capture_default_str();
-
-    // Options to be passed through to the model (? maybe not needed)
-    app.add_option( "--model_args", result.model_args, "Model-specific args passed through as strings" )
-        ->delimiter( ',' )
-        ->expected( -1 )
-        ->capture_default_str();
 
     // Output command line to stderr for remote debugging
     std::cerr << "Command line arguments:\n";

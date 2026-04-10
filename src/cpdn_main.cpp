@@ -287,6 +287,100 @@ static bool parse_double_arg( const std::string& text, double& value, std::strin
 static double step_to_model_time( int step, int timestep_seconds ) { return static_cast<double>( step ) * static_cast<double>( timestep_seconds ); }
 
 
+enum class TaskStartupMode { fresh_run, restart_run, invalid };
+
+
+struct TaskStartupStateResult {
+    bool ok = false;
+    TaskStartupMode startup_mode = TaskStartupMode::invalid;
+    std::string log_message;
+    bool print_model_logs = false;
+};
+
+
+/**
+ * @brief Initialize controller task state from the progress file and model restart control file.
+ *        Determines whether this is a fresh run, a restart, or an invalid mixed state.
+ */
+static TaskStartupStateResult initialize_task_state_from_restart( ModelControl& model_ctrl, const ProgressFileHandler& progress_file,
+                                                                 const int restart_interval_steps, TaskState& tstate, std::string& err_msg )
+{
+    err_msg.clear();
+
+    const bool progress_file_exists = progress_file.exists();
+    const bool restart_ctl_exists = model_ctrl.restart_ctl_exists();
+    const bool progress_file_is_empty = progress_file_exists ? progress_file.is_empty() : false;
+
+    if ( !progress_file_exists && !restart_ctl_exists ) {
+        return { true, TaskStartupMode::fresh_run, "-- Starting new model run --\n", false };
+    }
+
+    if ( progress_file_exists && !progress_file_is_empty && restart_ctl_exists ) {
+        std::string restart_step;
+        std::string restart_time;
+        if ( !model_ctrl.restart_ctl_read( restart_step, restart_time ) ) {
+            err_msg = "Reading the model restart control file failed";
+            return { false, TaskStartupMode::invalid, "", true };
+        }
+
+        if ( !progress_file.read( tstate, err_msg ) ) {
+            err_msg = "Failed to read progress file: " + err_msg;
+            return { false, TaskStartupMode::invalid, "", false };
+        }
+
+        int restart_step_value = 0;
+        std::string restart_step_text = restart_step;
+        if ( !parse_int( restart_step_text, restart_step_value, err_msg ) ) {
+            err_msg = "Failed to parse restart STEP value: " + err_msg;
+            return { false, TaskStartupMode::invalid, "", false };
+        }
+
+        if ( restart_step_value > tstate.last_completed_step ) {
+            err_msg = "STEP variable from model restart greater than last_completed_step from progress file, error occurred. Exiting..";
+            return { false, TaskStartupMode::invalid, "", false };
+        }
+
+        std::ostringstream log_message;
+        log_message << "-- Model is restarting --\n"
+                    << "Adjusting last_completed_step, " << tstate.last_completed_step << ", to previous model restart step.\n";
+
+        int adjusted_restart_step = tstate.last_completed_step;
+        adjusted_restart_step =
+            adjusted_restart_step - ( ( adjusted_restart_step % restart_interval_steps ) - 1 );    // -1 because the model will continue from restart_step.
+        tstate.last_completed_step = adjusted_restart_step;
+
+        return { true, TaskStartupMode::restart_run, log_message.str(), false };
+    }
+
+    if ( progress_file_exists && progress_file_is_empty ) {
+        err_msg = "progress file exists, but is empty => problem with model, quitting run";
+        return { false, TaskStartupMode::invalid, "", true };
+    }
+
+    if ( progress_file_exists && !restart_ctl_exists ) {
+        if ( !progress_file.read( tstate, err_msg ) ) {
+            err_msg = "Failed to read progress file: " + err_msg;
+            return { false, TaskStartupMode::invalid, "", false };
+        }
+
+        if ( tstate.last_completed_step >= restart_interval_steps ) {
+            err_msg = "progress file exists, but rcf file does not exist => problem with model, quitting run";
+            return { false, TaskStartupMode::invalid, "", true };
+        }
+
+        return { true, TaskStartupMode::fresh_run, "", false };
+    }
+
+    if ( !progress_file_exists && restart_ctl_exists ) {
+        err_msg = "rcf file exists, but progress file does not exist => problem with task, quitting run";
+        return { false, TaskStartupMode::invalid, "", true };
+    }
+
+    err_msg = "Unexpected restart/progress-file state";
+    return { false, TaskStartupMode::invalid, "", false };
+}
+
+
 /**
  * @brief Determine the appropriate exit code for the task based on the child process status and BOINC runtime status.
  *       Returns 0 for normal completion or if a quit request was made, 
@@ -731,95 +825,19 @@ int main( int argc, char** argv )
     // Initialise the ProgressFile handler
     ProgressFileHandler progress_file( bconfig.slot_path );
 
-    bool restart_ctl_exists = model_ctrl->restart_ctl_exists();    // -> model_is_restarting().
-
-
     // Check whether the rcf file and the progress file (contains model progress) are not already present from an unscheduled shutdown
     std::cerr << "Checking model's restart file and CPDN progress file: " << progress_file.path() << '\n';
 
-    // Handle the cases of the various states of the rcf file and progress file.
-    if ( !progress_file.exists() && !restart_ctl_exists ) {
-
-        // Both progress file and rcf file do not exist, model has not run.
-        // Do nothing as the task state variables are already initialized to zero values above.
-        std::cerr << "-- Starting new model run --\n";
-
-    } else if ( ( progress_file.exists() && !progress_file.is_empty() ) && restart_ctl_exists ) {
-
-        // If progress file exists, not empty and model's restart control file exists, this is a restart.
-        // Check the model's restart control file against the progress file and continue the run.
-        std::string restart_step;
-        std::string restart_time;
-
-        bool restart_ctl = model_ctrl->restart_ctl_read( restart_step, restart_time );
-
-        // If reading the rcf file failed, then kill model run
-        if ( !restart_ctl ) {
-            std::cerr << "..Reading the model restart control file failed" << '\n';
+    auto startup_state = initialize_task_state_from_restart( *model_ctrl, progress_file, restart_interval_steps, tstate, err_msg );
+    if ( !startup_state.ok ) {
+        std::cerr << ".." << err_msg << '\n';
+        if ( startup_state.print_model_logs ) {
             model_ctrl->print_logs( 50 );
-            return task_finish( 1 );
         }
-
-        if ( !progress_file.read( tstate, err_msg ) ) {
-            std::cerr << "..Failed to read progress file: " << err_msg << '\n';
-            return task_finish( 1 );
-        }
-
-        int rstep_i = 0;
-        std::string step_s = restart_step;
-        if ( !parse_int( step_s, rstep_i, err_msg ) ) {
-            std::cerr << "..Failed to parse restart STEP value: " << err_msg << '\n';
-            return task_finish( 1 );
-        }
-
-        // Check if the CSTEP variable from rcf is greater than the last completed step, if so then quit model run
-        // This is probably recoverable, but it might mean the model ran on after the controller crashed, so end for now.
-        if ( rstep_i > tstate.last_completed_step ) {
-            std::cerr << "..STEP variable from model restart greater than last_completed_step from progress file, error occurred. Exiting.." << '\n';
-            return task_finish( 1 );
-        }
-
-        // Adjust last_completed_step to the step of the previous model restart dump step.
-        // This is always a multiple of the restart frequency
-
-        std::cerr << "-- Model is restarting --\n";
-        std::cerr << "Adjusting last_completed_step, " << tstate.last_completed_step << ", to previous model restart step.\n";
-        int restart_step_i = tstate.last_completed_step;
-        restart_step_i =
-            restart_step_i - ( ( restart_step_i % restart_interval_steps ) - 1 );    // -1 because the model will continue from restart_step.
-        tstate.last_completed_step = restart_step_i;
-
-    } else if ( progress_file.exists() && file_is_empty( progress_file.path() ) ) {
-
-        // If progress file exists and is empty, an error has occurred, then kill model run
-        // GC. TODO. Review this. It might mean the we didn't get to the point where the progress file was written.?
-        std::cerr << "..progress file exists, but is empty => problem with model, quitting run" << '\n';
-        model_ctrl->print_logs( 50 );
         return task_finish( 1 );
-
-    } else if ( progress_file.exists() && !restart_ctl_exists ) {
-
-        // GC. TODO. I think this needs merging with case above of restart from existing rcf file?
-        // If the progress file exists, the model has started but not yet got to the first
-        // restart write. In which case the model starts from the beginning again.
-        if ( !progress_file.read( tstate, err_msg ) ) {
-            std::cerr << "..Failed to read progress file: " << err_msg << '\n';
-            return task_finish( 1 );
-        }
-        // If last_completed_step is less than the restart interval, model rcf has yet to be produced so model will restart from beginning.
-        if ( tstate.last_completed_step >= restart_interval_steps ) {
-            // Otherwise if progress file exists and rcf file does not exist, an error has occurred, then kill model run
-            model_ctrl->print_logs( 50 );
-            std::cerr << "..progress file exists, but rcf file does not exist => problem with model, quitting run" << '\n';
-            return task_finish( 1 );
-        }
-    } else if ( !progress_file.exists() && restart_ctl_exists ) {
-        // If rcf file exists and progress file does not exist, an error has occurred, then kill model run
-        // TODO: we should be able to bootstrap the progress file from the rcf file here?
-        // Maybe not as the model likely runs on after the controller process has crashed.
-        model_ctrl->print_logs( 50 );
-        std::cerr << "..rcf file exists, but progress file does not exist => problem with task, quitting run" << '\n';
-        return task_finish( 1 );
+    }
+    if ( !startup_state.log_message.empty() ) {
+        std::cerr << startup_state.log_message;
     }
 
     tstate.current_step = tstate.last_completed_step;

@@ -41,56 +41,14 @@ Out of scope for this refactor:
 
 ## Code Complexity
 
-### Before refactor
+Complexity tracking for this refactor sequence now lives in
+[docs/code_complexity_refactor_tracking.md](/home/glenn/github/cpdn_control/docs/code_complexity_refactor_tracking.md).
 
-Complexity was measured on 2026-04-09 using:
+Short version:
 
-- `pmccabe`
-- `/home/glenn/.local/bin/lizard`
-
-Measured hotspots:
-
-| File | Function | `pmccabe` | `lizard` CCN | `lizard` NLOC | Notes |
-| --- | --- | ---: | ---: | ---: | --- |
-| `src/cpdn_main.cpp` | `main()` | 120 | 120 | 516 | Primary complexity hotspot |
-| `src/cpdn_main.cpp` | `process_args()` | 10 | 10 | 49 | Secondary helper, moderate complexity |
-| `src/cpdn_control.cpp` | `resolve_boinc_input_file()` | 10 | 10 | 33 | Highest complexity in controller helpers |
-| `src/cpdn_control.cpp` | `handle_boinc_client_status()` | 9 | 9 | 42 | Moderate complexity |
-| `models/openifs/oifs_control.cpp` | `restart_ctl_read()` | 5 | 5 | 19 | Low complexity in model layer |
-
-Key observation:
-
-- the dominant problem is `main()`, not the helper or model classes
-- reducing the namelist-handling burden in `main()` is justified even if the first extraction is modest
-
-### After refactor
-
-Complexity was measured on 2026-04-10 using the same tools:
-
-- `pmccabe`
-- `/home/glenn/.local/bin/lizard`
-
-Measured hotspots:
-
-| File | Function | `pmccabe` | `lizard` CCN | `lizard` NLOC | Notes |
-| --- | --- | ---: | ---: | ---: | --- |
-| `src/cpdn_main.cpp` | `main()` | 88 | 88 | 399 | Still the primary hotspot, but materially reduced |
-| `src/cpdn_main.cpp` | `process_args()` | 10 | 10 | 49 | Essentially unchanged |
-| `src/cpdn_control.cpp` | `resolve_boinc_input_file()` | 10 | 10 | 33 | Unchanged controller helper hotspot |
-| `src/cpdn_control.cpp` | `handle_boinc_client_status()` | 9 | 9 | 42 | Unchanged controller helper |
-| `models/openifs/oifs_control.cpp` | `parse_control_input()` | 37 | 37 | 118 | New model-layer parsing hotspot created by the extraction |
-
-Comparison of the main hotspot:
-
-| Function | Before `pmccabe` | After `pmccabe` | Change | Before `lizard` NLOC | After `lizard` NLOC | Change |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `src/cpdn_main.cpp::main()` | 120 | 88 | -32 (`-26.7%`) | 516 | 399 | -117 (`-22.7%`) |
-
-Key observations after refactor:
-
-- the dominant hotspot is still `main()`, but it is materially smaller and easier to read
-- the namelist complexity has moved into `OpenIFSControl::parse_control_input()`, which is the intended ownership boundary
-- a later tidy may still be justified inside `parse_control_input()`, but that is preferable to keeping model-specific parsing in `main()`
+- the original `main()` hotspot was reduced materially by moving namelist parsing into the model layer
+- the later restart/progress bootstrap extraction reduced `main()` further
+- the current largest non-`main()` hotspots are `OpenIFSControl::parse_control_input()` and the newly extracted `initialize_task_state_from_restart()`
 
 ## Design
 

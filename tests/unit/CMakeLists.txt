@@ -29,6 +29,7 @@ add_executable(unit_tests unit_tests.cpp
                         t_run_process_with_timeout.cpp
                         t_verify_project_zip_md5.cpp
                         t_stage_model_input_archive.cpp
+                        t_parse_control_input.cpp
 )
 
 # Helper executable used by launch_process tests
@@ -62,3 +63,4 @@ add_test( NAME TrickleHandlerTest COMMAND unit_tests "Trickle Handler" )
 add_test( NAME RunProcessWithTimeoutTest COMMAND unit_tests "Run Process With Timeout" )
 add_test( NAME VerifyProjectZipMD5Test COMMAND unit_tests "Verify Project Zip MD5" )
 add_test( NAME StageModelInputArchiveTest COMMAND unit_tests "Stage Model Input Archive" )
+add_test( NAME ParseControlInputTest COMMAND unit_tests "Parse Control Input" )

@@ -17,7 +17,7 @@ int main( int argc, char* argv[] )
 {
 
     // Map the test name (as set in CMakeLists.txt) to the test function.
-    std::map< std::string, std::function<int()> > test_map = {
+    std::map<std::string, std::function<int()>> test_map = {
         { "Read RCF File", t_read_rcf_file },
         { "Read Progress File", t_read_progress_file },
         { "CPU Time Comparison", t_cputime_comparison },
@@ -36,6 +36,7 @@ int main( int argc, char* argv[] )
         { "Run Process With Timeout", t_run_process_with_timeout },
         { "Verify Project Zip MD5", t_verify_project_zip_md5 },
         { "Stage Model Input Archive", t_stage_model_input_archive },
+        { "Parse Control Input", t_parse_control_input },
         // Add new test functions here! Remember previous trailing comma!
     };
 

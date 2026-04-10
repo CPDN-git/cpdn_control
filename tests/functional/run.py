@@ -189,11 +189,11 @@ def main():
     # Either use <arg>=<val> syntax or split the arg & val into separate tokens.
     controller_cmd = [
         str(controller_dst),
-        "--startdate=yyyymmddhh",
+        "--filename_startdate=yyyymmddhh",
         f"--batch={batch_id}",
         f"--workunit={workunit}",
         f"--memberid={member_id}",
-        f"--fcast_len={forecast_length}",
+        f"--filename_fclen={forecast_length}",
     ]
 
     if running_in_github_actions():

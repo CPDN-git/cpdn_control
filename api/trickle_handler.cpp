@@ -91,9 +91,9 @@ std::string TrickleHandler::read_trickle_data_file() const
 /**
  * @brief Construct and upload a trickle message to the CPDN server.
  * @param current_cpu_time The current CPU time used by the task.
- * @param timestep The current timestep of the model.
+ * @param current_step The current model step count.
  */
-int TrickleHandler::process_trickle( double current_cpu_time, int timestep )
+int TrickleHandler::process_trickle( double current_cpu_time, int current_step )
 {
     std::string ph = "";
     std::string vr = "";
@@ -105,9 +105,9 @@ int TrickleHandler::process_trickle( double current_cpu_time, int timestep )
     if ( variety == "orig" ) {
         // cpdn_credit parses <cp> with BOINC's integer XML parser, so emit an
         // integer CPU time even though the controller tracks it as a double.
-        trickle_msg = fmt::format( ORIG_TRICKLE_FORMAT, wu_name, result_base_name, ph, timestep, trickle_cpu_time, vr );
+        trickle_msg = fmt::format( ORIG_TRICKLE_FORMAT, wu_name, result_base_name, ph, current_step, trickle_cpu_time, vr );
     } else if ( variety == "general" ) {
-        trickle_msg = fmt::format( GENERAL_TRICKLE_FORMAT, wu_name, result_base_name, ph, timestep, trickle_cpu_time, vr, data );
+        trickle_msg = fmt::format( GENERAL_TRICKLE_FORMAT, wu_name, result_base_name, ph, current_step, trickle_cpu_time, vr, data );
     } else {
         std::cerr << "Error: Unrecognized trickle variety: " << variety << "\n";
         return -1;
@@ -120,7 +120,7 @@ int TrickleHandler::process_trickle( double current_cpu_time, int timestep )
     m_trickle_buffer.insert( m_trickle_buffer.end(), trickle_msg.begin(), trickle_msg.end() );
     m_trickle_buffer.push_back( '\0' );
 
-    std::cerr << "Sending trickle message to CPDN at timestep: " << timestep << "\n";
+    std::cerr << "Sending trickle message to CPDN at timestep: " << current_step << "\n";
     retval = boinc_send_trickle_up( m_variety_buffer.data(), m_trickle_buffer.data() );
 
     // Diagnostic delay to test if async BOINC thread processing is the source of race conditions.

@@ -38,7 +38,7 @@ class TrickleHandler {
     TrickleHandler& operator=( TrickleHandler&& ) = delete;
 
     // Construct and upload a trickle message
-    int process_trickle( double current_cpu_time, int timestep );
+    int process_trickle( double current_cpu_time, int current_step );
 
   private:
     // Read and sanitize trickle data from the trickle data file in current working directory.

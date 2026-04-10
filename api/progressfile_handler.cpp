@@ -77,8 +77,8 @@ bool ProgressFileHandler::write( const TaskState& task, std::string& err_msg ) c
                       << "control_pid=" << std::to_string( getpid() ) << '\n'
                       << "prior_acc_cpu_time=" << std::to_string( task.current_cpu_time ) << '\n'
                       << "upload_file_number=" << std::to_string( task.upload_file_number ) << '\n'
-                      << "last_step=" << task.last_step << '\n'
-                      << "last_upload=" << std::to_string( task.last_upload ) << '\n'
+                      << "last_completed_step=" << std::to_string( task.last_completed_step ) << '\n'
+                      << "last_upload_time=" << std::to_string( task.last_upload_time ) << '\n'
                       << "model_completed=" << std::to_string( task.model_completed ) << '\n'
                       << "/" << std::endl;
 
@@ -136,7 +136,12 @@ bool ProgressFileHandler::read( TaskState& task, std::string& err_msg ) const
         return false;
     }
 
-    int counter = 0;
+    bool saw_control_pid = false;
+    bool saw_prior_acc_cpu_time = false;
+    bool saw_upload_file_number = false;
+    bool saw_last_completed_step = false;
+    bool saw_last_upload_time = false;
+    bool saw_model_completed = false;
     std::string key;
     std::string value;
 
@@ -159,34 +164,32 @@ bool ProgressFileHandler::read( TaskState& task, std::string& err_msg ) const
         // We don't use control_pid in TaskState but read it to validate the file.
         if ( key == "control_pid" ) {
             int pid_value = 0;
-            counter++;
+            saw_control_pid = true;
             if ( !parse_int( value, pid_value, err_msg ) ) {
                 err_msg = "control_pid: " + err_msg;
             }
         } else if ( key == "prior_acc_cpu_time" ) {
-            counter++;
+            saw_prior_acc_cpu_time = true;
             if ( !parse_double_value( value, task.prior_acc_cpu_time, err_msg ) ) {
                 err_msg = "prior_acc_cpu_time: " + err_msg;
             }
         } else if ( key == "upload_file_number" ) {
-            counter++;
+            saw_upload_file_number = true;
             if ( !parse_int( value, task.upload_file_number, err_msg ) ) {
                 err_msg = "upload_file_number: " + err_msg;
             }
-        } else if ( key == "last_step" ) {
-            int last_step_value = 0;
-            counter++;
-            if ( !parse_int( value, last_step_value, err_msg ) ) {    // check it's a valid int before adding to task state.
-                err_msg = "last_step: " + err_msg;
+        } else if ( key == "last_completed_step" || key == "last_step" ) {
+            saw_last_completed_step = true;
+            if ( !parse_int( value, task.last_completed_step, err_msg ) ) {
+                err_msg = key + ": " + err_msg;
             }
-            task.last_step = std::to_string( last_step_value );
-        } else if ( key == "last_upload" ) {
-            counter++;
-            if ( !parse_int( value, task.last_upload, err_msg ) ) {
-                err_msg = "last_upload: " + err_msg;
+        } else if ( key == "last_upload_time" || key == "last_upload" ) {
+            saw_last_upload_time = true;
+            if ( !parse_double_value( value, task.last_upload_time, err_msg ) ) {
+                err_msg = key + ": " + err_msg;
             }
         } else if ( key == "model_completed" ) {
-            counter++;
+            saw_model_completed = true;
             if ( !parse_int( value, task.model_completed, err_msg ) ) {
                 err_msg = "model_completed: " + err_msg;
             }
@@ -201,7 +204,8 @@ bool ProgressFileHandler::read( TaskState& task, std::string& err_msg ) const
         return false;
     }
 
-    if ( counter != PROGFILE_LINES ) {
+    if ( !( saw_control_pid && saw_prior_acc_cpu_time && saw_upload_file_number && saw_last_completed_step && saw_last_upload_time &&
+            saw_model_completed ) ) {
         err_msg = "Progress file missing required fields";
         return false;
     }

@@ -17,6 +17,26 @@
 
 namespace fs = std::filesystem;
 
+struct ModelControlInputData {
+    bool ok = false;
+    fs::path source_file;
+    std::string error_step;
+    std::string error_field;
+    std::string error_message;
+
+    std::string horiz_resolution;
+    std::string vert_resolution;
+    std::string grid_type;
+    std::string experiment_id;
+
+    int timestep_seconds = 0;    // UTSTEP
+    int output_interval = 0;     // NFRPOS raw value: +ve model steps, -ve hours
+    int restart_interval = 0;    // NFRRES raw value: +ve model steps, -ve hours
+    int upload_interval = 0;     // current controller semantics still treat this as step-based
+    int total_steps = 0;         // CUSTOP
+    double forecast_length_time = 0.0;
+};
+
 
 class ModelControl {
 
@@ -68,14 +88,14 @@ class ModelControl {
     virtual std::string get_model_name() const { return model_name; }
     virtual std::string get_model_version() const { return model_version; }
     virtual std::string get_executable_name() const { return executable; }
-    virtual std::string get_parameter_input_file() const { return parameter_input_file; }
     virtual ModelInputManifest get_input_manifest( const ModelInputManifestContext& ctx ) const = 0;
+    virtual ModelControlInputData parse_control_input() const = 0;
 
-    // Determine the current model step; return true if successful, false otherwise.
-    virtual bool get_current_step( std::string& current_step, const int total_steps ) const = 0;
+    // Determine the current model step count; return true if successful, false otherwise.
+    virtual bool get_current_step( int& current_step, const int total_steps ) const = 0;
 
-    // Provide a list of model output filenames for uploading to server at a particular step.
-    virtual std::vector<std::string> get_output_filenames( std::string_view step, std::string_view id ) const = 0;
+    // Provide a list of model output filenames for uploading to server at a particular step count.
+    virtual std::vector<std::string> get_output_filenames( int step, std::string_view id ) const = 0;
 
     // Provide a regular expression matching the model output filenames to be zipped for upload
     virtual std::regex get_output_filename_regex() const = 0;
@@ -98,15 +118,14 @@ class ModelControl {
     // Protected constructor for use by derived classes (may change in future when we use the model XML config file)
     // Use init list here, no need to use 'setters' in constructor.
     // C++ note. Allows keeping member variables private while still enabling derived classes to use init-list construction.
-    ModelControl( std::string_view vendor, std::string_view model, std::string_view version, std::string_view exe, std::string_view param_input_file )
-        : vendor_name( vendor ), model_name( model ), model_version( version ), executable( exe ), parameter_input_file( param_input_file ) {};
+    ModelControl( std::string_view vendor, std::string_view model, std::string_view version, std::string_view exe )
+        : vendor_name( vendor ), model_name( model ), model_version( version ), executable( exe ){};
 
     // Setters for model information (protected so only accessible to derived classes)
 
     void set_vendor_name( std::string_view vendor ) { vendor_name = vendor; }
     void set_model_name( std::string_view model ) { model_name = model; }
     void set_model_version( std::string_view version ) { model_version = version; }
-    void set_parameter_input_file( const std::string& param_infile ) { parameter_input_file = param_infile; }
 
 
   private:
@@ -118,7 +137,4 @@ class ModelControl {
     std::string model_name;       // e.g. "OpenIFS"
     std::string model_version;    // e.g. "43r3"
     std::string executable;       // e.g. "oifs_43r3_model.exe", "oifs_43r3_omp_model.exe", "test_model"
-
-    std::string parameter_input_file;    // Usually this will be a fortran namelist file. e.g. "fort.4" for OpenIFS.
-                                         // It is NOT intended for input data, only for gathering model info.
 };

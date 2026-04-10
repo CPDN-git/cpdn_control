@@ -37,8 +37,8 @@ int t_read_progress_file()
     task.prior_acc_cpu_time = 76828.0;
     task.current_cpu_time = 76828.5;
     task.upload_file_number = 3;
-    task.last_step = "1055";
-    task.last_upload = 1036800;
+    task.last_completed_step = 1055;
+    task.last_upload_time = 1036800.0;
     task.model_completed = 0;
 
     // Generate test progress file content
@@ -100,11 +100,40 @@ int t_read_progress_file()
         std::cout << "Failed to read progress file: " << err_msg << "\n";
         return EXIT_FAILURE;
     }
-    if ( taskin.last_step.empty() || taskin.prior_acc_cpu_time != 76828.5 || taskin.upload_file_number != 3 || taskin.last_upload != 1036800 ||
-         taskin.model_completed != 0 ) {
+    if ( taskin.last_completed_step != 1055 || taskin.prior_acc_cpu_time != 76828.5 || taskin.upload_file_number != 3 ||
+         taskin.last_upload_time != 1036800.0 || taskin.model_completed != 0 ) {
         FAIL;
-        std::cout << "last_step = " << taskin.last_step << ", prior_acc_cpu_time = " << taskin.prior_acc_cpu_time
-                  << ", upload_number = " << taskin.upload_file_number << ", last_upload = " << taskin.last_upload
+        std::cout << "last_completed_step = " << taskin.last_completed_step << ", prior_acc_cpu_time = " << taskin.prior_acc_cpu_time
+                  << ", upload_number = " << taskin.upload_file_number << ", last_upload_time = " << taskin.last_upload_time
+                  << ", completed = " << taskin.model_completed << "\n";
+        return EXIT_FAILURE;
+    }
+
+    std::cout << "Subtest: read legacy progress file keys\n";
+    const std::string legacy_content = "! CPDN controller progress file & fortran namelist\n"
+                                       "&CPDN\n"
+                                       "control_pid=123\n"
+                                       "prior_acc_cpu_time=76828.5\n"
+                                       "upload_file_number=3\n"
+                                       "last_step=1055\n"
+                                       "last_upload=1036800\n"
+                                       "model_completed=0\n"
+                                       "/\n";
+    if ( !write_text_file( progress_file.path(), legacy_content ) ) {
+        FAIL;
+        std::cout << "Unable to write legacy progress file\n";
+        return EXIT_FAILURE;
+    }
+    if ( !progress_file.read( taskin, err_msg ) ) {
+        FAIL;
+        std::cout << "Failed to read legacy progress file: " << err_msg << "\n";
+        return EXIT_FAILURE;
+    }
+    if ( taskin.last_completed_step != 1055 || taskin.prior_acc_cpu_time != 76828.5 || taskin.upload_file_number != 3 ||
+         taskin.last_upload_time != 1036800.0 || taskin.model_completed != 0 ) {
+        FAIL;
+        std::cout << "last_completed_step = " << taskin.last_completed_step << ", prior_acc_cpu_time = " << taskin.prior_acc_cpu_time
+                  << ", upload_number = " << taskin.upload_file_number << ", last_upload_time = " << taskin.last_upload_time
                   << ", completed = " << taskin.model_completed << "\n";
         return EXIT_FAILURE;
     }

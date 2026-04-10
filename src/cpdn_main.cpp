@@ -5,7 +5,9 @@
 // Complete rewrite of original version by Andy Bowery (OERC) December 2023.
 //
 
+#include <cerrno>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <dirent.h>
 #include <filesystem>
@@ -17,7 +19,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <thread>
-#include <unordered_set>
 #include <vector>
 
 #include "boinc/boinc_api.h"
@@ -75,10 +76,10 @@ static std::unique_ptr<ModelControl> create_model_control( std::string_view mode
     // As the test model is an OpenIFS skeleton clone, we use the OpenIFSControl class.
 
     if ( model_name == "test_model" ) {
-        model = std::make_unique<OpenIFSControl>( "CPDN", model_name, model_version, "test_model", "fort.4" );
+        model = std::make_unique<OpenIFSControl>( "CPDN", model_name, model_version, "test_model" );
 
     } else if ( model_name == "oifs_43r3_omp_l159" || model_name == "oifs_43r3_omp_l319" || model_name == "oifs_43r3_parest_omp_l319" ) {
-        model = std::make_unique<OpenIFSControl>( "ECMWF", model_name, model_version, "oifs_43r3_omp_model.exe", "fort.4" );
+        model = std::make_unique<OpenIFSControl>( "ECMWF", model_name, model_version, "oifs_43r3_omp_model.exe" );
     }
 
     return model;
@@ -154,6 +155,28 @@ static void report_input_stage_failure( std::string_view context, const InputSta
     }
     if ( !result.message.empty() ) {
         std::cerr << ": " << result.message;
+    }
+    std::cerr << '\n';
+}
+
+
+/**
+ * @brief Report failure to parse the model control input with as much context as possible.
+ */
+static void report_model_control_input_failure( const ModelControlInputData& result )
+{
+    std::cerr << "..Failed to parse model control input";
+    if ( !result.source_file.empty() ) {
+        std::cerr << " '" << result.source_file.string() << "'";
+    }
+    if ( !result.error_step.empty() ) {
+        std::cerr << " at step '" << result.error_step << "'";
+    }
+    if ( !result.error_field.empty() ) {
+        std::cerr << " for field '" << result.error_field << "'";
+    }
+    if ( !result.error_message.empty() ) {
+        std::cerr << ": " << result.error_message;
     }
     std::cerr << '\n';
 }
@@ -237,6 +260,31 @@ static void refresh_current_cpu_time( TaskState& tstate )
         tstate.current_cpu_time = tstate.prior_acc_cpu_time + child_cpu_time;
     }
 }
+
+
+static bool parse_double_arg( const std::string& text, double& value, std::string& err_msg )
+{
+    char* end = nullptr;
+    errno = 0;
+    value = std::strtod( text.c_str(), &end );
+
+    if ( end == text.c_str() ) {
+        err_msg = "invalid floating-point value";
+        return false;
+    }
+    if ( errno == ERANGE ) {
+        err_msg = "floating-point value out of range";
+        return false;
+    }
+    if ( end == nullptr || *end != '\0' ) {
+        err_msg = "unexpected trailing characters in floating-point value";
+        return false;
+    }
+    return true;
+}
+
+
+static double step_to_model_time( int step, int timestep_seconds ) { return static_cast<double>( step ) * static_cast<double>( timestep_seconds ); }
 
 
 /**
@@ -359,7 +407,7 @@ static std::string get_result_base_name( const BoincConfig& bconfig, const TaskC
             return base_name;
         }
     } else {
-        base_name = bconfig.app_name + "_" + tconfig.startdate + "_" + tconfig.batch + "_" + tconfig.workunit;
+        base_name = bconfig.app_name + "_" + tconfig.filename_startdate + "_" + tconfig.batch + "_" + tconfig.workunit;
     }
     return base_name;
 }
@@ -403,24 +451,26 @@ static int add_upload_files( const fs::path& dir, std::vector<fs::path>& out, co
  */
 static bool process_args( const ParseResult& parse_result, TaskConfig& tconfig, std::string& err_msg )
 {
-    // Read the exptid, umid, batchid, wuid, fclen from the parsed command line
-    tconfig.startdate = parse_result.startdate;    // simulation start date : needed for filename before model starts.
-    tconfig.exptid.clear();                        // Model experiment id is read later from CNMEXP in fort.4.
-    tconfig.memberid = parse_result.memberid;      // CPDN's unique member id (umid)
-    tconfig.batch = parse_result.batch;            // batch id
-    tconfig.workunit = parse_result.workunit;      // workunit id
-    tconfig.fclen = parse_result.fcast_len;        // forecast length in days. Needed before model runs for filenames.
+    // These CLI values are CPDN task/download naming metadata only.
+    // They are used to resolve the app-bundle filename before the model control input is parsed.
+    // They are not passed to the model and do not define model runtime behaviour.
+    tconfig.filename_startdate = parse_result.filename_startdate;
+    tconfig.exptid.clear();                      // Model experiment id is read later from CNMEXP in fort.4.
+    tconfig.memberid = parse_result.memberid;    // CPDN's unique member id (umid)
+    tconfig.batch = parse_result.batch;          // batch id
+    tconfig.workunit = parse_result.workunit;    // workunit id
+    tconfig.filename_fclen = parse_result.filename_fclen;
 
     std::cerr << "Parsed arguments:\n"
-              << "  startdate: " << tconfig.startdate << '\n'
+              << "  filename_startdate: " << tconfig.filename_startdate << '\n'
               << "  memberid: " << tconfig.memberid << '\n'
               << "  batch: " << tconfig.batch << '\n'
               << "  workunit: " << tconfig.workunit << '\n'
-              << "  fcast_len: " << tconfig.fclen << '\n';
+              << "  filename_fclen: " << tconfig.filename_fclen << '\n';
 
     std::vector<std::string> missing_args;
-    if ( tconfig.startdate.empty() ) {
-        missing_args.push_back( "--startdate" );
+    if ( tconfig.filename_startdate.empty() ) {
+        missing_args.push_back( "--filename_startdate" );
     }
     if ( tconfig.memberid.empty() ) {
         missing_args.push_back( "--memberid" );
@@ -431,8 +481,8 @@ static bool process_args( const ParseResult& parse_result, TaskConfig& tconfig, 
     if ( tconfig.workunit.empty() ) {
         missing_args.push_back( "--workunit" );
     }
-    if ( tconfig.fclen.empty() ) {
-        missing_args.push_back( "--fcast_len" );
+    if ( tconfig.filename_fclen.empty() ) {
+        missing_args.push_back( "--filename_fclen" );
     }
 
     if ( !missing_args.empty() ) {
@@ -576,9 +626,11 @@ int main( int argc, char** argv )
         std::cerr << "Using --nthreads from app_config.xml: " << nthreads << '\n';
     }
 
-    const std::string namelist = "fort.4";    // namelist file. will come from XML input later.
-    // THIS WILL NO LONGER WORK!
-    double num_days = atof( tconfig.fclen.c_str() );    // number of simulation days; fclen should come from fort.4, not the command line.
+    double num_days = 0.0;
+    if ( !parse_double_arg( tconfig.filename_fclen, num_days, err_msg ) ) {
+        std::cerr << "..Failed to parse --filename_fclen value: " << err_msg << '\n';
+        return task_finish( 1 );
+    }
 
     // --------------- Prepare the task environment -----------------
 
@@ -607,8 +659,8 @@ int main( int argc, char** argv )
     // into the slot, and unzip it without overwriting the BOINC logical file itself.
 
     fs::path app_bundle_path = bconfig.slot_path;
-    app_bundle_path /= std::string( bconfig.app_name ) + "_" + tconfig.memberid + "_" + tconfig.startdate + "_" + std::to_string( (int)num_days ) +
-                       "_" + tconfig.batch + "_" + tconfig.workunit + ".zip";
+    app_bundle_path /= std::string( bconfig.app_name ) + "_" + tconfig.memberid + "_" + tconfig.filename_startdate + "_" +
+                       std::to_string( (int)num_days ) + "_" + tconfig.batch + "_" + tconfig.workunit + ".zip";
 
     auto app_bundle_stage = stage_boinc_input_file( app_bundle_path, bconfig.slot_path, fs::path( "." ), "app_bundle" );
     if ( !app_bundle_stage.ok ) {
@@ -618,189 +670,46 @@ int main( int argc, char** argv )
     }
 
     //----------------------------------------------------------------------------------------------
-    // Parse the fort.4 namelist for controller scheduling values and the remaining OpenIFS metadata.
-    // Glenn C. Note the fort.4 file comes out of the app_bundle. This is OIFS specific, so parsing this
-    // file should be done generically with the implementation of the model control class,
-    // but for now we parse the values we need here and thread
+    // Parse the model control input through the model layer so controller code stays generic.
 
-    std::string namelist_file = bconfig.slot_path + "/" + namelist;
-    std::string namelist_line;
-    std::string horiz_resolution;
-    std::string vert_resolution;
-    std::string grid_type;
-    std::string tmpstr;
-
-    std::ifstream namelist_filestream;
-
-    int upload_interval = 0;
-    int trickle_freq = 0;
-    int timestep = 0;
-    int ICM_file_interval = 0;
-    int restart_interval = 0;
-
-    // Check for the existence of the namelist
-    if ( !path_exists( namelist_file ) ) {
-        std::cerr << "..The namelist file does not exist: " << namelist_file << std::endl;
-        return task_finish( 1 );    // should terminate, the model won't run.
-    }
-
-    // Read the model's controlling namelist file
-
-    if ( !( namelist_filestream.is_open() ) ) {
-        namelist_filestream.open( namelist_file );
-    }
-    if ( !namelist_filestream.is_open() ) {
-        std::cerr << "..Error opening namelist file: " << namelist_file << std::endl;
+    auto control_input = model_ctrl->parse_control_input();
+    if ( !control_input.ok ) {
+        report_model_control_input_failure( control_input );
         return task_finish( 1 );
     }
 
-    std::string parsed_key;
-    std::string parsed_value;
+    tconfig.exptid = control_input.experiment_id;
 
-    // Parsing the namelist file at the moment is a mix of looking for CPDN injected
-    // header variables and normal model namelist variables. It's a bit clumsy but works for now.
-    // It's not my code and I'm tidying the data flow to be more consistent.
-
-    // The header_keys are the CPDN injected task related parameters carried in
-    // comment-style lines within the namelist file. It's not a tidy solution as they are prefixed with
-    // '!' making them normal format comments. This causes issues parsing them as if we
-    // allow commented key/value pairs to be parsed, the code picks up other commented
-    // out namelist variables which has caused errors. Ideally it would have been
-    // better to prefix with something unique such as !TASK but as this involves
-    // changing the oifs_workgen repo and I plan to tidy this whole area up by
-    // reducing the usage of header parameters like this, for now we will simply
-    // look for these specific keys anywhere in the file and eliminate them as they
-    // become redundant.
-    //    Glenn   Jan 2026.
-
-    // These are the keys injected by CPDN into the namelist header. Other variables
-    // searched for come from the namelist itself.
-    const std::unordered_set<std::string> header_keys = { "HORIZ_RESOLUTION", "VERT_RESOLUTION", "GRID_TYPE", "UPLOAD_INTERVAL" };
-
-    while ( std::getline( namelist_filestream, namelist_line ) ) {
-        tmpstr.clear();
-        parsed_key.clear();
-        parsed_value.clear();
-
-        trim_whitespace( namelist_line );
-        if ( namelist_line.empty() ) {
-            continue;
-        }
-
-        bool have_kv = false;
-        std::string header_line = namelist_line;
-
-        if ( header_line.front() == '!' ) {    // possible CPDN task metadata key/value pair
-            header_line.erase( 0, 1 );
-
-            if ( parse_key_value( header_line, parsed_key, parsed_value ) &&
-                 header_keys.find( parsed_key ) != header_keys.end() ) {    // ignore any keys not in the allow-list above
-                have_kv = true;
-            }
-        } else {    // normal namelist parsing
-            if ( !parse_namelist_key_value( namelist_line, parsed_key, parsed_value ) ) {
-                continue;
-            }
-            have_kv = true;
-        }
-
-        if ( !have_kv ) {    // skip lines that didn't yield a key/value pair
-            continue;
-        }
-
-        if ( parsed_key == "HORIZ_RESOLUTION" ) {
-            horiz_resolution = parsed_value;
-        } else if ( parsed_key == "VERT_RESOLUTION" ) {
-            vert_resolution = parsed_value;
-        } else if ( parsed_key == "GRID_TYPE" ) {
-            grid_type = parsed_value;
-        } else if ( parsed_key == "UPLOAD_INTERVAL" ) {
-            tmpstr = parsed_value;
-            if ( !parse_int( tmpstr, upload_interval, err_msg ) ) {
-                std::cerr << "..Failed to parse upload interval from namelist: " << err_msg << '\n';
-                return task_finish( 1 );
-            }
-        } else if ( parsed_key == "UTSTEP" ) {
-            // UTSTEP (secs) is written as a float in the namelist, despite it only ever being an integer.
-            // parse_int is strict about parsing only integer representations.
-            tmpstr = parsed_value;
-            if ( auto dp = tmpstr.find( '.' ); dp != std::string::npos ) {
-                tmpstr = tmpstr.substr( 0, dp );
-            }
-            if ( !parse_int( tmpstr, timestep, err_msg ) ) {
-                std::cerr << "..Failed to parse timestep interval from namelist: " << err_msg << '\n';
-                return task_finish( 1 );
-            }
-        } else if ( parsed_key == "NFRPOS" ) {    // frequency of model OUTPUT file creation (for upload); +ve model steps, -ve hours.
-            tmpstr = parsed_value;
-            if ( !parse_int( tmpstr, ICM_file_interval, err_msg ) ) {
-                std::cerr << "..Failed to parse ICM model output interval from namelist: " << err_msg << '\n';
-                return task_finish( 1 );
-            }
-        } else if ( parsed_key == "NFRRES" ) {    // frequency of model RESTART file creation: +ve model steps, -ve hours.
-            tmpstr = parsed_value;
-            if ( !parse_int( tmpstr, restart_interval, err_msg ) ) {
-                std::cerr << "..Failed to parse restart interval from namelist: " << err_msg << '\n';
-                return task_finish( 1 );
-            }
-        } else if ( parsed_key == "CNMEXP" ) {
-            tconfig.exptid = parsed_value;
-            if ( tconfig.exptid.length() != 4 ) {
-                std::cerr << "..Invalid CNMEXP value in fort.4. Expected a 4-character experiment ID, got: '" << tconfig.exptid << "'\n";
-                return task_finish( 1 );
-            }
-        }
-    }
-    namelist_filestream.close();
-
-    // These metadata values are still required for scheduling and for the temporary OpenIFS manifest context.
-    std::vector<std::string> missing_namelist_fields;
-    if ( horiz_resolution.empty() )
-        missing_namelist_fields.push_back( "HORIZ_RESOLUTION" );
-    if ( vert_resolution.empty() )
-        missing_namelist_fields.push_back( "VERT_RESOLUTION" );
-    if ( grid_type.empty() )
-        missing_namelist_fields.push_back( "GRID_TYPE" );
-    if ( tconfig.exptid.empty() )
-        missing_namelist_fields.push_back( "CNMEXP" );
-
-    if ( !missing_namelist_fields.empty() ) {
-        std::cerr << "..Error. Required fort.4 metadata missing:";
-        for ( const auto& field : missing_namelist_fields ) {
-            std::cerr << ' ' << field;
-        }
-        std::cerr << '\n';
-        return task_finish( 1 );
+    const std::string& horiz_resolution = control_input.horiz_resolution;
+    const std::string& vert_resolution = control_input.vert_resolution;
+    const std::string& grid_type = control_input.grid_type;
+    const int upload_interval = control_input.upload_interval;
+    const int timestep_seconds = control_input.timestep_seconds;
+    const int output_interval = control_input.output_interval;
+    int restart_interval_steps = control_input.restart_interval;
+    if ( restart_interval_steps < 0 ) {
+        restart_interval_steps = abs( restart_interval_steps ) * 3600 / timestep_seconds;
+        std::cerr << " NFRRES: restart dump frequency (in steps) " << restart_interval_steps << '\n';
     }
 
-    std::cerr << "Values read from model namelist are: \n"
+    const int total_steps = control_input.total_steps;
+    const int trickle_freq = TrickleHandler::get_trickle_frequency( timestep_seconds, total_steps );
+    const double total_length_of_simulation_time = control_input.forecast_length_time;
+
+    std::cerr << "Values read from model control input are: \n"
               << " horiz_resolution: " << horiz_resolution << '\n'
               << " vert_resolution: " << vert_resolution << '\n'
               << " grid_type: " << grid_type << '\n'
               << " exptid (CNMEXP): " << tconfig.exptid << '\n'
               << " Upload_interval: " << upload_interval << '\n'
-              << " UTSTEP (timestep interval): " << timestep << '\n'
-              << " NFRPOS (frequency of model output): " << ICM_file_interval << '\n'
-              << " NFFRES (frequency of restarts/checkpoints): " << restart_interval << std::endl;
+              << " UTSTEP (timestep interval): " << timestep_seconds << '\n'
+              << " NFRPOS (frequency of model output): " << output_interval << '\n'
+              << " NFRRES (frequency of restarts/checkpoints): " << restart_interval_steps << '\n'
+              << " CUSTOP (total model steps): " << total_steps << '\n'
+              << " forecast_length_time: " << total_length_of_simulation_time << '\n';
 
-
-    //   Secondary run parameters
-
-    // restart frequency might be in units of hrs, convert to model steps
-    if ( restart_interval < 0 ) {
-        restart_interval = abs( restart_interval ) * 3600 / timestep;
-        std::cerr << " NFRRES: restart dump frequency (in steps) " << restart_interval << '\n';
-    }
-
-    // this should match CUSTOP in fort.4. If it doesn't we have a problem.
-    double total_nsteps = ( num_days * 86400.0 ) / static_cast<double>( timestep );    //GC. why is this a double? it's always an int.
-
-    //GC. Oct/25. The number of trickles are now determined by this and not set by user as before.
-    //    Value read from fort.4 namelist is ignored and should be removed.
-    trickle_freq = TrickleHandler::get_trickle_frequency( timestep, (int)total_nsteps );
-
-    std::cerr << "Trickle frequency is every : " << trickle_freq << " model steps, " << ( (float)trickle_freq * (float)timestep ) / 86400.0
-              << " days.\n";
+    std::cerr << "Trickle frequency is every : " << trickle_freq << " model steps, "
+              << ( static_cast<double>( trickle_freq ) * static_cast<double>( timestep_seconds ) ) / 86400.0 << " days.\n";
 
     //-------------------------------------------------------------------------------------------------------
     // Unpack remaining model input files through model instance manifest context so main() stays generic.
@@ -863,28 +772,22 @@ int main( int argc, char** argv )
             return task_finish( 1 );
         }
 
-        int last_step_i = 0;
-        std::string last_step_s = tstate.last_step;
-        if ( !parse_int( last_step_s, last_step_i, err_msg ) ) {
-            std::cerr << "..Failed to parse last_step from progress file: " << err_msg << '\n';
-            return task_finish( 1 );
-        }
-
-        // Check if the CSTEP variable from rcf is greater than the last_step, if so then quit model run
+        // Check if the CSTEP variable from rcf is greater than the last completed step, if so then quit model run
         // This is probably recoverable, but it might mean the model ran on after the controller crashed, so end for now.
-        if ( rstep_i > last_step_i ) {
-            std::cerr << "..STEP variable from model restart greater than last_step from progress file, error occurred. Exiting.." << '\n';
+        if ( rstep_i > tstate.last_completed_step ) {
+            std::cerr << "..STEP variable from model restart greater than last_completed_step from progress file, error occurred. Exiting.." << '\n';
             return task_finish( 1 );
         }
 
-        // Adjust last_step to the step of the previous model restart dump step.
+        // Adjust last_completed_step to the step of the previous model restart dump step.
         // This is always a multiple of the restart frequency
 
         std::cerr << "-- Model is restarting --\n";
-        std::cerr << "Adjusting last_step, " << tstate.last_step << ", to previous model restart step.\n";
-        int restart_step_i = last_step_i;
-        restart_step_i = restart_step_i - ( ( restart_step_i % restart_interval ) - 1 );    // -1 because the model will continue from restart_step.
-        tstate.last_step = std::to_string( restart_step_i );
+        std::cerr << "Adjusting last_completed_step, " << tstate.last_completed_step << ", to previous model restart step.\n";
+        int restart_step_i = tstate.last_completed_step;
+        restart_step_i =
+            restart_step_i - ( ( restart_step_i % restart_interval_steps ) - 1 );    // -1 because the model will continue from restart_step.
+        tstate.last_completed_step = restart_step_i;
 
     } else if ( progress_file.exists() && file_is_empty( progress_file.path() ) ) {
 
@@ -903,14 +806,8 @@ int main( int argc, char** argv )
             std::cerr << "..Failed to read progress file: " << err_msg << '\n';
             return task_finish( 1 );
         }
-        // If last_step less than restart interval, model rcf has yet to be produced so model will restart from beginning.
-        int last_step_int = 0;
-        std::string last_step_str = tstate.last_step;
-        if ( !parse_int( last_step_str, last_step_int, err_msg ) ) {
-            std::cerr << "..Failed to parse last_step from progress file: " << err_msg << '\n';
-            return task_finish( 1 );
-        }
-        if ( last_step_int >= restart_interval ) {
+        // If last_completed_step is less than the restart interval, model rcf has yet to be produced so model will restart from beginning.
+        if ( tstate.last_completed_step >= restart_interval_steps ) {
             // Otherwise if progress file exists and rcf file does not exist, an error has occurred, then kill model run
             model_ctrl->print_logs( 50 );
             std::cerr << "..progress file exists, but rcf file does not exist => problem with model, quitting run" << '\n';
@@ -925,6 +822,7 @@ int main( int argc, char** argv )
         return task_finish( 1 );
     }
 
+    tstate.current_step = tstate.last_completed_step;
     tstate.current_cpu_time = tstate.prior_acc_cpu_time;
 
     // Update progress file with current values
@@ -933,19 +831,13 @@ int main( int argc, char** argv )
         return task_finish( 1 );
     }
 
-    // seconds between upload files: upload_interval
-    // seconds between ICM files: ICM_file_interval * timestep
-    // upload interval in steps = upload_interval / timestep
-    //cerr "upload_interval: "<< upload_interval << ", timestep: " << timestep << '\n';
-
-    // Check if upload_interval x timestep equal to zero
-    if ( upload_interval * timestep == 0 ) {
-        std::cerr << "..upload_interval x timestep equals zero" << std::endl;
+    // Current controller behaviour still interprets UPLOAD_INTERVAL as a step-based quantity.
+    if ( upload_interval <= 0 || timestep_seconds <= 0 ) {
+        std::cerr << "..upload_interval or timestep_seconds is invalid" << std::endl;
         return task_finish( 1 );
     }
 
-    auto total_length_of_simulation = (int)( num_days * 86400 );
-    std::cerr << "Total_length_of_simulation: " << total_length_of_simulation << '\n';
+    std::cerr << "Total_length_of_simulation_time: " << total_length_of_simulation_time << '\n';
 
     // Get result_base_name to construct upload file names for both standalone and under BOINC.
 
@@ -1025,7 +917,6 @@ int main( int argc, char** argv )
 
     int delay_count = 0;
     int delay_max = LOOP_DELAY_DEFAULT;
-    std::string step = "0";
 
     while ( tstate.child_status == 0 && tstate.model_completed == 0 ) {
         sleep_seconds( 1 );    // Time delay to reduce overhead
@@ -1038,31 +929,17 @@ int main( int argc, char** argv )
         // Going too low can cause the %age done on boincmgr to flip backwards.
         if ( delay_count >= delay_max ) {
 
-            // Get the current model step.
-            // step is updated by this call if successful.
-            if ( !model_ctrl->get_current_step( step, total_nsteps ) ) {
-                step = tstate.last_step;    // revert to last valid step
+            int observed_step = tstate.current_step;
+            if ( !model_ctrl->get_current_step( observed_step, total_steps ) ) {
+                observed_step = tstate.last_completed_step;
             }
-
-            int step_value = 0;
-            std::string step_str = step;
-            if ( !parse_int( step_str, step_value, err_msg ) ) {
-                std::cerr << "..Failed to parse current step: " << err_msg << '\n';
-                return task_finish( 1 );
-            }
-
-            int last_step_value = 0;
-            std::string last_step_str = tstate.last_step;
-            if ( !parse_int( last_step_str, last_step_value, err_msg ) ) {
-                std::cerr << "..Failed to parse last_step: " << err_msg << '\n';
-                return task_finish( 1 );
-            }
+            tstate.current_step = observed_step;
 
             // Move the model result files to the task folder in the project directory
             // GC. Why do this every timestep? This check only needs to be done at same frequency as NFRPOS.
             // GC. Added run of external diagnostics code if present. EXPERIMENTAL STILL.
-            if ( step_value != last_step_value ) {
-                auto output_files = model_ctrl->get_output_filenames( tstate.last_step, tconfig.exptid );
+            if ( observed_step != tstate.last_completed_step ) {
+                auto output_files = model_ctrl->get_output_filenames( observed_step, tconfig.exptid );
                 bool diagnostics_ran = run_step_diagnostics( diag_exe, bconfig.slot_path, output_files );
 
                 for ( const auto& result : output_files ) {
@@ -1073,13 +950,12 @@ int main( int argc, char** argv )
                     }
                 }
 
-                // Convert current model step to seconds
-                tstate.current_step = last_step_value * timestep;
+                const double current_step_time = step_to_model_time( observed_step, timestep_seconds );
 
                 // Upload a new upload file if the end of an upload_interval has been reached
                 // GC. TODO. Why not combine adding to the zip file with moving the result files above?
-                if ( ( ( tstate.current_step - tstate.last_upload ) >= ( upload_interval * timestep ) ) &&
-                     ( tstate.current_step < total_length_of_simulation ) ) {
+                if ( ( ( current_step_time - tstate.last_upload_time ) >= ( static_cast<double>( upload_interval ) * timestep_seconds ) ) &&
+                     ( current_step_time < total_length_of_simulation_time ) ) {
                     // Create an intermediate results zip file
                     zfl.clear();
 
@@ -1088,12 +964,14 @@ int main( int argc, char** argv )
                     // *****  Critical section start  *****
                     boinc_begin_critical_section();
 
-                    // Cycle through all the steps from the last upload to the current upload
-                    //  GC. tstate.current_step/timestep is just tstate.last_step! Fix!
-                    for ( auto i = ( tstate.last_upload / timestep ); i < ( tstate.current_step / timestep ); i++ ) {
+                    const int last_upload_step =
+                        static_cast<int>( std::llround( tstate.last_upload_time / static_cast<double>( timestep_seconds ) ) );
+
+                    // Cycle through all the completed steps from the last upload point up to the current interval boundary.
+                    for ( int step_to_zip = last_upload_step; step_to_zip < observed_step; ++step_to_zip ) {
 
                         // Add model result files to zip to be uploaded
-                        for ( const auto& result : model_ctrl->get_output_filenames( std::to_string( i ), tconfig.exptid ) ) {
+                        for ( const auto& result : model_ctrl->get_output_filenames( step_to_zip, tconfig.exptid ) ) {
                             fs::path fpath = upload_dir;
                             fpath /= result;
                             if ( fs::exists( fpath ) ) {
@@ -1133,9 +1011,9 @@ int main( int argc, char** argv )
                                 std::cerr << "Finished the upload of the intermediate file: " << upload_file_name << '\n';
                             }
                         }
-                        tstate.last_upload = tstate.current_step;
+                        tstate.last_upload_time = current_step_time;
                     }
-                    tstate.last_upload = tstate.current_step;
+                    tstate.last_upload_time = current_step_time;
 
                     // *****  Normal end of critical section  *****
                     boinc_end_critical_section();
@@ -1144,18 +1022,17 @@ int main( int argc, char** argv )
                 }    // end of upload new output file block.
 
                 // Trickle every required fraction of the model run
-                if ( ( step_value % trickle_freq ) == 0 ) {
-                    std::cerr << "Sending progress trickle message to CPDN at step: " << step << '\n';
-                    trickler.process_trickle( tstate.current_cpu_time, tstate.current_step );
-                    tstate.last_trickle_step = tstate.current_step;
+                if ( ( observed_step % trickle_freq ) == 0 ) {
+                    std::cerr << "Sending progress trickle message to CPDN at step: " << observed_step << '\n';
+                    trickler.process_trickle( tstate.current_cpu_time, observed_step );
+                    tstate.last_trickle_step = observed_step;
                 }
 
+                tstate.last_completed_step = observed_step;
                 delay_max = diagnostics_ran ? LOOP_DELAY_FAST : LOOP_DELAY_DEFAULT;
             } else {
                 delay_max = LOOP_DELAY_DEFAULT;
             }    // end of if it's a new timestep block.
-
-            tstate.last_step = step;
 
             delay_count = 0;
 
@@ -1167,18 +1044,12 @@ int main( int argc, char** argv )
         }
 
         // Calculate the fraction done
-        tstate.fraction_done = model_frac_done( std::stof( step ), total_nsteps, nthreads_int );
+        tstate.fraction_done = model_frac_done( static_cast<double>( tstate.current_step ), static_cast<double>( total_steps ), nthreads_int );
 
         if ( !bconfig.standalone ) {
             // If the current model step is at a restart interval, update restart cpu time for boinc.
             double restart_cpu_time = 0;
-            int step_value = 0;
-            std::string step_str = step;
-            if ( !parse_int( step_str, step_value, err_msg ) ) {
-                std::cerr << "..Failed to parse current step: " << err_msg << '\n';
-                return task_finish( 1 );
-            }
-            if ( !( step_value % restart_interval ) ) {
+            if ( !( tstate.current_step % restart_interval_steps ) ) {
                 restart_cpu_time = tstate.current_cpu_time;
             }
 
@@ -1246,7 +1117,7 @@ int main( int argc, char** argv )
     }
 
     // Move the final model result files ready for upload
-    auto output_files = model_ctrl->get_output_filenames( tstate.last_step, tconfig.exptid );
+    auto output_files = model_ctrl->get_output_filenames( tstate.last_completed_step, tconfig.exptid );
     run_step_diagnostics( diag_exe, bconfig.slot_path, output_files );
     for ( const auto& result : output_files ) {
         retval = move_result_file( bconfig.slot_path, upload_dir, result );

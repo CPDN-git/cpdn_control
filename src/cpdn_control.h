@@ -28,12 +28,12 @@
 struct TaskState {
     double prior_acc_cpu_time = 0.0;    // Accumulated CPU time saved from earlier model runs before current child started
     int upload_file_number = 0;         // Sequential counter for upload files
-    std::string last_step = "0";        // Last completed model step
-    int last_upload = 0;                // Time of last upload file (in seconds)
+    int last_completed_step = 0;        // Last completed model step count
+    double last_upload_time = 0.0;      // Elapsed model time at the last upload, in seconds
     int model_completed = 0;            // Model completion state: 0=started/running, 1=completed; does NOT imply it worked!
     bool model_success = false;         // Model run success flag: false=failed, true=successful
-    int current_step = 0;               // Current model step (in seconds) ? really secs?
-    int last_trickle_step = 0;          // Last model step when trickle was sent
+    int current_step = 0;               // Current model step count
+    int last_trickle_step = 0;          // Last model step count for which a trickle was sent
     pid_t pid = 0;                      // Process ID of the child model process
     int child_status = 1;               // Child process status: 0=running, 1=exited normally, 3=signaled, 4=stopped, 5=not found.
     int exit_code = 0;                  // Child process exit code (valid for normal exit)
@@ -47,12 +47,12 @@ struct TaskState {
  * @brief Encapsulates all CPDN specific task-related configuration parameters passed on the command line.
  */
 struct TaskConfig {
-    std::string batch;        // Batch ID
-    std::string workunit;     // Workunit ID
-    std::string memberid;     // Unique member ID (umid)
-    std::string startdate;    // Simulation start date
-    std::string exptid;       // Experiment ID for the model run << GC. Why is this here? Should be in model obj.
-    std::string fclen;        // Forecast length in days : need this before model starts for filenames. It should match with the model!
+    std::string batch;                 // Batch ID
+    std::string workunit;              // Workunit ID
+    std::string memberid;              // Unique member ID (umid)
+    std::string filename_startdate;    // CPDN filename token used to resolve task download filenames; not passed to the model.
+    std::string exptid;                // Model experiment ID currently populated from CNMEXP for controller/model filename handling.
+    std::string filename_fclen;        // CPDN filename token used to resolve task download filenames; not passed to the model.
 };
 
 

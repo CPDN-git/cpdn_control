@@ -9,8 +9,9 @@ This repository builds the **CPDN controller** executable used to run/manage cli
   - Contains the model factory `create_model_control(...)` mapping `app_name/model_name -> ModelControl`.
   - Now stages model input archives through a model-owned manifest rather than hardcoded OpenIFS filename handling in `main()`.
   - Currently also contains **experimental** step-diagnostics glue that runs `diagnostics.exe` before result files are moved out of the slot directory. This is a temporary integration and is expected to move under model-class control later.
-- `src/parse.h`, `src/parse.cpp`
-  - CLI11-based command-line parsing for `--cpdn_*` and `--model_*` arguments.
+- `src/parse_args.h`, `src/parse_args.cpp`
+  - CLI11-based command-line parsing for controller/task arguments.
+  - The `--filename_startdate` and `--filename_fclen` options are CPDN filename-resolution metadata only; they are not authoritative model runtime controls.
   - Uses vendored CLI11 headers under `tools/CLI11/`.
 - `src/cpdn_control.cpp`, `src/cpdn_control.h`
   - Core controller logic used by the release/debug executables and unit tests.
@@ -19,6 +20,8 @@ This repository builds the **CPDN controller** executable used to run/manage cli
 - `api/model_control.h`
   - Abstract interface for model-specific controllers (`ModelControl`).
   - Includes the model input manifest hook used to describe logical BOINC filenames and slot unzip destinations.
+  - `ModelControl::parse_control_input()` now owns model control-file opening/parsing/validation and returns a structured `ModelControlInputData` result to `main()`.
+  - `ModelControl::get_current_step(...)` now reports the current model step as an integer step count.
 - `models/`
   - Model-specific helpers/implementations.
   - `models/test/` contains the `test_model` and controller glue used by functional tests.
@@ -114,6 +117,7 @@ Typical steps:
 Notes:
 - `ModelInputManifestContext` is currently a temporary bridge from `fort.4`-derived metadata into model-specific manifest generation.
 - Do not assume future models will use a Fortran namelist. A new model may populate the same manifest from a different source.
+- If a model has a control file such as `fort.4`, keep the filename and parsing logic private to the model implementation rather than exposing a controller-side getter for it.
 
 ## Current experimental area
 
@@ -154,6 +158,21 @@ Notes:
 - If this area is refactored, preserve the distinction:
   - `prior_acc_cpu_time` = accumulated CPU time from earlier controller runs
   - `current_cpu_time` = total accumulated CPU time including the currently running child process
+
+## Step And Progress Semantics
+
+- Treat model step counts and elapsed model time as different concepts with different names.
+- `TaskState::current_step`, `TaskState::last_completed_step`, and `TaskState::last_trickle_step` are integer model step counts.
+- `TaskState::last_upload_time` is elapsed model time in seconds.
+- Derive elapsed model time from `step * timestep_seconds` when possible rather than carrying parallel string/int representations of the same step through `main()`.
+- The progress file now writes `last_completed_step` and `last_upload_time`.
+- `ProgressFileHandler` still accepts legacy `last_step` and `last_upload` keys when reading older progress files.
+
+## CPDN Filename Metadata
+
+- The controller still needs CPDN task metadata on the command line to resolve downloaded filenames before the model input is parsed.
+- `TaskConfig::filename_startdate` and `TaskConfig::filename_fclen` are filename tokens for that purpose only.
+- Do not compare `filename_fclen` directly with model runtime controls such as `CUSTOP`; they belong to different contracts.
 
 ## BOINC And Child Status Semantics
 

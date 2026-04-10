@@ -28,3 +28,4 @@ int t_trickle_handler();
 int t_run_process_with_timeout();
 int t_verify_project_zip_md5();
 int t_stage_model_input_archive();
+int t_parse_control_input();

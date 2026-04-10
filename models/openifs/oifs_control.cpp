@@ -9,6 +9,22 @@
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <unordered_set>
+
+namespace {
+
+ModelControlInputData make_parse_error( const fs::path& source_file, std::string_view error_step, std::string_view error_field,
+                                        std::string_view message )
+{
+    ModelControlInputData result;
+    result.source_file = source_file;
+    result.error_step = std::string( error_step );
+    result.error_field = std::string( error_field );
+    result.error_message = std::string( message );
+    return result;
+}
+
+}    // namespace
 
 // Implementations of the pure virtual functions from ModelControl
 
@@ -61,6 +77,138 @@ ModelInputManifest OpenIFSControl::get_input_manifest( const ModelInputManifestC
 }
 
 
+ModelControlInputData OpenIFSControl::parse_control_input() const
+{
+    ModelControlInputData parsed;
+    parsed.source_file = control_input_file;
+
+    if ( !fs::exists( control_input_file ) ) {
+        return make_parse_error( control_input_file, "exists", "", "model control input file does not exist" );
+    }
+
+    std::ifstream control_input_stream( control_input_file );
+    if ( !control_input_stream.is_open() ) {
+        return make_parse_error( control_input_file, "open", "", "failed to open model control input file" );
+    }
+
+    const std::unordered_set<std::string> header_keys = { "HORIZ_RESOLUTION", "VERT_RESOLUTION", "GRID_TYPE", "UPLOAD_INTERVAL" };
+    std::string input_line;
+    std::string parsed_key;
+    std::string parsed_value;
+    std::string tmpstr;
+    std::string err_msg;
+
+    while ( std::getline( control_input_stream, input_line ) ) {
+        trim_whitespace( input_line );
+        if ( input_line.empty() ) {
+            continue;
+        }
+
+        parsed_key.clear();
+        parsed_value.clear();
+
+        bool have_kv = false;
+        std::string header_line = input_line;
+
+        if ( header_line.front() == '!' ) {
+            header_line.erase( 0, 1 );
+            if ( parse_key_value( header_line, parsed_key, parsed_value ) && header_keys.find( parsed_key ) != header_keys.end() ) {
+                have_kv = true;
+            }
+        } else if ( parse_namelist_key_value( input_line, parsed_key, parsed_value ) ) {
+            have_kv = true;
+        }
+
+        if ( !have_kv ) {
+            continue;
+        }
+
+        if ( parsed_key == "HORIZ_RESOLUTION" ) {
+            parsed.horiz_resolution = parsed_value;
+        } else if ( parsed_key == "VERT_RESOLUTION" ) {
+            parsed.vert_resolution = parsed_value;
+        } else if ( parsed_key == "GRID_TYPE" ) {
+            parsed.grid_type = parsed_value;
+        } else if ( parsed_key == "UPLOAD_INTERVAL" ) {
+            tmpstr = parsed_value;
+            if ( !parse_int( tmpstr, parsed.upload_interval, err_msg ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+            }
+        } else if ( parsed_key == "UTSTEP" ) {
+            tmpstr = parsed_value;
+            if ( auto decimal_point = tmpstr.find( '.' ); decimal_point != std::string::npos ) {
+                tmpstr = tmpstr.substr( 0, decimal_point );
+            }
+            if ( !parse_int( tmpstr, parsed.timestep_seconds, err_msg ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+            }
+        } else if ( parsed_key == "NFRPOS" ) {
+            tmpstr = parsed_value;
+            if ( !parse_int( tmpstr, parsed.output_interval, err_msg ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+            }
+        } else if ( parsed_key == "NFRRES" ) {
+            tmpstr = parsed_value;
+            if ( !parse_int( tmpstr, parsed.restart_interval, err_msg ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+            }
+        } else if ( parsed_key == "CNMEXP" ) {
+            parsed.experiment_id = parsed_value;
+            if ( parsed.experiment_id.length() != 4 ) {
+                return make_parse_error( control_input_file, "validate", parsed_key, "expected a 4-character experiment ID" );
+            }
+        } else if ( parsed_key == "CUSTOP" ) {
+            tmpstr = parsed_value;
+            if ( !parse_int( tmpstr, parsed.total_steps, err_msg ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+            }
+        }
+    }
+
+    std::vector<std::string> missing_fields;
+    if ( parsed.horiz_resolution.empty() ) {
+        missing_fields.push_back( "HORIZ_RESOLUTION" );
+    }
+    if ( parsed.vert_resolution.empty() ) {
+        missing_fields.push_back( "VERT_RESOLUTION" );
+    }
+    if ( parsed.grid_type.empty() ) {
+        missing_fields.push_back( "GRID_TYPE" );
+    }
+    if ( parsed.experiment_id.empty() ) {
+        missing_fields.push_back( "CNMEXP" );
+    }
+    if ( parsed.upload_interval == 0 ) {
+        missing_fields.push_back( "UPLOAD_INTERVAL" );
+    }
+    if ( parsed.timestep_seconds <= 0 ) {
+        missing_fields.push_back( "UTSTEP" );
+    }
+    if ( parsed.output_interval == 0 ) {
+        missing_fields.push_back( "NFRPOS" );
+    }
+    if ( parsed.restart_interval == 0 ) {
+        missing_fields.push_back( "NFRRES" );
+    }
+    if ( parsed.total_steps <= 0 ) {
+        missing_fields.push_back( "CUSTOP" );
+    }
+
+    if ( !missing_fields.empty() ) {
+        std::string message = "missing or invalid required fields:";
+        for ( const auto& field : missing_fields ) {
+            message += ' ';
+            message += field;
+        }
+        return make_parse_error( control_input_file, "validate", "", message );
+    }
+
+    parsed.forecast_length_time = static_cast<double>( parsed.total_steps ) * static_cast<double>( parsed.timestep_seconds );
+    parsed.ok = true;
+    return parsed;
+}
+
+
 /**
  * @brief Print the last n lines of key log files produced by the model.
  * @param nlines Number of lines to print from end of each log file.
@@ -81,11 +229,11 @@ void OpenIFSControl::print_logs( const int nlines ) const
  * @param current_step Reference to an integer to store the current step. Updated on success.
  * @returns True if the current step was successfully retrieved, false otherwise.
  */
-bool OpenIFSControl::get_current_step( std::string& current_step, const int total_steps ) const
+bool OpenIFSControl::get_current_step( int& current_step, const int total_steps ) const
 {
-    bool result = false;
-    std::string iter = "0";
     std::string lastline{};
+    std::string current_step_text;
+    std::string err_msg;
 
     // Read completed step from last line of ifs.stat file.
     // Note the first line from the model has a step count of '....  CNT3      -999 ....'
@@ -93,14 +241,18 @@ bool OpenIFSControl::get_current_step( std::string& current_step, const int tota
     // to the output files for that iteration, those files can now be moved and uploaded.
     //std::cerr << "Reading completed iteration step from last line of ifs.stat" << std::endl;
 
-    if ( fread_last_line( ifs_stat.string(), lastline ) ) {      // only returns true if lastline is read and changed.
-        if ( oifs_parse_stat( lastline, current_step, 4 ) ) {    // iter updates
-            if ( oifs_valid_step( iter, total_steps ) ) {
-                result = true;
+    if ( fread_last_line( ifs_stat.string(), lastline ) ) {           // only returns true if lastline is read and changed.
+        if ( oifs_parse_stat( lastline, current_step_text, 4 ) ) {    // iter updates
+            if ( !parse_int( current_step_text, current_step, err_msg ) ) {
+                return false;
             }
+            if ( current_step < 0 || current_step > total_steps ) {
+                return false;
+            }
+            return true;
         }
     }
-    return result;
+    return false;
 }
 
 
@@ -112,10 +264,10 @@ bool OpenIFSControl::get_current_step( std::string& current_step, const int tota
  * @param id The experiment ID or general experiment identifier (string).
  * @returns A vector of output filenames to be uploaded.
  */
-std::vector<std::string> OpenIFSControl::get_output_filenames( std::string_view step, std::string_view exptid ) const
+std::vector<std::string> OpenIFSControl::get_output_filenames( int step, std::string_view exptid ) const
 {
     // TODO: exptid should come from the model instance, not via the args
-    std::string suffix = oifs_get_filename_part( std::string( step ), std::string( exptid ) );
+    std::string suffix = oifs_get_filename_part( std::to_string( step ), std::string( exptid ) );
     return { "ICMGG" + suffix, "ICMSH" + suffix, "ICMUA" + suffix };
 }
 

@@ -15,7 +15,6 @@
 namespace fs = std::filesystem;
 
 constexpr std::string_view progressfile_name = "cpdn_progressfile.txt";
-constexpr int PROGFILE_LINES = 6;    // number of data fields in progress file.
 
 class ProgressFileHandler {
 

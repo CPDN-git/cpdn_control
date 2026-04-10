@@ -20,8 +20,8 @@ class OpenIFSControl : public ModelControl {
 
   public:
     // Constructor and destructor methods
-    OpenIFSControl( std::string_view vendor, std::string_view model, std::string_view version, std::string_view exe, std::string_view param_infile )
-        : ModelControl( vendor, model, version, exe, param_infile )
+    OpenIFSControl( std::string_view vendor, std::string_view model, std::string_view version, std::string_view exe )
+        : ModelControl( vendor, model, version, exe )
     {
     }
     ~OpenIFSControl() override = default;
@@ -35,8 +35,9 @@ class OpenIFSControl : public ModelControl {
     // Getters and setters
 
     ModelInputManifest get_input_manifest( const ModelInputManifestContext& ctx ) const override;
-    bool get_current_step( std::string& step, const int total_steps ) const override;
-    std::vector<std::string> get_output_filenames( std::string_view step, std::string_view id ) const override;
+    ModelControlInputData parse_control_input() const override;
+    bool get_current_step( int& step, const int total_steps ) const override;
+    std::vector<std::string> get_output_filenames( int step, std::string_view id ) const override;
     std::vector<std::string> get_log_filenames() const override;
     std::regex get_output_filename_regex() const override;
 
@@ -52,6 +53,8 @@ class OpenIFSControl : public ModelControl {
 
   private:
     // Private member variables
+    const fs::path control_input_file{ "fort.4" };
+
     const fs::path ifs_stat{ "ifs.stat" };
 
     const fs::path rcf{ "rcf" };

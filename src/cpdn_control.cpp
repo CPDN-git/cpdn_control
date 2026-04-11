@@ -38,6 +38,10 @@
 namespace chrono = std::chrono;
 namespace fs = std::filesystem;
 
+#ifndef CPDN_PLATFORM
+#define CPDN_PLATFORM "unknown-platform"
+#endif
+
 static std::string lowercase_copy( std::string value )
 {
     std::transform( value.begin(), value.end(), value.begin(), []( unsigned char ch ) { return static_cast<char>( std::tolower( ch ) ); } );
@@ -180,17 +184,7 @@ int move_and_unzip_app_file( const std::string& app_name, const std::string& ver
     // GC. TODO. This code could be combined with copy_and_unzip() to avoid code duplication.
 
     int retval = 0;
-
-// macOS
-#if defined( __APPLE__ )
-    std::string app_file = app_name + "_app_" + version + "_x86_64-apple-darwin.zip";
-// ARM
-#elif defined( _ARM )
-    std::string app_file = app_name + "_app_" + version + "_aarch64-poky-linux.zip";
-// Linux
-#else
-    std::string app_file = app_name + "_app_" + version + "_x86_64-pc-linux-gnu.zip";
-#endif
+    std::string app_file = app_name + "_app_" + version + "_" + CPDN_PLATFORM + ".zip";
 
     // Copy the app file to the working directory
     fs::path app_source = project_path;

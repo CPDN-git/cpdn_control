@@ -184,7 +184,10 @@ target_link_libraries(cpdn_control PUBLIC
 
 # this executes git to retrieve the current hash of the branch and sets a macro the code uses.
 get_git_hash(CODE_VERSION_HASH)
-target_compile_definitions(cpdn_control PUBLIC CODE_VERSION="${CODE_VERSION_HASH}")
+target_compile_definitions(cpdn_control PUBLIC
+                    CODE_VERSION="${CODE_VERSION_HASH}"
+                    CPDN_PLATFORM="${PLATFORM}"
+)
 
 #--------------------------- Executables -------------------------------------
 

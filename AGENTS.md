@@ -230,3 +230,20 @@ Notes:
   - for several substantially different models, especially if they do not share a Fortran namelist pattern, a `model.xml` or similar model-owned config file becomes more attractive
 - If `model.xml` is introduced later, prefer using it to populate the existing manifest/config seam rather than pushing more model-specific rules back into `main()`.
 - A future `model.xml` would likely describe input archives, unpack destinations, control-file names, output patterns, restart files, and model-specific setup dependencies.
+
+## Documentation
+
+- [docs/Adding_new_model.md](/home/glenn/github/cpdn_control/docs/Adding_new_model.md)
+  Use this as the starting guide for integrating a new model through the current `ModelControl` seam.
+- [docs/code_complexity_refactor_tracking.md](/home/glenn/github/cpdn_control/docs/code_complexity_refactor_tracking.md)
+  Use this to track `main()` and related refactor complexity measurements over time; update it after significant tidy/refactor work.
+- [docs/cpdn_control_data_flow.md](/home/glenn/github/cpdn_control/docs/cpdn_control_data_flow.md)
+  Use this for a higher-level description of controller execution flow and data movement.
+- [docs/input_file_refactor_plan.md](/home/glenn/github/cpdn_control/docs/input_file_refactor_plan.md)
+  Use this for the broader input/configuration refactor context and longer-term future-work discussion.
+- [docs/namelist_input_refactor_plan.md](/home/glenn/github/cpdn_control/docs/namelist_input_refactor_plan.md)
+  Use this for the `fort.4` and model-control-input refactor history and design decisions.
+- [docs/MACOS.md](/home/glenn/github/cpdn_control/docs/MACOS.md)
+  Use this for macOS-specific build or environment notes.
+- [docs/WINDOWS.md](/home/glenn/github/cpdn_control/docs/WINDOWS.md)
+  Use this for Windows-specific build or environment notes.

@@ -19,6 +19,28 @@ Already in place:
 - `set_env_var(...)` now uses `_putenv_s(...)` on Windows.
 - `api/progressfile_handler.cpp` now uses `_getpid()` on Windows.
 - `src/cpdn_main.cpp` no longer depends on `mkdir` and the old unconditional POSIX directory headers for its upload-directory setup.
+- `move_and_unzip_app_file(...)` now uses the shared CMake `PLATFORM` triplet rather than hardcoded Linux/macOS filename suffixes.
+
+## Temporary Probe Infrastructure
+
+The current Windows workflow is still a compile probe, not a runtime validation job.
+
+Temporary pieces now in use:
+
+- `CPDN_USE_BOINC_STUBS=ON`
+- compile-only BOINC headers from `cmake/boinc_stub/include`
+- `unit_tests` built for extra compile coverage
+- functional tests disabled
+
+This is useful for short-term porting work, but the BOINC stubs should not remain in the code indefinitely.
+
+They should be removed or at least stopped from being the default Windows porting path soon, because long-lived stubs create drift risk:
+
+- the controller can compile against interfaces that no longer match real BOINC headers/libs
+- Windows-specific BOINC link/runtime issues stay hidden
+- CI can start to look healthier than the real product state
+
+So treat the stubs as a temporary bridge only, and plan to replace them with a real Windows BOINC build/artifact path once the next round of compile blockers is cleared.
 
 ## Process Control Status
 
@@ -79,7 +101,7 @@ The current workflow is intentionally a compile probe. It does not yet prove:
 To move beyond the probe:
 
 - provide a real Windows BOINC install/artifact under `BOINC_DIR/include` and `BOINC_DIR/lib`
-- disable `CPDN_USE_BOINC_STUBS`
+- disable and then retire `CPDN_USE_BOINC_STUBS` from the active Windows workflow path
 - re-enable the relevant test/build stages in the workflow
 
 ### 3. Some test coverage is still not Windows-ready
@@ -93,9 +115,9 @@ Known follow-up areas:
 - the Windows probe workflow still disables functional tests and does not run the Windows-built unit test binary
 - the threaded suspend/resume and descendant-process termination paths need Windows-specific runtime coverage, not just compile success
 
-## Practical Meaning For GitHub Actions
+## Next practical milestones
 
-For now, the Windows workflow is useful as a development probe:
+The current Windows workflow is still useful as a development probe:
 
 - trigger it manually
 - inspect the uploaded build logs
@@ -104,12 +126,13 @@ For now, the Windows workflow is useful as a development probe:
 
 Do not promote it to required CI yet.
 
-Before enabling a real Windows CI job:
+Recommended near-term order:
 
-1. Provide real Windows BOINC headers/libs or a BOINC build job/artifact.
-2. Replace the compile-only stub mode with a real `BOINC_DIR`.
-3. Implement the Windows branch of `run_process_with_timeout(...)`.
-4. Re-enable and port the relevant tests.
-5. Validate runtime behavior, not just compilation.
+1. Clear the next compile/runtime portability issues while keeping changes small.
+2. Add a real Windows BOINC install/artifact path to the workflow.
+3. Stop using the BOINC stubs in the active Windows workflow path.
+4. Implement the Windows branch of `run_process_with_timeout(...)`.
+5. Re-enable and then run the relevant tests on Windows.
+6. Validate runtime behavior, not just compilation.
 
 Prefer dynamic BOINC linkage on Windows unless a fully static BOINC build is confirmed to work.

@@ -2,112 +2,84 @@
 
 Target: Windows 10+, x86_64, MSVC/Visual Studio.
 
-This note tracks the current state of the Windows port after the recent controller refactors. The repo now has some Windows-aware build and test plumbing, but it is not yet ready for a full Windows build-and-run workflow.
+This note tracks the current state of the Windows port after the recent controller refactors. The repo now has a usable Windows compile-probe workflow and a platform-specific child-process seam, but it is still not ready for a full Windows BOINC runtime.
 
 ## Current status
 
 Already in place:
 
 - CMake derives a Windows platform triplet of `x86_64-pc-windows-msvc` and rejects 32-bit Windows builds.
-- BOINC library discovery in `cmake/BoincConfig.cmake` now accepts Windows-style `.lib` files.
+- BOINC library discovery in `cmake/BoincConfig.cmake` accepts Windows-style `.lib` files.
+- The repo has a manual Windows compile-probe workflow at `.github/workflows/windows_build_probe.yml`.
+- That workflow currently uses compile-only BOINC stubs and disables tests so it can surface MSVC build errors before a real Windows BOINC build exists.
 - Linux-specific compile and link flags such as `-pthread`, `-static`, and `-fsanitize=address` are not applied to the main controller targets on Windows.
-- The functional test harness is now platform-aware:
-  - `tests/functional/run.py` appends `.exe` when needed
-  - `tests/functional/run.py` and `tests/functional/setup_test.py` use `CPDN_PLATFORM`
-  - `tests/functional/CMakeLists.txt` prepends `BOINC_LIB_DIR` to `PATH` on Windows
-  - the fixture generator models BOINC logical inputs using `<soft_link>...</soft_link>` files rather than filesystem symlinks
+- `test_model` now uses platform-aware compile options instead of unconditional `-g -Wall`.
 - `lib/cpdn_cpu_time.cpp` has a Windows implementation using `GetProcessTimes`.
 - `lib/logging_utils.cpp` already uses `localtime_s` on Windows.
+- `set_env_var(...)` now uses `_putenv_s(...)` on Windows.
+- `api/progressfile_handler.cpp` now uses `_getpid()` on Windows.
+- `src/cpdn_main.cpp` no longer depends on `mkdir` and the old unconditional POSIX directory headers for its upload-directory setup.
 
-Still true:
+## Process Control Status
 
-- A working Windows BOINC build is still required under a `BOINC_DIR/include` and `BOINC_DIR/lib` layout.
-- The controller runtime still depends heavily on POSIX process-control code and will not yet build or run cleanly on Windows.
+The controller no longer keeps all child-process logic inside a POSIX-only `launch_process(...)` implementation.
 
-## What The Refactors Changed
+Now in place:
 
-The recent refactors improved the Windows story indirectly:
+- a shared child-process handle type with a portable process id
+- a POSIX backend in `src/process_control_posix.cpp`
+- a Windows backend in `src/process_control_windows.cpp`
+- shared controller policy in `src/cpdn_control.cpp` for:
+  - `launch_process(...)`
+  - `check_child_status(...)`
+  - `handle_boinc_client_status(...)`
 
-- Model input staging is now driven by the model manifest rather than hardcoded controller logic in `main()`.
-- BOINC input staging now resolves logical BOINC files, validates the `jf_*` project archive, copies that archive into the slot, and unzips from the copied archive.
-- Functional tests now mirror BOINC logical input behaviour with `<soft_link>` files, which is a better fit for cross-platform testing than relying on real symlinks.
+The Windows backend now implements:
 
-Those changes make the startup path more portable, but they do not remove the remaining Unix-specific runtime/process code.
+- `CreateProcessW` for launch
+- explicit child-only environment handoff
+- `WaitForSingleObject(..., 0)` and `GetExitCodeProcess` for polling
+- `TerminateProcess` for forced shutdown
+- suspend/resume via Tool Help thread enumeration and `SuspendThread` / `ResumeThread`
+
+The obsolete `process_env_overrides()` testing path has been removed. Model environment variables are now prepared as data and passed to the child launcher rather than being applied to the parent controller process.
 
 ## Remaining Windows Blockers
 
-### 1. Process launch and child control are still POSIX-only
+### 1. Timed external-process execution is still stubbed on Windows
 
-The main controller runtime in `src/cpdn_control.cpp` still uses Unix process APIs:
+`lib/utils.cpp` still returns a default result from the Windows branch of `run_process_with_timeout(...)`.
 
-- `fork()`
-- `execl()`
-- `waitpid()`
-- `kill()`
-- `SIGKILL`, `SIGSTOP`, `SIGCONT`
-- `setrlimit()`
-
-Affected functions include:
-
-- `launch_process(...)`
-- `check_child_status(...)`
-- `handle_boinc_client_status(...)`
-
-This is the biggest runtime blocker. A Windows implementation will need `CreateProcess`-style launch and Windows-native suspend/resume/terminate/wait handling, or a small abstraction layer above platform-specific process control.
-
-### 2. Timed external-process execution is not implemented on Windows
-
-`lib/utils.cpp` contains `run_process_with_timeout(...)`, but the Windows branch currently returns the default `TimedProcessResult` immediately without spawning anything.
-
-This matters for:
+This still blocks:
 
 - the experimental diagnostics path in `src/external_diagnostics.cpp`
-- the `t_run_process_with_timeout` unit test
+- meaningful Windows coverage for `t_run_process_with_timeout`
 
-Until this helper has a real Windows implementation, diagnostics support on Windows is effectively blocked.
+### 2. Full Windows runtime has not yet been validated with real BOINC libraries
 
-### 3. Environment helper is still Unix-only
+The current workflow is intentionally a compile probe. It does not yet prove:
 
-`set_env_var(...)` in `lib/utils.cpp` still calls `setenv(...)` unconditionally.
+- link/runtime behavior against real Windows BOINC headers/libs
+- BOINC DLL discovery and execution environment
+- end-to-end controller behavior under a Windows BOINC-style task layout
 
-For Windows this should be changed to `_putenv_s(...)` or an equivalent wrapper. The current note that this helper "should use `_putenv_s`" is still an outstanding task, not something already completed.
+To move beyond the probe:
 
-### 4. A few source files still have direct Unix header or API dependencies
+- provide a real Windows BOINC install/artifact under `BOINC_DIR/include` and `BOINC_DIR/lib`
+- disable `CPDN_USE_BOINC_STUBS`
+- re-enable the relevant test/build stages in the workflow
 
-Current examples:
+### 3. Some test coverage is still not Windows-ready
 
-- `src/cpdn_main.cpp` includes `<dirent.h>`, `<sys/stat.h>`, and `<sys/types.h>` unconditionally.
-- `api/progressfile_handler.cpp` includes `<unistd.h>` and writes `getpid()` into the progress file.
-- `src/cpdn_control.h` includes `<sys/types.h>` for `pid_t`.
+The launch/status unit test has been refactored to use the new cross-platform process-control seam, but broader Windows test support is still incomplete.
 
-These are compile blockers for a straightforward MSVC build and should be hidden behind portable wrappers or guarded includes.
+Known follow-up areas:
 
-### 5. Some tests are still Unix-only
+- `t_run_process_with_timeout.cpp` still assumes the helper exists on Windows
+- several tests still use Unix-centric environment helpers directly
+- the Windows probe workflow still disables unit and functional tests on purpose
 
-Several unit tests assume POSIX APIs directly:
-
-- `tests/unit/t_launch_process.cpp` uses `<unistd.h>`, `setenv`, and signal-based expectations
-- `tests/unit/t_run_process_with_timeout.cpp` uses `setenv` and `unsetenv`
-- `tests/unit/launch_process_helper.cpp` raises `SIGTERM`
-
-The CPU-time test already has a Windows path, but the process-control tests still need either Windows variants or conditional exclusion.
-
-### 6. `test_model` compile options still need a Windows check
-
-Top-level `CMakeLists.txt` still applies:
-
-- `-g`
-- `-Wall`
-
-directly to `test_model` with:
-
-```cmake
-target_compile_options(test_model PRIVATE -g -Wall)
-```
-
-That is fine for GCC/Clang but not for MSVC. The main controller targets already route options through shared helpers; `test_model` should follow the same platform-aware pattern.
-
-### 7. App package naming still assumes Linux/macOS
+### 4. Application package naming still assumes Linux/macOS strings
 
 `move_and_unzip_app_file(...)` in `src/cpdn_control.cpp` still hardcodes:
 
@@ -115,27 +87,25 @@ That is fine for GCC/Clang but not for MSVC. The main controller targets already
 - `aarch64-poky-linux`
 - `x86_64-pc-linux-gnu`
 
-There is no Windows branch yet. That should be aligned with the shared `PLATFORM` triplet instead of maintaining separate hardcoded platform strings here.
+There is still no Windows branch there. That should be aligned with the shared `PLATFORM` triplet instead of maintaining separate hardcoded platform strings.
 
-## Practical Meaning For A GitHub Windows Workflow
+## Practical Meaning For GitHub Actions
 
-Do not add the Windows GitHub Actions job yet as a normal required build. The repo has enough groundwork to define the workflow shape, but not enough to expect a successful build-and-test run.
+For now, the Windows workflow is useful as a development probe:
 
-Before enabling a real Windows workflow:
+- trigger it manually
+- inspect the uploaded build logs
+- fix the next MSVC compile error
+- repeat
 
-1. Provide Windows BOINC headers/libs in a predictable `BOINC_DIR`.
-2. Remove the remaining MSVC compile blockers listed above.
-3. Implement Windows process launch/control for the controller runtime.
-4. Implement the Windows branch of `run_process_with_timeout(...)`.
-5. Make the Unix-only unit tests conditional or port them.
-6. Fix `test_model` compile options for MSVC.
+Do not promote it to required CI yet.
 
-Once that is done, the workflow should:
+Before enabling a real Windows CI job:
 
-- run on `windows-latest`
-- configure CMake with `BOINC_DIR`
-- build normally with the MSVC generator/toolchain
-- run `ctest`
-- ensure BOINC `.dll` locations are added to `PATH`
+1. Provide real Windows BOINC headers/libs or a BOINC build job/artifact.
+2. Replace the compile-only stub mode with a real `BOINC_DIR`.
+3. Implement the Windows branch of `run_process_with_timeout(...)`.
+4. Re-enable and port the relevant tests.
+5. Validate runtime behavior, not just compilation.
 
 Prefer dynamic BOINC linkage on Windows unless a fully static BOINC build is confirmed to work.

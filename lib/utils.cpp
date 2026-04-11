@@ -116,7 +116,11 @@ bool terminate_child_process( pid_t pid )
  */
 bool set_env_var( const std::string& name, const std::string& val )
 {
+#if defined( _WIN32 ) || defined( _WIN64 )
+    return ( _putenv_s( name.c_str(), val.c_str() ) == 0 );
+#else
     return ( setenv( name.c_str(), val.c_str(), 1 ) == 0 );    // 1 = overwrite existing value, true on success.
+#endif
 }
 
 

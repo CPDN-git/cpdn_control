@@ -12,7 +12,12 @@
 #include <string_view>
 #include <system_error>
 
+#if defined( _WIN32 )
+#include <process.h>
+#define getpid _getpid
+#else
 #include <unistd.h>    // for getpid()
+#endif
 
 #include "../lib/utils.h"
 #include "../src/cpdn_control.h"    // for TaskState struct

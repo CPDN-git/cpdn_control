@@ -24,16 +24,6 @@
 #include <cstdio>
 #include <cstdlib>
 
-#ifndef _WIN32
-#include <fcntl.h>
-#include <signal.h>
-#include <sys/resource.h>
-#include <sys/stat.h>    // for mkdir
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
-#endif
-
 #include "boinc/boinc_api.h"
 #include "boinc/diagnostics.h"
 #include "boinc/md5_file.h"
@@ -158,56 +148,6 @@ int init_boinc( BoincConfig& config )
 }
 
 
-// Next function allows the use of an override file to set environment variables for testing
-// on live tasks on remote machines.  The file is a simple text file with one variable per line in the format:
-// VAR=VALUE  or export VAR='VALUE'  (single or double quotes can be used, or no quotes)
-// e.g. export OMP_NUM_THREADS=6
-
-/**
- * @brief Checks for the override file and sets environment variables if found.
- * * 
- * @param project_path The base directory.
- * @param filename The override environment filename.
- * @return true if environment variables were successfully processed, false otherwise.
- */
-bool process_env_overrides( const fs::path& override_envs )
-{
-    if ( !fs::exists( override_envs ) ) {
-        // Fail silently to avoid highlighting existence of file
-        //std::cerr << "Override file not found: " << override_envs.string() << std::endl;
-        return false;
-    }
-
-    // debugging only. don't advertise existence of file
-    //std::cerr << "Processing environment overrides from: " << override_envs.string() << std::endl;
-
-    std::ifstream file( override_envs );
-    if ( !file.is_open() ) {
-        // Fail silently
-        //std::cerr << "Error: Could not open override file for reading." << std::endl;
-        return false;
-    }
-
-    std::string line;
-    bool success = true;
-    while ( std::getline( file, line ) ) {
-        std::string var_name;
-        std::string var_value;
-
-        if ( parse_key_value( line, var_name, var_value ) ) {
-            try {
-                set_env_var( var_name, var_value );
-                std::cerr << "Overriding env var: " << var_name << " = " << var_value << '\n';
-            } catch ( const std::exception& e ) {
-                std::cerr << "Error setting variable: " << e.what() << std::endl;
-                success = false;
-            }
-        }
-    }
-    return success;
-}
-
-
 /**
  * @brief Copies the application zip file to the slot directory and unzips it.
  * 
@@ -271,98 +211,106 @@ int move_and_unzip_app_file( const std::string& app_name, const std::string& ver
 /**
  * @brief Checks the status of a child process.
  * 
- * @param processid The process ID of the child process.
+ * @param child_process The child process handle.
  * @param child_status The current status of the child process.
  * @param exit_code The exit code of the child process (set on normal exit).
  * @return The updated child status, unchanged if still running.
  */
-int check_child_status( pid_t processid, int child_status, int& exit_code )
+int check_child_status( ChildProcessHandle& child_process, int child_status, int& exit_code )
 {
-    int stat = 0;
-
-    // Check whether child process has exited
-    // waitpid will return process id of zombie (finished) process; zero if still running
-    if ( pid_t pid; ( pid = waitpid( processid, &stat, WNOHANG ) ) > 0 ) {
-        child_status = 1;
-        // Child exited normally but model might still have failed
-        if ( WIFEXITED( stat ) ) {
-            child_status = 1;
-            exit_code = WEXITSTATUS( stat );
-            std::cerr << "..The child process terminated with status: " << WEXITSTATUS( stat ) << '\n';
-        }
-        // Child process has exited due to signal that was not caught
-        // n.b. OpenIFS has its own signal handler.
-        else if ( WIFSIGNALED( stat ) ) {
-            child_status = 3;
-            exit_code = -1;
-            std::cerr << "..The child process has been killed with signal: " << WTERMSIG( stat ) << '\n';
-        }
-        // Child is stopped
-        else if ( WIFSTOPPED( stat ) ) {
-            child_status = 4;
-            exit_code = -1;
-            std::cerr << "..The child process has stopped with signal: " << WSTOPSIG( stat ) << '\n';
-        }
-    } else if ( pid == -1 ) {
-        // should not get here, it means the child could not be found
-        child_status = 5;
-        exit_code = -1;
-        std::cerr << "..Unable to retrieve status of child process " << '\n';
-        perror( "waitpid() error" );
+    std::string err_msg;
+    int updated_status = poll_child_process( child_process, child_status, exit_code, err_msg );
+    if ( updated_status == child_status ) {
+        return updated_status;
     }
-    return child_status;
+
+    if ( updated_status == 1 ) {
+        std::cerr << "..The child process terminated with status: " << exit_code << '\n';
+    } else if ( updated_status == 3 ) {
+        std::cerr << "..The child process terminated abnormally or was forcibly ended" << '\n';
+    } else if ( updated_status == 4 ) {
+        std::cerr << "..The child process has been suspended" << '\n';
+    } else if ( updated_status == 5 ) {
+        exit_code = -1;
+        std::cerr << "..Unable to retrieve status of child process";
+        if ( !err_msg.empty() ) {
+            std::cerr << ": " << err_msg;
+        }
+        std::cerr << '\n';
+    }
+    return updated_status;
 }
 
 
 /**
  * @brief Applies the latest BOINC client status to the child process.
  * 
- * @param processid The process ID of the child process.
+ * @param child_process The child process handle.
  * @param runtime Holds the latest BOINC runtime status snapshot.
  * @return True if the controller should continue running, false on quit/abort/no-heartbeat.
  */
-bool handle_boinc_client_status( pid_t processid, BoincRuntime& runtime )
+bool handle_boinc_client_status( ChildProcessHandle& child_process, BoincRuntime& runtime )
 {
+    std::string err_msg;
+
     // If a quit, abort or no heartbeat has been received from the BOINC client, end child process
     if ( runtime.client_status.quit_request ) {
         std::cerr << "Quit request received from BOINC client, ending the child process" << '\n';
-        kill( processid, SIGKILL );
+        if ( !terminate_child_process( child_process, err_msg ) ) {
+            std::cerr << "..Failed to terminate child process: " << err_msg << '\n';
+        }
         return false;
     } else if ( runtime.client_status.abort_request ) {
         std::cerr << "Abort request received from BOINC client, ending the child process" << '\n';
-        kill( processid, SIGKILL );
+        if ( !terminate_child_process( child_process, err_msg ) ) {
+            std::cerr << "..Failed to terminate child process: " << err_msg << '\n';
+        }
         return false;
     } else if ( runtime.client_status.no_heartbeat ) {
         std::cerr << "No heartbeat received from BOINC client, ending the child process" << '\n';
-        kill( processid, SIGKILL );
+        if ( !terminate_child_process( child_process, err_msg ) ) {
+            std::cerr << "..Failed to terminate child process: " << err_msg << '\n';
+        }
         return false;
     }
     // Else if BOINC client is suspended, suspend child process and periodically refresh BOINC client status
     else {
         if ( runtime.client_status.suspended ) {
             std::cerr << "Suspend request received from the BOINC client, suspending the child process" << '\n';
-            kill( processid, SIGSTOP );
+            if ( !suspend_child_process( child_process, err_msg ) ) {
+                std::cerr << "..Failed to suspend child process: " << err_msg << '\n';
+                return false;
+            }
 
             while ( runtime.client_status.suspended ) {
                 boinc_get_status( &runtime.client_status );
                 if ( runtime.client_status.quit_request ) {
                     std::cerr << "Quit request received from the BOINC client, ending the child process" << '\n';
-                    kill( processid, SIGKILL );
+                    if ( !terminate_child_process( child_process, err_msg ) ) {
+                        std::cerr << "..Failed to terminate child process: " << err_msg << '\n';
+                    }
                     return false;
                 } else if ( runtime.client_status.abort_request ) {
                     std::cerr << "Abort request received from the BOINC client, ending the child process" << '\n';
-                    kill( processid, SIGKILL );
+                    if ( !terminate_child_process( child_process, err_msg ) ) {
+                        std::cerr << "..Failed to terminate child process: " << err_msg << '\n';
+                    }
                     return false;
                 } else if ( runtime.client_status.no_heartbeat ) {
                     std::cerr << "No heartbeat received from the BOINC client, ending the child process" << '\n';
-                    kill( processid, SIGKILL );
+                    if ( !terminate_child_process( child_process, err_msg ) ) {
+                        std::cerr << "..Failed to terminate child process: " << err_msg << '\n';
+                    }
                     return false;
                 }
                 sleep_seconds( 1 );
             }
             // Resume child process
             std::cerr << "Resuming the child process" << "\n";
-            kill( processid, SIGCONT );
+            if ( !resume_child_process( child_process, err_msg ) ) {
+                std::cerr << "..Failed to resume child process: " << err_msg << '\n';
+                return false;
+            }
         }
         return true;
     }
@@ -376,74 +324,32 @@ bool handle_boinc_client_status( pid_t processid, BoincRuntime& runtime )
  * @param slot_path The path to the slot directory.
  * @param strCmd The command to execute (model executable).
  * @param nthreads The number of threads to use.
- * @param app_name The application name.
- * @return long The process handle of the launched child process, or -1 on failure.
+ * @return ChildProcessHandle The launched child process handle, or an invalid handle on failure.
  */
-pid_t launch_process( const std::string& project_path, const std::string& slot_path, const std::string& strCmd, const std::string& nthreads )
+ChildProcessHandle launch_process( const std::string& project_path, const std::string& slot_path, const std::string& strCmd,
+                                   const std::string& nthreads )
 {
-    pid_t handle_process;
+    (void)project_path;
 
-    switch ( ( handle_process = fork() ) ) {
-    case -1: {
-        std::cerr << "..Unable to start a new child process" << "\n";
-        return -1;    // Don't exit() here, return as this is the parent process.
-        break;
+    ChildEnvironment env_vars;
+    std::string err_msg;
+    if ( !oifs_get_model_env_vars( slot_path, nthreads, env_vars, err_msg ) ) {
+        std::cerr << "..Failed to prepare child environment: " << err_msg << '\n';
+        return {};
     }
-    case 0: {    // The child process
 
-        // Set the environment variables for the executable.
-        if ( !oifs_setenvs( slot_path, nthreads ) ) {
-            std::cerr << "..Setting the environmental variables failed" << std::endl;
-            exit( 1 );    // Can't continue so exit to end child process.
+    auto child_process = start_child_process( strCmd, slot_path, env_vars, err_msg );
+    if ( !child_process_is_valid( child_process ) ) {
+        std::cerr << "..Unable to start a new child process";
+        if ( !err_msg.empty() ) {
+            std::cerr << ": " << err_msg;
         }
-
-        // --------------------------------------
-        // Custom environment variable overrides, if the override file exists.
-        // NOTE! This should only be used for testing and never advertised to users.
-        {
-            fs::path override_env_vars = project_path + "/oifs_override_env_vars";
-            process_env_overrides( override_env_vars );
-        }
-        //---------------------------------------
-
-        // Set the core dump size to 0
-        struct rlimit core_limits;
-        core_limits.rlim_cur = core_limits.rlim_max = 0;
-        if ( setrlimit( RLIMIT_CORE, &core_limits ) != 0 ) {
-            std::cerr << "..Setting the core dump size to 0 failed" << std::endl;
-            exit( 1 );
-        }
-
-        // Set the stack limit to be unlimited
-        struct rlimit stack_limits;
-// In macOS we cannot set the stack size limit to infinity
-#ifndef __APPLE__    // Linux
-        stack_limits.rlim_cur = stack_limits.rlim_max = RLIM_INFINITY;
-        if ( setrlimit( RLIMIT_STACK, &stack_limits ) != 0 ) {
-            std::cerr << "..Setting the stack limit to unlimited failed" << std::endl;
-            exit( 1 );
-        }
-#endif
-
-        // Execute model process.
-
-        std::cerr << "Executing the command: " << strCmd << "\n";
-        execl( strCmd.c_str(), strCmd.c_str(), NULL );    // always returns -1 on failure
-
-        // If execl returns there was an error
-        int syserr = errno;    // grab the error before any other system call.
-        const char* syserr_msg = strerror( syserr );
-
-        std::cerr << "..Launch process failed: execl - errno = " << syserr << ", " << syserr_msg << "\n slot_path=" << slot_path
-                  << ",strCmd=" << strCmd << std::endl;
-
-        exit( syserr );    // exit child process with system code for better remote diagnosis.
-        break;
+        std::cerr << '\n';
+        return {};
     }
-    default:
-        std::cerr << "The child process has been launched with process id: " << handle_process << "\n";
-    }
-    return handle_process;
+
+    std::cerr << "The child process has been launched with process id: " << child_process.process_id << "\n";
+    return child_process;
 }
 
 

@@ -137,6 +137,12 @@ set(LOCAL_INCLUDE_DIRS
 
 add_subdirectory(models)
 
+if (WIN32)
+    set(CPDN_PROCESS_CONTROL_SOURCE ./src/process_control_windows.cpp)
+else()
+    set(CPDN_PROCESS_CONTROL_SOURCE ./src/process_control_posix.cpp)
+endif()
+
 #--------------------------- Libraries ---------------------------------------
 
 # Unit tests need just these source files; create a library for them to link against.
@@ -145,6 +151,7 @@ add_library(cpdn_control
         ./src/control_start.cpp
         ./src/external_diagnostics.cpp
         ./src/parse_args.cpp
+        ${CPDN_PROCESS_CONTROL_SOURCE}
         ./lib/logging_utils.cpp
         ./lib/utils.cpp
         ./lib/cpdn_cpu_time.cpp
@@ -195,7 +202,11 @@ add_cpdn_executable(${DEBUG_TARGET_NAME} ./src/cpdn_main.cpp ${DEBUG_OUTPUT_NAME
 add_executable(test_model ./models/test/test_model.cpp)
 
 # Compile options for test_model (debug symbols and warnings)
-target_compile_options(test_model PRIVATE -g -Wall)
+if (MSVC)
+    target_compile_options(test_model PRIVATE /W3)
+else()
+    target_compile_options(test_model PRIVATE -g -Wall)
+endif()
 
 
 #------- UNIT TESTS CONFIGURATION

@@ -1,18 +1,19 @@
 #include <chrono>
-#include <csignal>
 #include <cstdlib>
 #include <string>
 #include <thread>
 
 int main()
 {
-    const char* signal_mode = std::getenv( "CPDN_LAUNCH_PROCESS_SIGNAL" );
-    if ( signal_mode && std::string( signal_mode ) == "TERM" ) {
-        std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
-        std::raise( SIGTERM );
-        return 1;
+    int sleep_ms = 1000;
+    if ( const char* sleep_text = std::getenv( "CPDN_LAUNCH_PROCESS_SLEEP_MS" ) ) {
+        try {
+            sleep_ms = std::stoi( sleep_text );
+        } catch ( ... ) {
+            sleep_ms = 1000;
+        }
     }
 
-    std::this_thread::sleep_for( std::chrono::seconds( 5 ) );
+    std::this_thread::sleep_for( std::chrono::milliseconds( sleep_ms ) );
     return 0;
 }

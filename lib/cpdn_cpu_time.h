@@ -1,3 +1,5 @@
 #pragma once
 
-double cpdn_cpu_time( pid_t pid );
+#include <cstdint>
+
+double cpdn_cpu_time( std::uint64_t pid );

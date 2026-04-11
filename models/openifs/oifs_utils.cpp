@@ -30,22 +30,21 @@ std::vector<std::pair<std::string, std::string>> oifs_get_grib_env_vars( const s
 
 
 /**
- * @brief Set the required OpenIFS environment variables.
+ * @brief Build the required OpenIFS child-process environment variables.
  *        OMP_NUM_THREADS uses the incoming nthreads value; other values are fixed.
  */
-bool oifs_setenvs( const std::string& slot_path, const std::string& nthreads )
+bool oifs_get_model_env_vars( const std::string& slot_path, const std::string& nthreads,
+                              std::vector<std::pair<std::string, std::string>>& env_vars, std::string& err_msg )
 {
+    err_msg.clear();
+    env_vars.clear();
+
     // check nthreads is valid integer
     // parse_int can modify the string!
     if ( std::string nthreads_copy = nthreads; !parse_int( nthreads_copy ) ) {
-        std::cerr << "..oifs_setenvs: Invalid value of 'nthreads': " << nthreads << '\n';
+        err_msg = "invalid value of 'nthreads': " + nthreads;
         return false;
     }
-
-    // Ordered list of environment variables to set.
-    // vector of pairs is more efficient than map for single use & small number of items.
-    // Use emplace_back to avoid unnecessary copies, rather than push_back.
-    std::vector<std::pair<std::string, std::string>> env_vars;
 
     // OIFS_DUMMY_ACTION controls what the model does when it gets into a dummy subroutine.
     // Possible values are 'quiet', 'verbose' or 'abort'. We use 'abort' to stop the model.
@@ -62,21 +61,6 @@ bool oifs_setenvs( const std::string& slot_path, const std::string& nthreads )
 
     auto grib_env_vars = oifs_get_grib_env_vars( slot_path );
     env_vars.insert( env_vars.end(), grib_env_vars.begin(), grib_env_vars.end() );
-
-    for ( const auto& [name, value] : env_vars ) {
-        if ( !set_env_var( name, value ) ) {
-            std::cerr << "..Setting the " << name << " environmental variable failed" << std::endl;
-            return false;
-        }
-
-        if ( name == "OMP_NUM_THREADS" ) {
-            std::cerr << "Info: OMP_NUM_THREADS is set to: " << getenv( "OMP_NUM_THREADS" ) << "\n";
-        } else if ( name == "GRIB_SAMPLES_PATH" ) {
-            std::cerr << "The GRIB_SAMPLES_PATH environmental variable is: " << getenv( "GRIB_SAMPLES_PATH" ) << "\n";
-        } else if ( name == "GRIB_DEFINITION_PATH" ) {
-            std::cerr << "The GRIB_DEFINITION_PATH environmental variable is: " << getenv( "GRIB_DEFINITION_PATH" ) << "\n";
-        }
-    }
 
     return true;
 }

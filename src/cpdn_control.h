@@ -10,12 +10,12 @@
 #include <filesystem>
 #include <string>
 #include <string_view>
-#include <sys/types.h>
 #include <vector>
 
 #include "boinc/boinc_api.h"    // for BOINC_STATUS and BOINC_OPTIONS structs and boinc API function declarations
 
 #include "api/model_input_manifest.h"
+#include "process_control.h"
 
 
 // GC. TODO. Consider splitting these structs into separate header files.
@@ -34,8 +34,8 @@ struct TaskState {
     bool model_success = false;         // Model run success flag: false=failed, true=successful
     int current_step = 0;               // Current model step count
     int last_trickle_step = 0;          // Last model step count for which a trickle was sent
-    pid_t pid = 0;                      // Process ID of the child model process
-    int child_status = 1;               // Child process status: 0=running, 1=exited normally, 3=signaled, 4=stopped, 5=not found.
+    ChildProcessHandle child_process;   // Child process handle and portable process id for the model child.
+    int child_status = 1;               // Child process status: 0=running, 1=exited normally, 3=abnormal/forced termination, 4=suspended, 5=not found.
     int exit_code = 0;                  // Child process exit code (valid for normal exit)
     double current_cpu_time = 0.0;      // Current accumulated CPU time
     double fraction_done = 0.0;         // Fraction of model run completed (0.0-1.0)
@@ -102,12 +102,11 @@ struct InputStageResult {
 
 int init_boinc( BoincConfig& );
 int move_and_unzip_app_file( const std::string&, const std::string&, const std::string&, const std::string& );
-int check_child_status( pid_t, int, int& );
-bool handle_boinc_client_status( pid_t, BoincRuntime& );
-pid_t launch_process( const std::string&, const std::string&, const std::string&, const std::string& );
+int check_child_status( ChildProcessHandle&, int, int& );
+bool handle_boinc_client_status( ChildProcessHandle&, BoincRuntime& );
+ChildProcessHandle launch_process( const std::string&, const std::string&, const std::string&, const std::string& );
 double model_frac_done( double, double, int );
 int move_result_file( const std::string&, const std::string&, const std::string& );
-bool process_env_overrides( const std::filesystem::path& );
 int zip_and_delete( const std::string&, const std::vector<std::filesystem::path>& );
 bool resolve_boinc_input_file( const std::filesystem::path&, std::filesystem::path&, std::string* error_msg = nullptr );
 bool verify_project_zip_md5( const std::filesystem::path&, std::string* error_msg = nullptr );

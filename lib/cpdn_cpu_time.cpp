@@ -23,7 +23,7 @@
 
 // Improved cpu time function.
 // Define the function outside of a class for direct replacement of the original
-double cpdn_cpu_time( pid_t pid )
+double cpdn_cpu_time( std::uint64_t pid )
 {
 
 #if defined( __APPLE__ )

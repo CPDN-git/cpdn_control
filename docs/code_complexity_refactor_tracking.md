@@ -176,6 +176,33 @@ Comparison against the original baseline:
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `src/cpdn_main.cpp::main()` | 120 | 69 | -51 (`-42.5%`) | 516 | 340 | -176 (`-34.1%`) |
 
+## After extracting cross-platform process-control seam
+
+Measured on 2026-04-11 after moving child launch/poll/suspend/resume/terminate implementation into `src/process_control_posix.cpp` and `src/process_control_windows.cpp`, while keeping BOINC policy in `src/cpdn_control.cpp`.
+
+| File | Function | `pmccabe` | `lizard` CCN | `lizard` NLOC | Notes |
+| --- | --- | ---: | ---: | ---: | --- |
+| `src/cpdn_main.cpp` | `main()` | 67 | 67 | 342 | Main reduced slightly after child-handle integration and upload-dir cleanup |
+| `src/cpdn_main.cpp` | `zip_and_send_upload()` | 8 | 8 | 53 | Unchanged helper complexity |
+| `src/cpdn_control.cpp` | `handle_boinc_client_status()` | 17 | 17 | 61 | BOINC policy is still here and got more complex as platform actions were abstracted underneath it |
+| `src/cpdn_control.cpp` | `resolve_boinc_input_file()` | 10 | 10 | 33 | Unchanged controller helper hotspot |
+| `src/process_control_posix.cpp` | `poll_child_process()` | 10 | 11 | 38 | New POSIX backend hotspot |
+| `src/process_control_posix.cpp` | `start_child_process()` | 9 | 9 | 44 | New POSIX backend launch helper |
+| `src/control_start.cpp` | `initialize_task_state_from_restart()` | 19 | 19 | 62 | Unchanged startup-state helper |
+| `models/openifs/oifs_control.cpp` | `parse_control_input()` | 37 | 37 | 118 | Largest non-`main()` hotspot remains in the model layer |
+
+Comparison against the previous refactor point:
+
+| Function | Prior `pmccabe` | Current `pmccabe` | Change | Prior `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src/cpdn_main.cpp::main()` | 69 | 67 | -2 (`-2.9%`) | 340 | 342 | +2 (`+0.6%`) |
+
+Comparison against the original baseline:
+
+| Function | Baseline `pmccabe` | Current `pmccabe` | Change | Baseline `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src/cpdn_main.cpp::main()` | 120 | 67 | -53 (`-44.2%`) | 516 | 342 | -174 (`-33.7%`) |
+
 ## Current observations
 
 - `main()` is still the dominant complexity hotspot, but it is materially smaller than the original baseline.
@@ -183,6 +210,10 @@ Comparison against the original baseline:
   - `OpenIFSControl::parse_control_input()` for model-specific control-file parsing
   - `initialize_task_state_from_restart()` in `src/control_start.cpp` for controller restart/progress bootstrap
   - `zip_and_send_upload()` removes duplicated upload-send mechanics, but the overall `main()` metric did not improve further because the caller-side branching and file collection still remain in `main()`.
+- The process-control refactor improved platform separation more than raw complexity numbers:
+  - low-level POSIX child-process mechanics now live in `src/process_control_posix.cpp`
+  - a matching Windows implementation path exists in `src/process_control_windows.cpp`
+  - `handle_boinc_client_status()` became more complex because it still owns the BOINC-driven suspend/abort/quit policy while delegating the platform actions underneath
 - `process_args(...)` was a good cohesion move as well as a useful reduction in `main()` complexity; the parsing/validation split now lives together in `src/parse_args.cpp`.
 - The timestamped logging refactor improved operability but, as expected, did not materially change control-flow complexity.
 - The `control_start` extraction is valuable mainly because it creates a direct unit-test seam for a high-risk state machine, even though it does not reduce the `main()` metric further.

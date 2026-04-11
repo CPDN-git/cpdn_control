@@ -9,8 +9,8 @@
 #include <iostream>
 #include <string>
 #include <thread>
-#include <unistd.h>
 
+#include "../src/process_control.h"
 #include "../src/cpdn_control.h"
 #include "unit_tests.h"
 
@@ -21,15 +21,33 @@ namespace fs = std::filesystem;
 #endif
 
 namespace {
-constexpr const char* kSignalEnv = "CPDN_LAUNCH_PROCESS_SIGNAL";
+constexpr const char* kSleepEnv = "CPDN_LAUNCH_PROCESS_SLEEP_MS";
 
-bool wait_for_status( pid_t pid, int expected_status, int timeout_seconds, bool& saw_running, int& exit_code )
+void set_test_env( const char* name, const std::string& value )
+{
+#if defined( _WIN32 )
+    _putenv_s( name, value.c_str() );
+#else
+    setenv( name, value.c_str(), 1 );
+#endif
+}
+
+void clear_test_env( const char* name )
+{
+#if defined( _WIN32 )
+    _putenv_s( name, "" );
+#else
+    unsetenv( name );
+#endif
+}
+
+bool wait_for_status( ChildProcessHandle& child_process, int expected_status, int timeout_seconds, bool& saw_running, int& exit_code )
 {
     int process_status = 0;
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds( timeout_seconds );
 
     while ( std::chrono::steady_clock::now() < deadline ) {
-        process_status = check_child_status( pid, process_status, exit_code );
+        process_status = check_child_status( child_process, process_status, exit_code );
         if ( process_status == 0 ) {
             saw_running = true;
         } else if ( process_status == expected_status ) {
@@ -64,19 +82,20 @@ int t_launch_process()
     const std::string nthreads = "1";
 
     // Normal exit case.
+    set_test_env( kSleepEnv, "200" );
     test_count++;
-    pid_t pid = launch_process( project_path, slot_path, cmd, nthreads );
-    if ( pid > 0 ) {
+    ChildProcessHandle child_process = launch_process( project_path, slot_path, cmd, nthreads );
+    if ( child_process_is_valid( child_process ) ) {
         test_passed++;
     } else {
         std::cerr << "  launch_process failed to start helper process\n";
     }
 
     test_count++;
-    if ( pid > 0 ) {
+    if ( child_process_is_valid( child_process ) ) {
         bool saw_running = false;
         int exit_code = 0;
-        if ( wait_for_status( pid, 1, 10, saw_running, exit_code ) && saw_running && exit_code == 0 ) {
+        if ( wait_for_status( child_process, 1, 10, saw_running, exit_code ) && saw_running && exit_code == 0 ) {
             test_passed++;
         } else {
             std::cerr << "  Normal exit case did not behave as expected (exit_code=" << exit_code << ")\n";
@@ -85,37 +104,59 @@ int t_launch_process()
         std::cerr << "  Skipping normal exit status check due to launch failure\n";
     }
 
-    // Signal-termination case.
-    std::string prev_value;
-    const char* prev_env = std::getenv( kSignalEnv );
-    if ( prev_env ) {
-        prev_value = prev_env;
-    }
-
+    // Controller-driven termination case.
+    set_test_env( kSleepEnv, "5000" );
     test_count++;
-    if ( setenv( kSignalEnv, "TERM", 1 ) != 0 ) {
-        std::cerr << "  Failed to set " << kSignalEnv << " environment variable\n";
+    child_process = launch_process( project_path, slot_path, cmd, nthreads );
+    if ( !child_process_is_valid( child_process ) ) {
+        std::cerr << "  launch_process failed to start helper process (termination case)\n";
     } else {
-        pid = launch_process( project_path, slot_path, cmd, nthreads );
-        if ( pid > 0 ) {
+        BoincRuntime runtime{};
+        runtime.client_status.abort_request = 1;
+        if ( !handle_boinc_client_status( child_process, runtime ) ) {
             bool saw_running = false;
             int exit_code = 0;
-            if ( wait_for_status( pid, 3, 10, saw_running, exit_code ) && exit_code == -1 ) {
+            if ( wait_for_status( child_process, 3, 10, saw_running, exit_code ) && exit_code == -1 ) {
                 test_passed++;
             } else {
-                std::cerr << "  Signal termination case did not behave as expected (exit_code=" << exit_code << ")\n";
+                std::cerr << "  Controller termination case did not behave as expected (exit_code=" << exit_code << ")\n";
             }
         } else {
-            std::cerr << "  launch_process failed to start helper process (signal case)\n";
+            std::cerr << "  handle_boinc_client_status should have requested task shutdown\n";
         }
     }
 
-    if ( !prev_value.empty() ) {
-        setenv( kSignalEnv, prev_value.c_str(), 1 );
+    // Suspend and resume case through the platform process-control seam.
+    set_test_env( kSleepEnv, "5000" );
+    test_count++;
+    child_process = launch_process( project_path, slot_path, cmd, nthreads );
+    if ( !child_process_is_valid( child_process ) ) {
+        std::cerr << "  launch_process failed to start helper process (suspend/resume case)\n";
     } else {
-        unsetenv( kSignalEnv );
+        std::string err_msg;
+        int exit_code = 0;
+        if ( suspend_child_process( child_process, err_msg ) ) {
+            int suspended_status = check_child_status( child_process, 0, exit_code );
+            if ( suspended_status == 4 && resume_child_process( child_process, err_msg ) ) {
+                if ( terminate_child_process( child_process, err_msg ) ) {
+                    bool saw_running = false;
+                    if ( wait_for_status( child_process, 3, 10, saw_running, exit_code ) ) {
+                        test_passed++;
+                    } else {
+                        std::cerr << "  Suspend/resume cleanup did not reach terminated state\n";
+                    }
+                } else {
+                    std::cerr << "  Failed to terminate helper after suspend/resume: " << err_msg << "\n";
+                }
+            } else {
+                std::cerr << "  Suspend/resume case did not reach expected suspended/running states: " << err_msg << "\n";
+            }
+        } else {
+            std::cerr << "  Failed to suspend helper process: " << err_msg << "\n";
+        }
     }
 
+    clear_test_env( kSleepEnv );
     fs::remove_all( tmp_dir, ec );
 
     std::cout << "  launch_process/check_child_status: " << test_passed << "/" << test_count << " tests passed\n";

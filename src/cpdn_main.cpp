@@ -9,14 +9,11 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
-#include <dirent.h>
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <regex>
 #include <sstream>
-#include <sys/stat.h>
-#include <sys/types.h>
 #include <thread>
 #include <vector>
 
@@ -135,7 +132,7 @@ static void report_model_control_input_failure( const ModelControlInputData& res
  */
 static void refresh_current_cpu_time( TaskState& tstate )
 {
-    double child_cpu_time = cpdn_cpu_time( tstate.pid );
+    double child_cpu_time = cpdn_cpu_time( tstate.child_process.process_id );
     if ( child_cpu_time > 0.0 ) {
         tstate.current_cpu_time = tstate.prior_acc_cpu_time + child_cpu_time;
     }
@@ -212,7 +209,7 @@ static bool sleep_with_boinc_poll( BoincRuntime& bruntime, bool standalone, int 
 /**
  * @brief Zip a prepared upload file set and, when running under BOINC, submit the logical upload file.
  */
-static UploadSendResult zip_and_send_upload( const BoincConfig& bconfig, BoincRuntime& bruntime, const TaskState& tstate,
+static UploadSendResult zip_and_send_upload( const BoincConfig& bconfig, BoincRuntime& bruntime, TaskState& tstate,
                                              const std::string& result_base_name, const int upload_file_number,
                                              const std::vector<fs::path>& files_to_zip )
 {
@@ -243,7 +240,7 @@ static UploadSendResult zip_and_send_upload( const BoincConfig& bconfig, BoincRu
 
     std::cerr << "Waiting for file operations to complete...(20 secs)" << std::endl;
     if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 20 ) ) {
-        if ( !handle_boinc_client_status( tstate.pid, bruntime ) ) {
+        if ( !handle_boinc_client_status( tstate.child_process, bruntime ) ) {
             result.ok = false;
             result.error_step = "boinc_poll";
             result.error_message = "BOINC status changed before upload could be submitted";
@@ -469,8 +466,13 @@ int main( int argc, char** argv )
 {
     BoincConfig bconfig;    // BOINC settings from init_data.xml.
     TaskConfig tconfig;     // CPDN task settings from command line.
+    TaskState tstate;       // Task state is declared early so finish paths can always release child resources.
     int retval = 0;
     std::string err_msg;
+    auto finish_task = [&]( int exit_code ) {
+        close_child_process_handle( tstate.child_process );
+        return task_finish( exit_code );
+    };
 
     // ------------- BOINC Initialisation -----------------
 
@@ -479,7 +481,7 @@ int main( int argc, char** argv )
     retval = init_boinc( bconfig );
     if ( retval ) {
         std::cerr << "..BOINC initialisation failed" << "\n";
-        return task_finish( retval );
+        return finish_task( retval );
     }
 
     // Install a temporary streambuf wrapper on std::cerr so each new log line gets
@@ -489,7 +491,7 @@ int main( int argc, char** argv )
 
     if ( bconfig.slot_path.empty() ) {
         std::cerr << "..Error. Can't determine slot path: current_path() returned empty" << std::endl;
-        return task_finish( 1 );
+        return finish_task( 1 );
     }
     std::cerr << "Working slot directory is: " << bconfig.slot_path << '\n';
     std::cerr << "Project directory is: " << bconfig.project_dir << '\n';
@@ -518,7 +520,7 @@ int main( int argc, char** argv )
     auto model_ctrl = create_model_control( bconfig.app_name, bconfig.app_version );
     if ( model_ctrl == nullptr ) {
         std::cerr << "..Error creating model control instance. Unsupported model: " << bconfig.app_name << std::endl;
-        return task_finish( 1 );
+        return finish_task( 1 );
     }
 
     // --------------- Argument processing -----------------
@@ -526,13 +528,13 @@ int main( int argc, char** argv )
     // New long-form arg approach.
     ParseResult parse_result = parse_args( argc, argv );
     if ( !parse_result.ok ) {
-        return task_finish( parse_result.exit_code );
+        return finish_task( parse_result.exit_code );
     }
 
     // Process parsed arguments into the data structures used by the rest of the code.
     if ( !process_args( parse_result, tconfig, err_msg ) ) {
         std::cerr << ".." << err_msg << '\n';
-        return task_finish( 1 );
+        return finish_task( 1 );
     }
 
     // Check for optional '--nthreads <value>' at end of arg list optionally set by app_config.xml on user's machine.
@@ -545,12 +547,12 @@ int main( int argc, char** argv )
         std::string app_config_nthreads = argv[argc - 1];
         if ( !get_app_config_nthreads( app_config_nthreads, nthreads, err_msg ) && !err_msg.empty() ) {
             std::cerr << "..Failed to parse --nthreads argument: " << err_msg << '\n';
-            return task_finish( 1 );
+            return finish_task( 1 );
         }
         std::string nthreads_value = nthreads;
         if ( !parse_int( nthreads_value, nthreads_int, err_msg ) ) {
             std::cerr << "..Failed to parse --nthreads value: " << err_msg << '\n';
-            return task_finish( 1 );
+            return finish_task( 1 );
         }
         bconfig.ncpus = nthreads_int;
         std::cerr << "Using --nthreads from app_config.xml: " << nthreads << '\n';
@@ -559,7 +561,7 @@ int main( int argc, char** argv )
     double num_days = 0.0;
     if ( !parse_double_arg( tconfig.filename_fclen, num_days, err_msg ) ) {
         std::cerr << "..Failed to parse --filename_fclen value: " << err_msg << '\n';
-        return task_finish( 1 );
+        return finish_task( 1 );
     }
 
     // --------------- Prepare the task environment -----------------
@@ -570,18 +572,16 @@ int main( int argc, char** argv )
     // BOINC measures the disk usage on the slots directory so we must move all results out of this folder
     std::string upload_dir = bconfig.project_dir + bconfig.app_name + "_" + tconfig.workunit;
     std::cerr << "Location of temp folder: " << upload_dir << '\n';
-    if ( !path_exists( upload_dir ) ) {
-        if ( mkdir( upload_dir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH ) != 0 ) {
-            std::cerr << "..mkdir for temp folder for results failed" << std::endl;
-            return task_finish( 1 );    // should terminate, the model won't run.
-        }
+    if ( !ensure_directory( upload_dir, &err_msg ) ) {
+        std::cerr << "..Failed to create temp folder for results: " << err_msg << std::endl;
+        return finish_task( 1 );
     }
 
     //  Unpack application into slot
     retval = move_and_unzip_app_file( bconfig.app_name, bconfig.app_version, bconfig.project_dir, bconfig.slot_path );
     if ( retval ) {
         std::cerr << "..move_and_unzip_app_file failed" << "\n";
-        return task_finish( retval );
+        return finish_task( retval );
     }
 
     //------------------------------------------Stage & unpack the app bundle---------------------------
@@ -596,7 +596,7 @@ int main( int argc, char** argv )
     if ( !app_bundle_stage.ok ) {
         report_input_stage_failure( "app bundle", app_bundle_stage );
         std::cerr << "..App bundle logical path was: " << app_bundle_path.string() << std::endl;
-        return task_finish( 1 );    // should terminate, the model won't run.
+        return finish_task( 1 );    // should terminate, the model won't run.
     }
 
     //----------------------------------------------------------------------------------------------
@@ -605,7 +605,7 @@ int main( int argc, char** argv )
     auto control_input = model_ctrl->parse_control_input();
     if ( !control_input.ok ) {
         report_model_control_input_failure( control_input );
-        return task_finish( 1 );
+        return finish_task( 1 );
     }
 
     tconfig.exptid = control_input.experiment_id;
@@ -650,13 +650,8 @@ int main( int argc, char** argv )
     auto manifest_stage = stage_model_input_manifest( input_manifest, bconfig.slot_path );
     if ( !manifest_stage.ok ) {
         report_input_stage_failure( "model input archive", manifest_stage );
-        return task_finish( 1 );    // should terminate, the model won't run.
+        return finish_task( 1 );    // should terminate, the model won't run.
     }
-
-    //-------------------------------------------------------------------------------------------------------
-
-    // Initialize task state with default value
-    TaskState tstate;
 
     // Initialise the ProgressFile handler
     ProgressFileHandler progress_file( bconfig.slot_path );
@@ -670,7 +665,7 @@ int main( int argc, char** argv )
         if ( startup_state.print_model_logs ) {
             model_ctrl->print_logs( 50 );
         }
-        return task_finish( 1 );
+        return finish_task( 1 );
     }
     if ( !startup_state.log_message.empty() ) {
         std::cerr << startup_state.log_message;
@@ -682,13 +677,13 @@ int main( int argc, char** argv )
     // Update progress file with current values
     if ( !progress_file.write( tstate, err_msg ) ) {
         std::cerr << "..Failed to write progress file: " << err_msg << '\n';
-        return task_finish( 1 );
+        return finish_task( 1 );
     }
 
     // Current controller behaviour still interprets UPLOAD_INTERVAL as a step-based quantity.
     if ( upload_interval <= 0 || timestep_seconds <= 0 ) {
         std::cerr << "..upload_interval or timestep_seconds is invalid" << std::endl;
-        return task_finish( 1 );
+        return finish_task( 1 );
     }
 
     std::cerr << "Total_length_of_simulation_time: " << total_length_of_simulation_time << '\n';
@@ -709,7 +704,7 @@ int main( int argc, char** argv )
 
     if ( !fs::exists( model_exe ) ) {
         std::cerr << ".. Abort. Model executable not found: " << model_exe << std::endl;
-        return task_finish( 1 );
+        return finish_task( 1 );
     }
 
     // Bug workaround. The current cpdn_unzip function does not preserve executable permissions on Linux.
@@ -718,7 +713,7 @@ int main( int argc, char** argv )
 
     if ( !set_exec_perms( model_exe.string() ) ) {
         std::cerr << "..Cannot start model. Setting execute permission for model executable failed: " << model_exe << std::endl;
-        return task_finish( 1 );
+        return finish_task( 1 );
     }
 
     // GC. --- EXPERIMENTAL CODE ---
@@ -736,20 +731,20 @@ int main( int argc, char** argv )
         // Set execute permissions on diagnostics program if it exists (as above)
         if ( !set_exec_perms( diag_exe.string() ) ) {
             std::cerr << "..Cannot set execute permission for diagnostics program: " << diag_exe << std::endl;
-            return task_finish( 1 );
+            return finish_task( 1 );
         }
     }
     // ------ END OF EXPERIMENTAL CODE -------
 
     // Start the model process
     std::cerr << "Launching model executable: " << model_exe << std::endl;
-    tstate.pid = launch_process( bconfig.project_dir, bconfig.slot_path, model_exe.string(), nthreads );
+    tstate.child_process = launch_process( bconfig.project_dir, bconfig.slot_path, model_exe.string(), nthreads );
 
-    if ( tstate.pid > 0 ) {
+    if ( child_process_is_valid( tstate.child_process ) ) {
         tstate.child_status = 0;
-    } else if ( tstate.pid == -1 ) {
-        std::cerr << "..Error launching model process, return value: " << tstate.pid << std::endl;
-        return task_finish( 1 );
+    } else {
+        std::cerr << "..Error launching model process" << std::endl;
+        return finish_task( 1 );
     }
 
     boinc_end_critical_section();
@@ -757,9 +752,9 @@ int main( int argc, char** argv )
 
     // child_status = 0 running
     // child_status = 1 exited normally
-    // child_status = 3 child process killed by signal
-    // child_status = 4 child process stopped
-    // child_status = 5 child process not found by waitpid()
+    // child_status = 3 abnormal or forced termination
+    // child_status = 4 suspended
+    // child_status = 5 child process not found / status unavailable
 
 
     //----------------------------------------Main loop------------------------------------------------------
@@ -800,7 +795,7 @@ int main( int argc, char** argv )
                     retval = move_result_file( bconfig.slot_path, upload_dir, result );
                     if ( retval ) {
                         std::cerr << ".. Moving " << result << " result file to the temp folder in the projects directory failed" << "\n";
-                        return task_finish( retval );
+                        return finish_task( retval );
                     }
                 }
 
@@ -844,7 +839,7 @@ int main( int argc, char** argv )
                         auto upload_result = zip_and_send_upload( bconfig, bruntime, tstate, result_base_name, tstate.upload_file_number, zfl );
                         if ( !upload_result.ok ) {
                             report_upload_send_failure( "intermediate upload", upload_result );
-                            return task_finish( upload_result.finish_code );
+                            return finish_task( upload_result.finish_code );
                         }
                         if ( upload_result.upload_attempted ) {
                             std::cerr << "Finished the upload of the intermediate file: " << upload_file_name << '\n';
@@ -877,7 +872,7 @@ int main( int argc, char** argv )
             // Update progress file with current values
             if ( !progress_file.write( tstate, err_msg ) ) {
                 std::cerr << "..Failed to write progress file: " << err_msg << '\n';
-                return task_finish( 1 );
+                return finish_task( 1 );
             }
         }
 
@@ -898,10 +893,10 @@ int main( int argc, char** argv )
             boinc_fraction_done( tstate.fraction_done );
 
             boinc_get_status( &bruntime.client_status );
-            (void)handle_boinc_client_status( tstate.pid, bruntime );    // Child status is refreshed immediately below.
+            (void)handle_boinc_client_status( tstate.child_process, bruntime );    // Child status is refreshed immediately below.
         }
 
-        tstate.child_status = check_child_status( tstate.pid, tstate.child_status, tstate.exit_code );
+        tstate.child_status = check_child_status( tstate.child_process, tstate.child_status, tstate.exit_code );
     }
 
     //----- End of main loop ---------------------------------------------------------------------------
@@ -914,8 +909,8 @@ int main( int argc, char** argv )
     // Time delay to ensure model files are all flushed to disk
     std::cerr << "Waiting for file operations to complete...(60 secs)" << std::endl;
     if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 60 ) ) {
-        if ( !handle_boinc_client_status( tstate.pid, bruntime ) ) {
-            return task_finish( get_task_finish_code( tstate, bruntime ) );
+        if ( !handle_boinc_client_status( tstate.child_process, bruntime ) ) {
+            return finish_task( get_task_finish_code( tstate, bruntime ) );
         }
     }
 
@@ -980,7 +975,7 @@ int main( int argc, char** argv )
         auto upload_result = zip_and_send_upload( bconfig, bruntime, tstate, result_base_name, tstate.upload_file_number, zfl );
         if ( !upload_result.ok ) {
             report_upload_send_failure( "final upload", upload_result );
-            return task_finish( upload_result.finish_code );
+            return finish_task( upload_result.finish_code );
         }
         if ( upload_result.upload_attempted ) {
             std::cerr << "Finished the upload of the final file" << '\n';
@@ -1003,11 +998,11 @@ int main( int argc, char** argv )
     // Delay to ensure all files are flushed to disk before exiting
     std::cerr << "Waiting for file operations to complete...(90 secs)" << std::endl;
     if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 90 ) ) {
-        if ( !handle_boinc_client_status( tstate.pid, bruntime ) ) {
-            return task_finish( get_task_finish_code( tstate, bruntime ) );
+        if ( !handle_boinc_client_status( tstate.child_process, bruntime ) ) {
+            return finish_task( get_task_finish_code( tstate, bruntime ) );
         }
     }
     std::cerr << "Task finished." << std::endl;
 
-    return task_finish( get_task_finish_code( tstate, bruntime ) );    // I could return the task return code here?
+    return finish_task( get_task_finish_code( tstate, bruntime ) );    // I could return the task return code here?
 }

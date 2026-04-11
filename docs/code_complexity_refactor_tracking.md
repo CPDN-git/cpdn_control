@@ -7,6 +7,25 @@ Measurements were taken with:
 - `pmccabe`
 - `/home/glenn/.local/bin/lizard`
 
+## Target for `main()`
+
+The goal is not a tiny `main()` made up of many thin helpers. For this controller, `main()` is expected to remain the top-level orchestration flow for:
+
+- BOINC lifecycle
+- model launch and polling
+- restart/bootstrap handling
+- upload/trickle coordination
+- final shutdown
+
+The target is therefore a readable orchestration function with clear subtask boundaries, not the smallest possible metric.
+
+Current working target for `[src/cpdn_main.cpp](/home/glenn/github/cpdn_control/src/cpdn_main.cpp)` `main()`:
+
+- `pmccabe` roughly `40-55`
+- `lizard` NLOC roughly `220-300`
+
+That range is intended as a practical stopping point for this codebase. If `main()` is pushed much below that, there is a risk of over-extraction and weaker cohesion unless the new helper boundaries are very clearly justified.
+
 ## Baseline: before namelist refactor
 
 Measured on 2026-04-09.

@@ -693,9 +693,9 @@ double model_frac_done( double step, double total_steps, int nthreads )
     double frac_per_step = 1.0 / total_steps;
 
     if ( debug ) {
-        fprintf( stderr, "get_frac_done: step = %.0f\n", step );
-        fprintf( stderr, "        total_steps = %.0f\n", total_steps );
-        fprintf( stderr, "      frac_per_step = %f\n", frac_per_step );
+        std::cerr << "get_frac_done: step = " << step << '\n';
+        std::cerr << "        total_steps = " << total_steps << '\n';
+        std::cerr << "      frac_per_step = " << frac_per_step << '\n';
     }
 
     // Constant below represents estimate of how many times around the mainloop
@@ -724,10 +724,10 @@ double model_frac_done( double step, double total_steps, int nthreads )
     if ( frac_done > 1.0 )
         frac_done = 0.9999;    // never 100% until wrapper finishes
     if ( debug ) {
-        fprintf( stderr, "    heartbeat_inc = %.8f\n", heartbeat_inc );
-        fprintf( stderr, "    heartbeat     = %.8f\n", heartbeat );
+        std::cerr << "    heartbeat_inc = " << heartbeat_inc << '\n';
+        std::cerr << "    heartbeat     = " << heartbeat << '\n';
         double percent = frac_done * 100.0;
-        fprintf( stderr, "     percent done = %.3f\n", percent );
+        std::cerr << "     percent done = " << percent << '\n';
     }
 
     return frac_done;

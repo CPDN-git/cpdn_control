@@ -140,6 +140,7 @@ add_library(cpdn_control
         ./src/cpdn_control.cpp
         ./src/external_diagnostics.cpp
         ./src/parse_args.cpp
+        ./lib/logging_utils.cpp
         ./lib/utils.cpp
         ./lib/cpdn_cpu_time.cpp
         ./api/trickle_handler.cpp

@@ -109,6 +109,30 @@ Comparison against the original baseline:
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `src/cpdn_main.cpp::main()` | 120 | 69 | -51 (`-42.5%`) | 516 | 339 | -177 (`-34.3%`) |
 
+## After timestamped stderr logging wrapper
+
+Measured on 2026-04-11 after installing a timestamping `std::cerr` streambuf wrapper and converting the remaining controller `fprintf(stderr, ...)` call sites to `std::cerr`.
+
+| File | Function | `pmccabe` | `lizard` CCN | `lizard` NLOC | Notes |
+| --- | --- | ---: | ---: | ---: | --- |
+| `src/cpdn_main.cpp` | `main()` | 69 | 69 | 340 | Main complexity unchanged; line count changed slightly |
+| `src/cpdn_main.cpp` | `initialize_task_state_from_restart()` | 19 | 19 | 62 | Unchanged startup-state helper |
+| `src/cpdn_main.cpp` | `zip_and_send_upload()` | 8 | 8 | 53 | Unchanged shared upload-send helper |
+| `src/cpdn_control.cpp` | `resolve_boinc_input_file()` | 10 | 10 | 33 | Unchanged controller helper hotspot |
+| `models/openifs/oifs_control.cpp` | `parse_control_input()` | 37 | 37 | 118 | Largest non-`main()` hotspot |
+
+Comparison against the previous refactor point:
+
+| Function | Prior `pmccabe` | Current `pmccabe` | Change | Prior `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src/cpdn_main.cpp::main()` | 69 | 69 | `0` | 339 | 340 | +1 (`+0.3%`) |
+
+Comparison against the original baseline:
+
+| Function | Baseline `pmccabe` | Current `pmccabe` | Change | Baseline `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src/cpdn_main.cpp::main()` | 120 | 69 | -51 (`-42.5%`) | 516 | 340 | -176 (`-34.1%`) |
+
 ## Current observations
 
 - `main()` is still the dominant complexity hotspot, but it is materially smaller than the original baseline.
@@ -117,4 +141,5 @@ Comparison against the original baseline:
   - `initialize_task_state_from_restart()` for controller restart/progress bootstrap
   - `zip_and_send_upload()` removes duplicated upload-send mechanics, but the overall `main()` metric did not improve further because the caller-side branching and file collection still remain in `main()`.
 - `process_args(...)` was a good cohesion move as well as a useful reduction in `main()` complexity; the parsing/validation split now lives together in `src/parse_args.cpp`.
+- The timestamped logging refactor improved operability but, as expected, did not materially change control-flow complexity.
 - The next likely low-hanging fruit remains the per-step processing and upload/trickle block inside `main()`.

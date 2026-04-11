@@ -27,6 +27,7 @@
 #include "cpdn_zip.h"
 #include "external_diagnostics.h"
 #include "lib/cpdn_cpu_time.h"
+#include "lib/logging_utils.h"
 #include "lib/utils.h"
 #include "parse_args.h"
 
@@ -528,10 +529,10 @@ static int add_upload_files( const fs::path& dir, std::vector<fs::path>& out, co
  */
 static void banner( const std::string& model_name, const std::string& model_version, const std::string& code_version )
 {
-    fprintf( stderr, "\n\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n" );
-    fprintf( stderr, "|  CPDN task controller starting: version %s \n", code_version.c_str() );
-    fprintf( stderr, "|  Model name: %s. App version: %s \n", model_name.c_str(), model_version.c_str() );
-    fprintf( stderr, "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n" );
+    std::cerr << "\n\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
+    std::cerr << "|  CPDN task controller starting: version " << code_version << " \n";
+    std::cerr << "|  Model name: " << model_name << ". App version: " << model_version << " \n";
+    std::cerr << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n";
 }
 
 
@@ -573,6 +574,12 @@ int main( int argc, char** argv )
         std::cerr << "..BOINC initialisation failed" << "\n";
         return task_finish( retval );
     }
+
+    // Install a temporary streambuf wrapper on std::cerr so each new log line gets
+    // a date/time prefix automatically. This keeps the existing stream-style logging
+    // code intact while making remote stderr logs easier to correlate and debug.
+    TimestampedCerrGuard timestamped_cerr( std::cerr );
+
     if ( bconfig.slot_path.empty() ) {
         std::cerr << "..Error. Can't determine slot path: current_path() returned empty" << std::endl;
         return task_finish( 1 );

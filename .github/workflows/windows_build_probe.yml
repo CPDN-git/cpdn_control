@@ -1,0 +1,57 @@
+name: Windows Build Probe
+
+on:
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  windows_build_probe:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Build cpdn_zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path logs | Out-Null
+          cmake -S zip -B zip/build -G "Visual Studio 17 2022" -A x64 -DCMAKE_INSTALL_PREFIX=zip/install 2>&1 `
+            | Tee-Object -FilePath logs/cpdn_zip_configure.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          cmake --build zip/build --config $env:BUILD_TYPE --target install 2>&1 `
+            | Tee-Object -FilePath logs/cpdn_zip_build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Configure controller
+        shell: pwsh
+        run: |
+          # Temporary Windows porting mode:
+          # use compile-only BOINC stubs and skip tests so this workflow can surface
+          # MSVC compile errors in the controller codebase before a real Windows BOINC
+          # build exists. When Windows runtime support is ready, replace this probe
+          # mode with a real BOINC install/artifact path and turn the stub option off.
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+            -DCPDN_USE_BOINC_STUBS=ON `
+            -DCPDN_BUILD_UNIT_TESTS=OFF `
+            -DCPDN_BUILD_FUNCTIONAL_TESTS=OFF 2>&1 `
+            | Tee-Object -FilePath logs/controller_configure.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build controller
+        shell: pwsh
+        run: |
+          cmake --build build --config $env:BUILD_TYPE 2>&1 `
+            | Tee-Object -FilePath logs/controller_build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload Windows probe logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          overwrite: true
+          name: windows-build-probe-logs
+          path: logs

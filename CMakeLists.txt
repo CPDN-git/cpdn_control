@@ -33,6 +33,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "Export compile_commands.json" F
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+option(CPDN_USE_BOINC_STUBS "Use compile-only BOINC stubs instead of a real BOINC install." OFF)
+option(CPDN_BUILD_UNIT_TESTS "Build the unit test executable and register unit tests." ON)
+option(CPDN_BUILD_FUNCTIONAL_TESTS "Register functional tests." ON)
+
 # Enforce 64-bit builds on Windows.
 if (WIN32 AND CMAKE_SIZEOF_VOID_P LESS 8)
     message(FATAL_ERROR "32-bit Windows builds are not supported. Please use a 64-bit generator/toolchain.")
@@ -200,7 +204,11 @@ target_compile_options(test_model PRIVATE -g -Wall)
 enable_testing()
 
 # Include the unit tests
-add_subdirectory(tests/unit)
+if (CPDN_BUILD_UNIT_TESTS)
+    add_subdirectory(tests/unit)
+endif()
 
 # Include the functional tests
-add_subdirectory(tests/functional)
+if (CPDN_BUILD_FUNCTIONAL_TESTS)
+    add_subdirectory(tests/functional)
+endif()

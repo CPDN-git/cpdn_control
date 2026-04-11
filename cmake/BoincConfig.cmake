@@ -1,5 +1,18 @@
 # Helper to configure the BOINC dependency for this project.
 function(configure_boinc boinc_dir)
+    if(CPDN_USE_BOINC_STUBS)
+        set(BOINC_INCLUDE_DIR
+            "${CMAKE_SOURCE_DIR}/cmake/boinc_stub/include"
+            CACHE PATH "Path to compile-only BOINC stub headers." FORCE
+        )
+        set(BOINC_LIB "" PARENT_SCOPE)
+        set(BOINC_API "" PARENT_SCOPE)
+        set(BOINC_INCLUDE_DIR ${BOINC_INCLUDE_DIR} PARENT_SCOPE)
+        set(BOINC_LIB_DIR "" PARENT_SCOPE)
+        message(STATUS "Using compile-only BOINC stub headers")
+        return()
+    endif()
+
     set(BOINC_LIB_NAME "boinc")
     set(BOINC_API_NAME "boinc_api")
 

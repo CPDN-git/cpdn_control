@@ -3,6 +3,8 @@
 #include <string>
 #include <vector>
 
+struct TaskConfig;
+
 struct ParseResult {
 
     std::string batch = "";       // CPDN assigned batch ID for this task
@@ -18,3 +20,4 @@ struct ParseResult {
 };
 
 ParseResult parse_args( int argc, char** argv );
+bool process_args( const ParseResult& parse_result, TaskConfig& tconfig, std::string& err_msg );

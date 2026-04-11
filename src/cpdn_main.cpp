@@ -189,6 +189,31 @@ struct UploadSendResult {
 };
 
 
+/**
+ * @brief Report failure to zip and send an upload archive with as much context as possible.
+ */
+static void report_upload_send_failure( std::string_view context, const UploadSendResult& result )
+{
+    std::cerr << "..Failed to send " << context;
+    if ( !result.archive_path.empty() ) {
+        std::cerr << " archive '" << result.archive_path << "'";
+    }
+    if ( !result.logical_upload_name.empty() ) {
+        std::cerr << " as logical file '" << result.logical_upload_name << "'";
+    }
+    if ( !result.error_step.empty() ) {
+        std::cerr << " at step '" << result.error_step << "'";
+    }
+    if ( result.error_code != 0 ) {
+        std::cerr << " (code " << result.error_code << ")";
+    }
+    if ( !result.error_message.empty() ) {
+        std::cerr << ": " << result.error_message;
+    }
+    std::cerr << '\n';
+}
+
+
 static int get_task_finish_code( const TaskState& tstate, const BoincRuntime& bruntime );
 static bool sleep_with_boinc_poll( BoincRuntime& bruntime, bool standalone, int total_seconds );
 
@@ -497,70 +522,6 @@ static int add_upload_files( const fs::path& dir, std::vector<fs::path>& out, co
     }
     return 0;
 }
-
-/**
- * @brief Process command line arguments to populate TaskConfig.
- * @param parse_result The result of parsing the command line arguments.
- * @param tconfig TaskConfig structure to populate.
- * @return 0 on success, non-zero on failure.
- */
-static bool process_args( const ParseResult& parse_result, TaskConfig& tconfig, std::string& err_msg )
-{
-    // These CLI values are CPDN task/download naming metadata only.
-    // They are used to resolve the app-bundle filename before the model control input is parsed.
-    // They are not passed to the model and do not define model runtime behaviour.
-    tconfig.filename_startdate = parse_result.filename_startdate;
-    tconfig.exptid.clear();                      // Model experiment id is read later from CNMEXP in fort.4.
-    tconfig.memberid = parse_result.memberid;    // CPDN's unique member id (umid)
-    tconfig.batch = parse_result.batch;          // batch id
-    tconfig.workunit = parse_result.workunit;    // workunit id
-    tconfig.filename_fclen = parse_result.filename_fclen;
-
-    std::cerr << "Parsed arguments:\n"
-              << "  filename_startdate: " << tconfig.filename_startdate << '\n'
-              << "  memberid: " << tconfig.memberid << '\n'
-              << "  batch: " << tconfig.batch << '\n'
-              << "  workunit: " << tconfig.workunit << '\n'
-              << "  filename_fclen: " << tconfig.filename_fclen << '\n';
-
-    std::vector<std::string> missing_args;
-    if ( tconfig.filename_startdate.empty() ) {
-        missing_args.push_back( "--filename_startdate" );
-    }
-    if ( tconfig.memberid.empty() ) {
-        missing_args.push_back( "--memberid" );
-    }
-    if ( tconfig.batch.empty() ) {
-        missing_args.push_back( "--batch" );
-    }
-    if ( tconfig.workunit.empty() ) {
-        missing_args.push_back( "--workunit" );
-    }
-    if ( tconfig.filename_fclen.empty() ) {
-        missing_args.push_back( "--filename_fclen" );
-    }
-
-    if ( !missing_args.empty() ) {
-        std::ostringstream oss;
-        oss << "Missing required controller argument";
-        if ( missing_args.size() > 1 ) {
-            oss << "s";
-        }
-        oss << ": ";
-        for ( auto it = missing_args.begin(); it != missing_args.end(); ++it ) {
-            if ( it != missing_args.begin() ) {
-                oss << ", ";
-            }
-            oss << *it;
-        }
-        err_msg = oss.str();
-        return false;
-    }
-
-    err_msg.clear();
-    return true;
-}
-
 
 /**
  * @brief Prints a banner to stderr at start of controller with model name and version.
@@ -968,20 +929,7 @@ int main( int argc, char** argv )
 
                         auto upload_result = zip_and_send_upload( bconfig, bruntime, tstate, result_base_name, tstate.upload_file_number, zfl );
                         if ( !upload_result.ok ) {
-                            std::cerr << "..Failed to send intermediate upload archive '" << upload_result.archive_path << "'";
-                            if ( !upload_result.logical_upload_name.empty() ) {
-                                std::cerr << " as logical file '" << upload_result.logical_upload_name << "'";
-                            }
-                            if ( !upload_result.error_step.empty() ) {
-                                std::cerr << " at step '" << upload_result.error_step << "'";
-                            }
-                            if ( upload_result.error_code != 0 ) {
-                                std::cerr << " (code " << upload_result.error_code << ")";
-                            }
-                            if ( !upload_result.error_message.empty() ) {
-                                std::cerr << ": " << upload_result.error_message;
-                            }
-                            std::cerr << '\n';
+                            report_upload_send_failure( "intermediate upload", upload_result );
                             return task_finish( upload_result.finish_code );
                         }
                         if ( upload_result.upload_attempted ) {
@@ -1117,20 +1065,7 @@ int main( int argc, char** argv )
 
         auto upload_result = zip_and_send_upload( bconfig, bruntime, tstate, result_base_name, tstate.upload_file_number, zfl );
         if ( !upload_result.ok ) {
-            std::cerr << "..Failed to send final upload archive '" << upload_result.archive_path << "'";
-            if ( !upload_result.logical_upload_name.empty() ) {
-                std::cerr << " as logical file '" << upload_result.logical_upload_name << "'";
-            }
-            if ( !upload_result.error_step.empty() ) {
-                std::cerr << " at step '" << upload_result.error_step << "'";
-            }
-            if ( upload_result.error_code != 0 ) {
-                std::cerr << " (code " << upload_result.error_code << ")";
-            }
-            if ( !upload_result.error_message.empty() ) {
-                std::cerr << ": " << upload_result.error_message;
-            }
-            std::cerr << '\n';
+            report_upload_send_failure( "final upload", upload_result );
             return task_finish( upload_result.finish_code );
         }
         if ( upload_result.upload_attempted ) {

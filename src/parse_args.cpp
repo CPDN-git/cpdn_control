@@ -1,5 +1,10 @@
 #include "parse_args.h"
 
+#include <iostream>
+#include <sstream>
+
+#include "cpdn_control.h"
+
 #include "../tools/CLI11/CLI/CLI.hpp"
 
 ParseResult parse_args( int argc, char** argv )
@@ -40,4 +45,62 @@ ParseResult parse_args( int argc, char** argv )
     }
 
     return result;
+}
+
+
+bool process_args( const ParseResult& parse_result, TaskConfig& tconfig, std::string& err_msg )
+{
+    // These CLI values are CPDN task/download naming metadata only.
+    // They are used to resolve the app-bundle filename before the model control input is parsed.
+    // They are not passed to the model and do not define model runtime behaviour.
+    tconfig.filename_startdate = parse_result.filename_startdate;
+    tconfig.exptid.clear();                      // Model experiment id is read later from CNMEXP in fort.4.
+    tconfig.memberid = parse_result.memberid;    // CPDN's unique member id (umid)
+    tconfig.batch = parse_result.batch;          // batch id
+    tconfig.workunit = parse_result.workunit;    // workunit id
+    tconfig.filename_fclen = parse_result.filename_fclen;
+
+    std::cerr << "Parsed arguments:\n"
+              << "  filename_startdate: " << tconfig.filename_startdate << '\n'
+              << "  memberid: " << tconfig.memberid << '\n'
+              << "  batch: " << tconfig.batch << '\n'
+              << "  workunit: " << tconfig.workunit << '\n'
+              << "  filename_fclen: " << tconfig.filename_fclen << '\n';
+
+    std::vector<std::string> missing_args;
+    if ( tconfig.filename_startdate.empty() ) {
+        missing_args.push_back( "--filename_startdate" );
+    }
+    if ( tconfig.memberid.empty() ) {
+        missing_args.push_back( "--memberid" );
+    }
+    if ( tconfig.batch.empty() ) {
+        missing_args.push_back( "--batch" );
+    }
+    if ( tconfig.workunit.empty() ) {
+        missing_args.push_back( "--workunit" );
+    }
+    if ( tconfig.filename_fclen.empty() ) {
+        missing_args.push_back( "--filename_fclen" );
+    }
+
+    if ( !missing_args.empty() ) {
+        std::ostringstream oss;
+        oss << "Missing required controller argument";
+        if ( missing_args.size() > 1 ) {
+            oss << "s";
+        }
+        oss << ": ";
+        for ( auto it = missing_args.begin(); it != missing_args.end(); ++it ) {
+            if ( it != missing_args.begin() ) {
+                oss << ", ";
+            }
+            oss << *it;
+        }
+        err_msg = oss.str();
+        return false;
+    }
+
+    err_msg.clear();
+    return true;
 }

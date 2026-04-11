@@ -204,6 +204,7 @@ Notes:
 - Keep build logic in CMake (don’t hardcode machine-specific paths in code).
 - Formatting: use the repo `.clang-format` when you need to format code; avoid reformatting unrelated files/sections.
 - When changing controller behavior, add/adjust a unit test where practical; use functional tests for end-to-end behavior.
+- After any significant tidying or refactor, rerun the code-complexity scan with `pmccabe` and `/home/glenn/.local/bin/lizard` without waiting to be asked, and update [docs/code_complexity_refactor_tracking.md](/home/glenn/github/cpdn_control/docs/code_complexity_refactor_tracking.md).
 - The debug controller binary enables ASan; prefer it for test runs and bug hunting.
 - When touching the experimental diagnostics path, keep the change narrowly scoped unless the task is explicitly to migrate it into the model classes.
 - AI-authored commits should prefix the commit subject with the model/version identifier, for example `GPT-5.4: ...`, so repository history clearly records the source of the change.

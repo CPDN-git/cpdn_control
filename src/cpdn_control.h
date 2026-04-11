@@ -15,7 +15,7 @@
 #include "boinc/boinc_api.h"    // for BOINC_STATUS and BOINC_OPTIONS structs and boinc API function declarations
 
 #include "api/model_input_manifest.h"
-#include "process_control.h"
+#include "lib/process_control.h"
 
 
 // GC. TODO. Consider splitting these structs into separate header files.

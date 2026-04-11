@@ -80,6 +80,20 @@ ChildProcessHandle start_child_process( const std::string& executable, const std
     }
 
     std::vector<std::string> env_storage = build_child_environment( env_vars );
+    std::vector<char*> argv;
+    argv.reserve( 2 );
+    argv.push_back( const_cast<char*>( executable.c_str() ) );
+    argv.push_back( nullptr );
+
+    std::vector<char*> envp;
+    envp.reserve( env_storage.size() + 1 );
+    for ( auto& entry : env_storage ) {
+        envp.push_back( entry.data() );
+    }
+    envp.push_back( nullptr );
+
+    const char* executable_path = executable.c_str();
+    const char* working_dir_path = working_dir.c_str();
 
     pid_t pid = fork();
     if ( pid == -1 ) {
@@ -88,7 +102,7 @@ ChildProcessHandle start_child_process( const std::string& executable, const std
     }
 
     if ( pid == 0 ) {
-        if ( !working_dir.empty() && chdir( working_dir.c_str() ) != 0 ) {
+        if ( working_dir_path[0] != '\0' && chdir( working_dir_path ) != 0 ) {
             _exit( 126 );
         }
 
@@ -106,18 +120,7 @@ ChildProcessHandle start_child_process( const std::string& executable, const std
         }
 #endif
 
-        std::vector<char*> argv;
-        argv.push_back( const_cast<char*>( executable.c_str() ) );
-        argv.push_back( nullptr );
-
-        std::vector<char*> envp;
-        envp.reserve( env_storage.size() + 1 );
-        for ( auto& entry : env_storage ) {
-            envp.push_back( entry.data() );
-        }
-        envp.push_back( nullptr );
-
-        execve( executable.c_str(), argv.data(), envp.data() );
+        execve( executable_path, argv.data(), envp.data() );
         _exit( 127 );
     }
 
@@ -126,49 +129,48 @@ ChildProcessHandle start_child_process( const std::string& executable, const std
 }
 
 
-int poll_child_process( ChildProcessHandle& child_process, int child_status, int& exit_code, std::string& err_msg )
+ChildProcessState poll_child_process( ChildProcessHandle& child_process, int& exit_code, std::string& err_msg )
 {
-    (void)child_status;
     err_msg.clear();
 
     if ( !child_process_is_valid( child_process ) ) {
         err_msg = "child process handle is not valid";
-        return 5;
+        return ChildProcessState::unavailable;
     }
 
     int stat = 0;
     pid_t wait_result = waitpid( static_cast<pid_t>( child_process.process_id ), &stat, WNOHANG | WUNTRACED | WCONTINUED );
     if ( wait_result == 0 ) {
-        return child_process.suspended ? 4 : 0;
+        return child_process.suspended ? ChildProcessState::suspended : ChildProcessState::running;
     }
     if ( wait_result == -1 ) {
         err_msg = std::strerror( errno );
-        return 5;
+        return ChildProcessState::unavailable;
     }
 
     if ( WIFEXITED( stat ) ) {
         exit_code = WEXITSTATUS( stat );
         close_child_process_handle( child_process );
-        return 1;
+        return ChildProcessState::exited;
     }
     if ( WIFSIGNALED( stat ) ) {
         exit_code = -1;
         close_child_process_handle( child_process );
-        return 3;
+        return ChildProcessState::terminated;
     }
     if ( WIFSTOPPED( stat ) ) {
         child_process.suspended = true;
         exit_code = -1;
-        return 4;
+        return ChildProcessState::suspended;
     }
 #ifdef WIFCONTINUED
     if ( WIFCONTINUED( stat ) ) {
         child_process.suspended = false;
-        return 0;
+        return ChildProcessState::running;
     }
 #endif
 
-    return child_process.suspended ? 4 : 0;
+    return child_process.suspended ? ChildProcessState::suspended : ChildProcessState::running;
 }
 
 
@@ -203,6 +205,7 @@ void close_child_process_handle( ChildProcessHandle& child_process )
 {
     child_process.process_id = 0;
     child_process.native_process_handle = 0;
+    child_process.native_job_handle = 0;
     child_process.suspended = false;
     child_process.termination_requested = false;
 }

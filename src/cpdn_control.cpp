@@ -77,6 +77,24 @@ static InputStageResult make_stage_error( std::string_view step, std::string mes
     return result;
 }
 
+static int child_status_from_process_state( ChildProcessState process_state, int current_status )
+{
+    switch ( process_state ) {
+        case ChildProcessState::running:
+            return 0;
+        case ChildProcessState::exited:
+            return 1;
+        case ChildProcessState::terminated:
+            return 3;
+        case ChildProcessState::suspended:
+            return 4;
+        case ChildProcessState::unavailable:
+            return 5;
+        default:
+            return current_status;
+    }
+}
+
 
 /**
  * @brief Initialise BOINC data structure and set the options
@@ -219,7 +237,8 @@ int move_and_unzip_app_file( const std::string& app_name, const std::string& ver
 int check_child_status( ChildProcessHandle& child_process, int child_status, int& exit_code )
 {
     std::string err_msg;
-    int updated_status = poll_child_process( child_process, child_status, exit_code, err_msg );
+    ChildProcessState process_state = poll_child_process( child_process, exit_code, err_msg );
+    int updated_status = child_status_from_process_state( process_state, child_status );
     if ( updated_status == child_status ) {
         return updated_status;
     }

@@ -27,20 +27,32 @@ The controller no longer keeps all child-process logic inside a POSIX-only `laun
 Now in place:
 
 - a shared child-process handle type with a portable process id
-- a POSIX backend in `src/process_control_posix.cpp`
-- a Windows backend in `src/process_control_windows.cpp`
+- a POSIX backend in `lib/process_control_posix.cpp`
+- a Windows backend in `lib/process_control_windows.cpp`
 - shared controller policy in `src/cpdn_control.cpp` for:
   - `launch_process(...)`
   - `check_child_status(...)`
   - `handle_boinc_client_status(...)`
 
+The POSIX backend now keeps `setrlimit(...)` in the forked child, but all argument/environment preparation is done in the parent first. The child branch is intentionally limited to:
+
+- `chdir(...)`
+- `setrlimit(RLIMIT_CORE, ...)`
+- `setrlimit(RLIMIT_STACK, ...)`
+- `execve(...)`
+- `_exit(...)` on failure
+
+This keeps the old OpenIFS-compatible launch model while avoiding the earlier post-`fork()` C++ setup work in the child.
+
 The Windows backend now implements:
 
 - `CreateProcessW` for launch
 - explicit child-only environment handoff
+- case-insensitive environment-variable merge for Windows child environments
 - `WaitForSingleObject(..., 0)` and `GetExitCodeProcess` for polling
-- `TerminateProcess` for forced shutdown
-- suspend/resume via Tool Help thread enumeration and `SuspendThread` / `ResumeThread`
+- Job Object containment so descendants stay attached to the launched model tree
+- `TerminateJobObject(...)` for forced shutdown of the full child tree
+- suspend/resume across the attached job tree via Tool Help thread enumeration and `SuspendThread` / `ResumeThread`
 
 The obsolete `process_env_overrides()` testing path has been removed. Model environment variables are now prepared as data and passed to the child launcher rather than being applied to the parent controller process.
 
@@ -62,6 +74,7 @@ The current workflow is intentionally a compile probe. It does not yet prove:
 - link/runtime behavior against real Windows BOINC headers/libs
 - BOINC DLL discovery and execution environment
 - end-to-end controller behavior under a Windows BOINC-style task layout
+- runtime behavior of the new Job Object suspend/resume and tree-termination logic under real model workloads
 
 To move beyond the probe:
 
@@ -78,6 +91,7 @@ Known follow-up areas:
 - `t_run_process_with_timeout.cpp` still assumes the helper exists on Windows
 - several tests still use Unix-centric environment helpers directly
 - the Windows probe workflow still disables unit and functional tests on purpose
+- the threaded suspend/resume and descendant-process termination paths need Windows-specific runtime coverage, not just compile success
 
 ### 4. Application package naming still assumes Linux/macOS strings
 

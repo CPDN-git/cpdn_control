@@ -10,8 +10,8 @@
 #include <string>
 #include <thread>
 
-#include "../src/process_control.h"
 #include "../src/cpdn_control.h"
+#include "process_control.h"
 #include "unit_tests.h"
 
 namespace fs = std::filesystem;

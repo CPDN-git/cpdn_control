@@ -138,9 +138,9 @@ set(LOCAL_INCLUDE_DIRS
 add_subdirectory(models)
 
 if (WIN32)
-    set(CPDN_PROCESS_CONTROL_SOURCE ./src/process_control_windows.cpp)
+    set(CPDN_PROCESS_CONTROL_SOURCE ./lib/process_control_windows.cpp)
 else()
-    set(CPDN_PROCESS_CONTROL_SOURCE ./src/process_control_posix.cpp)
+    set(CPDN_PROCESS_CONTROL_SOURCE ./lib/process_control_posix.cpp)
 endif()
 
 #--------------------------- Libraries ---------------------------------------

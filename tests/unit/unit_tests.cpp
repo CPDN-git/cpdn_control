@@ -37,6 +37,8 @@ int main( int argc, char* argv[] )
         { "Verify Project Zip MD5", t_verify_project_zip_md5 },
         { "Stage Model Input Archive", t_stage_model_input_archive },
         { "Parse Control Input", t_parse_control_input },
+        { "Control Start", t_control_start },
+        { "Logging Utils", t_logging_utils },
         // Add new test functions here! Remember previous trailing comma!
     };
 

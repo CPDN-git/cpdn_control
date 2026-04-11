@@ -11,7 +11,7 @@ Already in place:
 - CMake derives a Windows platform triplet of `x86_64-pc-windows-msvc` and rejects 32-bit Windows builds.
 - BOINC library discovery in `cmake/BoincConfig.cmake` accepts Windows-style `.lib` files.
 - The repo has a manual Windows compile-probe workflow at `.github/workflows/windows_build_probe.yml`.
-- That workflow currently uses compile-only BOINC stubs and disables tests so it can surface MSVC build errors before a real Windows BOINC build exists.
+- That workflow currently uses compile-only BOINC stubs, builds `unit_tests` for extra compile coverage, and still skips functional tests so it can surface MSVC build errors before a real Windows BOINC build exists.
 - Linux-specific compile and link flags such as `-pthread`, `-static`, and `-fsanitize=address` are not applied to the main controller targets on Windows.
 - `test_model` now uses platform-aware compile options instead of unconditional `-g -Wall`.
 - `lib/cpdn_cpu_time.cpp` has a Windows implementation using `GetProcessTimes`.
@@ -88,20 +88,10 @@ The launch/status unit test has been refactored to use the new cross-platform pr
 
 Known follow-up areas:
 
-- `t_run_process_with_timeout.cpp` still assumes the helper exists on Windows
+- `t_run_process_with_timeout.cpp` will still fail at runtime on Windows until `run_process_with_timeout(...)` is implemented there
 - several tests still use Unix-centric environment helpers directly
-- the Windows probe workflow still disables unit and functional tests on purpose
+- the Windows probe workflow still disables functional tests and does not run the Windows-built unit test binary
 - the threaded suspend/resume and descendant-process termination paths need Windows-specific runtime coverage, not just compile success
-
-### 4. Application package naming still assumes Linux/macOS strings
-
-`move_and_unzip_app_file(...)` in `src/cpdn_control.cpp` still hardcodes:
-
-- `x86_64-apple-darwin`
-- `aarch64-poky-linux`
-- `x86_64-pc-linux-gnu`
-
-There is still no Windows branch there. That should be aligned with the shared `PLATFORM` triplet instead of maintaining separate hardcoded platform strings.
 
 ## Practical Meaning For GitHub Actions
 

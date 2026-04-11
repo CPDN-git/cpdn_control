@@ -19,9 +19,23 @@ namespace fs = std::filesystem;
 #endif
 
 namespace {
-void set_test_env( const char* name, const std::string& value ) { setenv( name, value.c_str(), 1 ); }
+void set_test_env( const char* name, const std::string& value )
+{
+#if defined( _WIN32 )
+    _putenv_s( name, value.c_str() );
+#else
+    setenv( name, value.c_str(), 1 );
+#endif
+}
 
-void clear_test_env( const char* name ) { unsetenv( name ); }
+void clear_test_env( const char* name )
+{
+#if defined( _WIN32 )
+    _putenv_s( name, "" );
+#else
+    unsetenv( name );
+#endif
+}
 }    // namespace
 
 int t_run_process_with_timeout()

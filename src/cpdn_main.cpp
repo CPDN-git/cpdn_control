@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "boinc/boinc_api.h"
+#include "boinc/error_numbers.h"
 
 #include "cpdn_control.h"
 #include "cpdn_zip.h"
@@ -175,6 +176,23 @@ struct TaskStartupStateResult {
 };
 
 
+struct UploadSendResult {
+    bool ok = true;
+    bool archive_created = false;
+    bool upload_attempted = false;
+    fs::path archive_path;
+    std::string logical_upload_name;
+    std::string error_step;
+    int error_code = 0;
+    int finish_code = 1;
+    std::string error_message;
+};
+
+
+static int get_task_finish_code( const TaskState& tstate, const BoincRuntime& bruntime );
+static bool sleep_with_boinc_poll( BoincRuntime& bruntime, bool standalone, int total_seconds );
+
+
 /**
  * @brief Initialize controller task state from the progress file and model restart control file.
  *        Determines whether this is a fresh run, a restart, or an invalid mixed state.
@@ -255,6 +273,72 @@ static TaskStartupStateResult initialize_task_state_from_restart( ModelControl& 
 
     err_msg = "Unexpected restart/progress-file state";
     return { false, TaskStartupMode::invalid, "", false };
+}
+
+
+/**
+ * @brief Zip a prepared upload file set and, when running under BOINC, submit the logical upload file.
+ */
+static UploadSendResult zip_and_send_upload( const BoincConfig& bconfig, BoincRuntime& bruntime, const TaskState& tstate,
+                                             const std::string& result_base_name, const int upload_file_number,
+                                             const std::vector<fs::path>& files_to_zip )
+{
+    UploadSendResult result;
+    result.archive_path = fs::path( bconfig.project_dir ) / ( result_base_name + "_" + std::to_string( upload_file_number ) + ".zip" );
+    result.logical_upload_name = "upload_file_" + std::to_string( upload_file_number ) + ".zip";
+
+    if ( files_to_zip.empty() ) {
+        return result;
+    }
+
+    std::cerr << "Compressing upload file: " << result.archive_path << '\n';
+    int zip_ret = zip_and_delete( result.archive_path.string(), files_to_zip );
+    if ( zip_ret != 0 ) {
+        result.ok = false;
+        result.error_step = "zip";
+        result.error_code = zip_ret;
+        result.error_message = "failed to create upload archive";
+        return result;
+    }
+    result.archive_created = true;
+
+    if ( bconfig.standalone ) {
+        return result;
+    }
+
+    result.upload_attempted = true;
+
+    std::cerr << "Waiting for file operations to complete...(20 secs)" << std::endl;
+    if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 20 ) ) {
+        if ( !handle_boinc_client_status( tstate.pid, bruntime ) ) {
+            result.ok = false;
+            result.error_step = "boinc_poll";
+            result.error_message = "BOINC status changed before upload could be submitted";
+            result.finish_code = get_task_finish_code( tstate, bruntime );
+            return result;
+        }
+    }
+
+    std::string upload_name = result.logical_upload_name;
+    int upload_ret = boinc_upload_file( upload_name );
+    if ( upload_ret != 0 ) {
+        result.ok = false;
+        result.error_step = "boinc_upload_file";
+        result.error_code = upload_ret;
+        result.error_message = boincerror( upload_ret );
+        return result;
+    }
+
+    int upload_status_ret = boinc_upload_status( upload_name );
+    if ( upload_status_ret != 0 ) {
+        result.ok = false;
+        result.error_step = "boinc_upload_status";
+        result.error_code = upload_status_ret;
+        result.error_message = boincerror( upload_status_ret );
+        return result;
+    }
+
+    return result;
 }
 
 
@@ -876,35 +960,32 @@ int main( int argc, char** argv )
                         }
                     }
 
-                    std::string upload_file = bconfig.project_dir + result_base_name + "_" + std::to_string( tstate.upload_file_number ) + ".zip";
-                    std::cerr << "Compressing upload file: " << upload_file << '\n';
-
-                    // Create the zipped upload file from the list of files added to zfl
                     if ( !zfl.empty() ) {
-                        auto zret = zip_and_delete( upload_file, zfl );
-
-                        // If running under a BOINC client
-                        if ( !bconfig.standalone && zret == 0 ) {
-
-                            // Upload the file. In BOINC the upload file is the logical name, not the physical name
-                            std::string upload_file_name = "upload_file_" + std::to_string( tstate.upload_file_number ) + ".zip";
+                        std::string upload_file_name = "upload_file_" + std::to_string( tstate.upload_file_number ) + ".zip";
+                        if ( !bconfig.standalone ) {
                             std::cerr << "Uploading the intermediate file: " << upload_file_name << '\n';
+                        }
 
-                            std::cerr << "Waiting for file operations to complete...(20 secs)" << std::endl;
-                            if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 20 ) ) {
-                                if ( !handle_boinc_client_status( tstate.pid, bruntime ) ) {
-                                    return task_finish( get_task_finish_code( tstate, bruntime ) );
-                                }
+                        auto upload_result = zip_and_send_upload( bconfig, bruntime, tstate, result_base_name, tstate.upload_file_number, zfl );
+                        if ( !upload_result.ok ) {
+                            std::cerr << "..Failed to send intermediate upload archive '" << upload_result.archive_path << "'";
+                            if ( !upload_result.logical_upload_name.empty() ) {
+                                std::cerr << " as logical file '" << upload_result.logical_upload_name << "'";
                             }
-                            retval = boinc_upload_file( upload_file_name );
-                            if ( retval ) {
-                                std::cerr << "..boinc_upload_file failed for file: " << upload_file_name << std::endl;
-                                return task_finish( retval );
+                            if ( !upload_result.error_step.empty() ) {
+                                std::cerr << " at step '" << upload_result.error_step << "'";
                             }
-                            retval = boinc_upload_status( upload_file_name );
-                            if ( !retval ) {
-                                std::cerr << "Finished the upload of the intermediate file: " << upload_file_name << '\n';
+                            if ( upload_result.error_code != 0 ) {
+                                std::cerr << " (code " << upload_result.error_code << ")";
                             }
+                            if ( !upload_result.error_message.empty() ) {
+                                std::cerr << ": " << upload_result.error_message;
+                            }
+                            std::cerr << '\n';
+                            return task_finish( upload_result.finish_code );
+                        }
+                        if ( upload_result.upload_attempted ) {
+                            std::cerr << "Finished the upload of the intermediate file: " << upload_file_name << '\n';
                         }
                         tstate.last_upload_time = current_step_time;
                     }
@@ -1028,38 +1109,38 @@ int main( int argc, char** argv )
         std::cerr << "Adding model output files to the upload zip failed!\n";
     }
 
-    std::string upload_file = bconfig.project_dir + result_base_name + "_" + std::to_string( tstate.upload_file_number ) + ".zip";
-    std::cerr << "Compressing final upload file: " << upload_file << '\n';
-
     if ( !zfl.empty() ) {
-        auto zret = zip_and_delete( upload_file, zfl );
-
-        if ( !bconfig.standalone && zret == 0 ) {
-
-            std::string upload_file_name = "upload_file_" + std::to_string( tstate.upload_file_number ) + ".zip";
+        std::string upload_file_name = "upload_file_" + std::to_string( tstate.upload_file_number ) + ".zip";
+        if ( !bconfig.standalone ) {
             std::cerr << "Uploading the final file: " << upload_file_name << '\n';
+        }
 
-            std::cerr << "Waiting for file operations to complete...(20 secs)" << std::endl;
-            if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 20 ) ) {
-                if ( !handle_boinc_client_status( tstate.pid, bruntime ) ) {
-                    return task_finish( get_task_finish_code( tstate, bruntime ) );
-                }
+        auto upload_result = zip_and_send_upload( bconfig, bruntime, tstate, result_base_name, tstate.upload_file_number, zfl );
+        if ( !upload_result.ok ) {
+            std::cerr << "..Failed to send final upload archive '" << upload_result.archive_path << "'";
+            if ( !upload_result.logical_upload_name.empty() ) {
+                std::cerr << " as logical file '" << upload_result.logical_upload_name << "'";
             }
-            retval = boinc_upload_file( upload_file_name );
-            if ( retval ) {
-                std::cerr << "..boinc_upload_file failed for file: " << upload_file_name << std::endl;
-            } else {
-                retval = boinc_upload_status( upload_file_name );
-                if ( !retval ) {
-                    std::cerr << "Finished the upload of the final file" << '\n';
-                }
+            if ( !upload_result.error_step.empty() ) {
+                std::cerr << " at step '" << upload_result.error_step << "'";
             }
+            if ( upload_result.error_code != 0 ) {
+                std::cerr << " (code " << upload_result.error_code << ")";
+            }
+            if ( !upload_result.error_message.empty() ) {
+                std::cerr << ": " << upload_result.error_message;
+            }
+            std::cerr << '\n';
+            return task_finish( upload_result.finish_code );
+        }
+        if ( upload_result.upload_attempted ) {
+            std::cerr << "Finished the upload of the final file" << '\n';
+        }
 
-            // Produce final trickle it's the same timestep as the last main loop trickle
-            if ( tstate.current_step > tstate.last_trickle_step ) {
-                refresh_current_cpu_time( tstate );
-                trickler.process_trickle( tstate.current_cpu_time, tstate.current_step );
-            }
+        // Produce final trickle it's the same timestep as the last main loop trickle
+        if ( !bconfig.standalone && tstate.current_step > tstate.last_trickle_step ) {
+            refresh_current_cpu_time( tstate );
+            trickler.process_trickle( tstate.current_cpu_time, tstate.current_step );
         }
     }
 

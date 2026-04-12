@@ -46,6 +46,11 @@ project(CpdnZip VERSION 1.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Match the Windows vcpkg BOINC package, which is built with the static MSVC runtime.
+if (MSVC AND WIN32)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 # --- ZipLib ---
 # Add the downloaded ZipLib source as a subdirectory.
 # This will create the 'ZipLib' target.

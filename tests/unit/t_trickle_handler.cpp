@@ -277,7 +277,7 @@ int t_trickle_handler()
 
     // Summary
     if ( test_passed == test_count ) {
-        SUCCESS;
+        TEST_SUCCESS;
         return EXIT_SUCCESS;
     } else {
         std::cerr << "  " << test_passed << "/" << test_count << " tests passed\n";

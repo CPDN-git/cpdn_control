@@ -161,10 +161,10 @@ int t_launch_process()
 
     std::cout << "  launch_process/check_child_status: " << test_passed << "/" << test_count << " tests passed\n";
     if ( test_passed == test_count ) {
-        SUCCESS;
+        TEST_SUCCESS;
         return EXIT_SUCCESS;
     } else {
-        FAIL;
+        TEST_FAIL;
         return EXIT_FAILURE;
     }
 }

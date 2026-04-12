@@ -32,7 +32,7 @@ int t_parse_control_input()
     std::error_code ec;
     fs::create_directories( tmp_dir, ec );
     if ( ec ) {
-        FAIL;
+        TEST_FAIL;
         std::cout << "Unable to create temp dir: " << tmp_dir.string() << "\n";
         return EXIT_FAILURE;
     }
@@ -61,7 +61,7 @@ int t_parse_control_input()
                                       "/\n";
 
     if ( !write_control_input( tmp_dir / "fort.4", valid_content ) ) {
-        FAIL;
+        TEST_FAIL;
         std::cout << "Unable to write valid fort.4 test file\n";
         fs::current_path( original_cwd );
         fs::remove_all( tmp_dir, ec );
@@ -73,7 +73,7 @@ int t_parse_control_input()
     if ( !parsed.ok || parsed.horiz_resolution != "159" || parsed.vert_resolution != "91" || parsed.grid_type != "l_2" ||
          parsed.experiment_id != "ABCD" || parsed.upload_interval != 6 || parsed.timestep_seconds != 3600 || parsed.output_interval != 6 ||
          parsed.restart_interval != -24 || parsed.total_steps != 48 || parsed.forecast_length_time != 172800.0 ) {
-        FAIL;
+        TEST_FAIL;
         std::cout << "Unexpected parse result:" << " ok=" << parsed.ok << ", horiz=" << parsed.horiz_resolution << ", vert=" << parsed.vert_resolution
                   << ", grid=" << parsed.grid_type << ", exptid=" << parsed.experiment_id << ", upload=" << parsed.upload_interval
                   << ", timestep_seconds=" << parsed.timestep_seconds << ", output_interval=" << parsed.output_interval
@@ -96,7 +96,7 @@ int t_parse_control_input()
                                         " NFRPOS=6,\n"
                                         "/\n";
     if ( !write_control_input( tmp_dir / "fort.4", invalid_content ) ) {
-        FAIL;
+        TEST_FAIL;
         std::cout << "Unable to write invalid fort.4 test file\n";
         fs::current_path( original_cwd );
         fs::remove_all( tmp_dir, ec );
@@ -105,7 +105,7 @@ int t_parse_control_input()
 
     parsed = model.parse_control_input();
     if ( parsed.ok || parsed.error_step != "validate" ) {
-        FAIL;
+        TEST_FAIL;
         std::cout << "Expected validate failure, got ok=" << parsed.ok << ", error_step=" << parsed.error_step
                   << ", error_message=" << parsed.error_message << "\n";
         fs::current_path( original_cwd );
@@ -115,6 +115,6 @@ int t_parse_control_input()
 
     fs::current_path( original_cwd );
     fs::remove_all( tmp_dir, ec );
-    SUCCESS;
+    TEST_SUCCESS;
     return EXIT_SUCCESS;
 }

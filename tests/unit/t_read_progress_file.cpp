@@ -46,7 +46,7 @@ int t_read_progress_file()
     std::string err_msg;
     std::cout << "Subtest: write progress file\n";
     if ( !progress_file.write( task, err_msg ) ) {
-        FAIL;
+        TEST_FAIL;
         std::cout << err_msg << "\n";
         return EXIT_FAILURE;
     }
@@ -56,7 +56,7 @@ int t_read_progress_file()
     {
         std::ifstream in( progress_file.path() );
         if ( !in.is_open() ) {
-            FAIL;
+            TEST_FAIL;
             std::cout << "Unable to open progress file: " << progress_file.path() << "\n";
             return EXIT_FAILURE;
         }
@@ -79,14 +79,14 @@ int t_read_progress_file()
         }
 
         if ( cpnd_index < 0 || slash_index < 0 || slash_index <= cpnd_index ) {
-            FAIL;
+            TEST_FAIL;
             std::cout << "Progress file missing &CPDN or terminating '/' line\n";
             return EXIT_FAILURE;
         }
 
         int count_between = slash_index - cpnd_index - 1;
         if ( count_between != 6 ) {
-            FAIL;
+            TEST_FAIL;
             std::cout << "Progress file has " << count_between << " lines between &CPDN and '/', expected 6\n";
             return EXIT_FAILURE;
         }
@@ -96,13 +96,13 @@ int t_read_progress_file()
     std::cout << "Subtest: read valid progress file\n";
     TaskState taskin;
     if ( !progress_file.read( taskin, err_msg ) ) {
-        FAIL;
+        TEST_FAIL;
         std::cout << "Failed to read progress file: " << err_msg << "\n";
         return EXIT_FAILURE;
     }
     if ( taskin.last_completed_step != 1055 || taskin.prior_acc_cpu_time != 76828.5 || taskin.upload_file_number != 3 ||
          taskin.last_upload_time != 1036800.0 || taskin.model_completed != 0 ) {
-        FAIL;
+        TEST_FAIL;
         std::cout << "last_completed_step = " << taskin.last_completed_step << ", prior_acc_cpu_time = " << taskin.prior_acc_cpu_time
                   << ", upload_number = " << taskin.upload_file_number << ", last_upload_time = " << taskin.last_upload_time
                   << ", completed = " << taskin.model_completed << "\n";
@@ -120,18 +120,18 @@ int t_read_progress_file()
                                        "model_completed=0\n"
                                        "/\n";
     if ( !write_text_file( progress_file.path(), legacy_content ) ) {
-        FAIL;
+        TEST_FAIL;
         std::cout << "Unable to write legacy progress file\n";
         return EXIT_FAILURE;
     }
     if ( !progress_file.read( taskin, err_msg ) ) {
-        FAIL;
+        TEST_FAIL;
         std::cout << "Failed to read legacy progress file: " << err_msg << "\n";
         return EXIT_FAILURE;
     }
     if ( taskin.last_completed_step != 1055 || taskin.prior_acc_cpu_time != 76828.5 || taskin.upload_file_number != 3 ||
          taskin.last_upload_time != 1036800.0 || taskin.model_completed != 0 ) {
-        FAIL;
+        TEST_FAIL;
         std::cout << "last_completed_step = " << taskin.last_completed_step << ", prior_acc_cpu_time = " << taskin.prior_acc_cpu_time
                   << ", upload_number = " << taskin.upload_file_number << ", last_upload_time = " << taskin.last_upload_time
                   << ", completed = " << taskin.model_completed << "\n";
@@ -144,7 +144,7 @@ int t_read_progress_file()
     std::error_code ec;
     fs::create_directory( tmp_dir, ec );
     if ( ec ) {
-        FAIL;
+        TEST_FAIL;
         std::cout << "Unable to create temp dir: " << tmp_dir.string() << "\n";
         return EXIT_FAILURE;
     }
@@ -154,7 +154,7 @@ int t_read_progress_file()
     // Missing file
     std::cout << "Subtest: read missing file\n";
     if ( tmp_handler.read( taskin, err_msg ) ) {
-        FAIL;
+        TEST_FAIL;
         std::cout << "Read succeeded unexpectedly for missing file\n";
         return EXIT_FAILURE;
     }
@@ -165,7 +165,7 @@ int t_read_progress_file()
         std::ofstream out( tmp_handler.path(), std::ios::out | std::ios::trunc );
     }
     if ( tmp_handler.read( taskin, err_msg ) ) {
-        FAIL;
+        TEST_FAIL;
         std::cout << "Read succeeded unexpectedly for empty file\n";
         return EXIT_FAILURE;
     }
@@ -182,12 +182,12 @@ int t_read_progress_file()
                                         "model_completed=0\n"
                                         "/\n";
     if ( !write_text_file( tmp_handler.path(), invalid_content ) ) {
-        FAIL;
+        TEST_FAIL;
         std::cout << "Unable to write invalid progress file\n";
         return EXIT_FAILURE;
     }
     if ( tmp_handler.read( taskin, err_msg ) ) {
-        FAIL;
+        TEST_FAIL;
         std::cout << "Read succeeded unexpectedly for invalid data\n";
         return EXIT_FAILURE;
     }
@@ -200,12 +200,12 @@ int t_read_progress_file()
                                           "prior_acc_cpu_time=1.0\n"
                                           "/\n";
     if ( !write_text_file( tmp_handler.path(), truncated_content ) ) {
-        FAIL;
+        TEST_FAIL;
         std::cout << "Unable to write truncated progress file\n";
         return EXIT_FAILURE;
     }
     if ( tmp_handler.read( taskin, err_msg ) ) {
-        FAIL;
+        TEST_FAIL;
         std::cout << "Read succeeded unexpectedly for truncated file\n";
         return EXIT_FAILURE;
     }
@@ -214,6 +214,6 @@ int t_read_progress_file()
     fs::remove( progress_file.path(), ec );
     fs::remove_all( tmp_dir, ec );
 
-    SUCCESS;
+    TEST_SUCCESS;
     return EXIT_SUCCESS;
 }

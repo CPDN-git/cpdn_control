@@ -98,9 +98,9 @@ int t_verify_project_zip_md5()
     fs::remove_all( work_dir );
     std::cout << "  verify_project_zip_md5: " << test_passed << "/" << test_count << " tests passed\n";
     if ( test_passed == test_count ) {
-        SUCCESS;
+        TEST_SUCCESS;
         return EXIT_SUCCESS;
     }
-    FAIL;
+    TEST_FAIL;
     return EXIT_FAILURE;
 }

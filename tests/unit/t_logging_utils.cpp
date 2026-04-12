@@ -48,7 +48,7 @@ int t_logging_utils()
         const auto lines = split_lines( out.str() );
         if ( lines.size() != 2 || !has_timestamp_prefix( lines[0] ) || !has_timestamp_prefix( lines[1] ) ||
              lines[0].find( "alpha" ) == std::string::npos || lines[1].find( "beta" ) == std::string::npos ) {
-            FAIL;
+            TEST_FAIL;
             std::cout << "Unexpected prefixed multi-line output:\n" << out.str() << "\n";
             return EXIT_FAILURE;
         }
@@ -67,12 +67,12 @@ int t_logging_utils()
         const auto lines = split_lines( out.str() );
         if ( lines.size() != 2 || !has_timestamp_prefix( lines[0] ) || lines[0].find( "gamma delta" ) == std::string::npos ||
              has_timestamp_prefix( lines[1] ) || lines[1] != "plain" ) {
-            FAIL;
+            TEST_FAIL;
             std::cout << "Unexpected partial-write or restored-buffer output:\n" << out.str() << "\n";
             return EXIT_FAILURE;
         }
     }
 
-    SUCCESS;
+    TEST_SUCCESS;
     return EXIT_SUCCESS;
 }

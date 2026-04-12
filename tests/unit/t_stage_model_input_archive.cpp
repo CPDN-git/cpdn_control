@@ -105,9 +105,9 @@ int t_stage_model_input_archive()
     fs::remove_all( work_dir );
     std::cout << "  stage_model_input_archive: " << test_passed << "/" << test_count << " tests passed\n";
     if ( test_passed == test_count ) {
-        SUCCESS;
+        TEST_SUCCESS;
         return EXIT_SUCCESS;
     }
-    FAIL;
+    TEST_FAIL;
     return EXIT_FAILURE;
 }

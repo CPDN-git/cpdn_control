@@ -247,10 +247,10 @@ int t_file_is_empty()
     std::cout << "  file_is_empty: " << test_passed << "/" << test_count << " tests passed\n";
 
     if ( test_passed == test_count ) {
-        SUCCESS;
+        TEST_SUCCESS;
         return EXIT_SUCCESS;
     } else {
-        FAIL;
+        TEST_FAIL;
         return EXIT_FAILURE;
     }
 }

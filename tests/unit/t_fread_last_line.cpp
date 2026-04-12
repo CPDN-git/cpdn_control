@@ -247,10 +247,10 @@ int t_fread_last_line()
     std::cout << "  fread_last_line: " << test_passed << "/" << test_count << " tests passed\n";
 
     if ( test_passed == test_count ) {
-        SUCCESS;
+        TEST_SUCCESS;
         return EXIT_SUCCESS;
     } else {
-        FAIL;
+        TEST_FAIL;
         return EXIT_FAILURE;
     }
 }

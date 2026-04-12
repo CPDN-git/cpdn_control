@@ -383,7 +383,7 @@ static std::string get_result_base_name( const BoincConfig& bconfig, const TaskC
             return base_name;
         }
 
-        base_name = fs::path( resolved_name ).stem();    // returns filename without path nor '.zip'
+        base_name = fs::path( resolved_name ).stem().string();    // returns filename without path nor '.zip'
         if ( base_name.length() > 2 ) {
             base_name.erase( base_name.length() - 2 );    // remove the '_0'
         }

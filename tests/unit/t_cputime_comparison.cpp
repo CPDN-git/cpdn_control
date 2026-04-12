@@ -78,22 +78,22 @@ int t_cputime_comparison()
     std::cout << "BOINC CPU Time (seconds): " << boinc_time << "\nDifference (CPDN - BOINC): " << delta << std::endl;
     if ( std::abs( delta ) < 0.01 ) {
         std::cout << "RESULT: Implementations agree within 10 milliseconds." << std::endl;
-        SUCCESS;
+        TEST_SUCCESS;
         return EXIT_SUCCESS;
     } else {
         std::cout << "RESULT: Implementations show a noticeable difference. Check clock resolution." << std::endl;
-        FAIL;
+        TEST_FAIL;
         return EXIT_FAILURE;
     }
 #else
     // On non-Linux platforms, just ensure CPU time increased during the busy wait.
     if ( cpdn_time_after > 0.0 ) {
         std::cout << "RESULT: CPU time measured successfully on this platform." << std::endl;
-        SUCCESS;
+        TEST_SUCCESS;
         return EXIT_SUCCESS;
     } else {
         std::cout << "RESULT: CPU time measurement failed on this platform." << std::endl;
-        FAIL;
+        TEST_FAIL;
         return EXIT_FAILURE;
     }
 #endif

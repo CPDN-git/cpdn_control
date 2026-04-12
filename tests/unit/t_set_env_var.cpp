@@ -62,10 +62,10 @@ int t_set_env_var()
 
     std::cout << "  set_env_var: " << passed << "/" << tests << " tests passed\n";
     if ( passed == tests ) {
-        SUCCESS;
+        TEST_SUCCESS;
         return EXIT_SUCCESS;
     } else {
-        FAIL;
+        TEST_FAIL;
         return EXIT_FAILURE;
     }
 }

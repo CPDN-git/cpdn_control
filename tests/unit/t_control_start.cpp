@@ -94,7 +94,7 @@ int t_control_start()
 
         auto result = initialize_task_state_from_restart( model_ctrl, progress_file, restart_interval_steps, tstate, err_msg );
         if ( !result.ok || result.startup_mode != TaskStartupMode::fresh_run || result.log_message.empty() || !err_msg.empty() ) {
-            FAIL;
+            TEST_FAIL;
             std::cout << "Unexpected fresh-run result\n";
             return EXIT_FAILURE;
         }
@@ -112,7 +112,7 @@ int t_control_start()
         TaskState tstate;
 
         if ( !write_progress_file( dir, 13 ) ) {
-            FAIL;
+            TEST_FAIL;
             std::cout << "Unable to write valid progress file\n";
             return EXIT_FAILURE;
         }
@@ -120,7 +120,7 @@ int t_control_start()
         auto result = initialize_task_state_from_restart( model_ctrl, progress_file, restart_interval_steps, tstate, err_msg );
         if ( !result.ok || result.startup_mode != TaskStartupMode::restart_run || result.log_message.find( "Model is restarting" ) == std::string::npos ||
              tstate.last_completed_step != 13 ) {
-            FAIL;
+            TEST_FAIL;
             std::cout << "Unexpected restart result or adjusted step: " << tstate.last_completed_step << "\n";
             return EXIT_FAILURE;
         }
@@ -138,14 +138,14 @@ int t_control_start()
         TaskState tstate;
 
         if ( !write_progress_file( dir, 13 ) ) {
-            FAIL;
+            TEST_FAIL;
             std::cout << "Unable to write valid progress file\n";
             return EXIT_FAILURE;
         }
 
         auto result = initialize_task_state_from_restart( model_ctrl, progress_file, restart_interval_steps, tstate, err_msg );
         if ( result.ok || result.startup_mode != TaskStartupMode::invalid || err_msg.find( "restart greater than last_completed_step" ) == std::string::npos ) {
-            FAIL;
+            TEST_FAIL;
             std::cout << "Unexpected invalid-restart result: " << err_msg << "\n";
             return EXIT_FAILURE;
         }
@@ -161,14 +161,14 @@ int t_control_start()
         TaskState tstate;
 
         if ( !write_empty_file( dir / std::string( progressfile_name ) ) ) {
-            FAIL;
+            TEST_FAIL;
             std::cout << "Unable to write empty progress file\n";
             return EXIT_FAILURE;
         }
 
         auto result = initialize_task_state_from_restart( model_ctrl, progress_file, restart_interval_steps, tstate, err_msg );
         if ( result.ok || !result.print_model_logs || err_msg.find( "progress file exists, but is empty" ) == std::string::npos ) {
-            FAIL;
+            TEST_FAIL;
             std::cout << "Unexpected empty-progress result: " << err_msg << "\n";
             return EXIT_FAILURE;
         }
@@ -184,14 +184,14 @@ int t_control_start()
         TaskState tstate;
 
         if ( !write_progress_file( dir, 5 ) ) {
-            FAIL;
+            TEST_FAIL;
             std::cout << "Unable to write valid progress file\n";
             return EXIT_FAILURE;
         }
 
         auto result = initialize_task_state_from_restart( model_ctrl, progress_file, restart_interval_steps, tstate, err_msg );
         if ( !result.ok || result.startup_mode != TaskStartupMode::fresh_run || !err_msg.empty() ) {
-            FAIL;
+            TEST_FAIL;
             std::cout << "Unexpected progress-without-rcf result: " << err_msg << "\n";
             return EXIT_FAILURE;
         }
@@ -207,14 +207,14 @@ int t_control_start()
         TaskState tstate;
 
         if ( !write_progress_file( dir, 12 ) ) {
-            FAIL;
+            TEST_FAIL;
             std::cout << "Unable to write valid progress file\n";
             return EXIT_FAILURE;
         }
 
         auto result = initialize_task_state_from_restart( model_ctrl, progress_file, restart_interval_steps, tstate, err_msg );
         if ( result.ok || !result.print_model_logs || err_msg.find( "progress file exists, but rcf file does not exist" ) == std::string::npos ) {
-            FAIL;
+            TEST_FAIL;
             std::cout << "Unexpected invalid mixed-state result: " << err_msg << "\n";
             return EXIT_FAILURE;
         }
@@ -232,7 +232,7 @@ int t_control_start()
 
         auto result = initialize_task_state_from_restart( model_ctrl, progress_file, restart_interval_steps, tstate, err_msg );
         if ( result.ok || !result.print_model_logs || err_msg.find( "rcf file exists, but progress file does not exist" ) == std::string::npos ) {
-            FAIL;
+            TEST_FAIL;
             std::cout << "Unexpected missing-progress result: " << err_msg << "\n";
             return EXIT_FAILURE;
         }
@@ -240,6 +240,6 @@ int t_control_start()
         fs::remove_all( dir, ec );
     }
 
-    SUCCESS;
+    TEST_SUCCESS;
     return EXIT_SUCCESS;
 }

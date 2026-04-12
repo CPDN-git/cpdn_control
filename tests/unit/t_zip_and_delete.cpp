@@ -418,10 +418,10 @@ int t_zip_and_delete()
     std::cout << "zip_and_delete: " << test_passed << "/" << test_count << " tests passed\n";
 
     if ( test_passed == test_count ) {
-        SUCCESS;
+        TEST_SUCCESS;
         return 0;
     } else {
-        FAIL;
+        TEST_FAIL;
         return 1;
     }
 }

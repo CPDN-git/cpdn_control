@@ -42,6 +42,11 @@ if (WIN32 AND CMAKE_SIZEOF_VOID_P LESS 8)
     message(FATAL_ERROR "32-bit Windows builds are not supported. Please use a 64-bit generator/toolchain.")
 endif()
 
+# Match the Windows vcpkg BOINC package, which is built with the static MSVC runtime.
+if (MSVC AND WIN32)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 # Configuration
 # Derive a sensible default platform triplet but allow overrides.
 if (NOT DEFINED PLATFORM)

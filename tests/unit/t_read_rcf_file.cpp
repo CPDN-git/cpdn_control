@@ -40,12 +40,12 @@ int t_read_rcf_file()
 
     if ( ret ) {
         if ( cstep != "1008" || ctime != "00140000" ) {
-            FAIL;
+            TEST_FAIL;
             return EXIT_FAILURE;
         }
-        SUCCESS;
+        TEST_SUCCESS;
         return EXIT_SUCCESS;
     }
-    FAIL;
+    TEST_FAIL;
     return EXIT_FAILURE;
 }

@@ -1,6 +1,7 @@
 #include "cpdn_zip.h"
 #include <iostream>
 #include <fstream>
+#include <string>
 #include <vector>
 #include <filesystem>
 #include <cassert>

@@ -79,12 +79,27 @@ target_link_libraries(test_zip PRIVATE cpdn_zip)
 target_link_libraries(test_unzip PRIVATE cpdn_zip)
 
 # --- Combined Library Creation ---
-# Add a custom command that runs AFTER the build is complete. 
-# It finds all the static libraries (cpdn_zip, ZipLib, zlib, bzip2) 
-# and combines them into a single, final libcpdn_zip.a in the build dir.
+# Bundle cpdn_zip and the ZipLib dependency archives into one installed static library.
+# The Unix and Windows toolchains need different archive-combine steps.
+if (WIN32)
+    set(CPDNZIP_COMBINED_ARCHIVE "${CMAKE_CURRENT_BINARY_DIR}/cpdn_zip_combined.lib")
 
-# Do NOT put {} inside the script, as CMake will misinterpret them.
-set(COMBINE_SCRIPT "
+    add_custom_command(
+                TARGET test_zip POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E echo "Bundling all static libraries into a single cpdn_zip.lib"
+                COMMAND "${CMAKE_AR}" /NOLOGO /OUT:${CPDNZIP_COMBINED_ARCHIVE}
+                        "$<TARGET_FILE:cpdn_zip>"
+                        "$<TARGET_FILE:ZipLib>"
+                        "$<TARGET_FILE:zlib>"
+                        "$<TARGET_FILE:bzip2>"
+                        "$<TARGET_FILE:lzma>"
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CPDNZIP_COMBINED_ARCHIVE}" "$<TARGET_FILE:cpdn_zip>"
+                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                COMMENT "Bundling all static libraries into a single cpdn_zip.lib"
+    )
+else()
+    # Do NOT put {} inside the script, as CMake will misinterpret them.
+    set(COMBINE_SCRIPT "
 #!/bin/bash
 set -e
 echo 'Creating combined static library libcpdn_zip.a...'
@@ -92,29 +107,29 @@ echo 'Creating combined static library libcpdn_zip.a...'
 mkdir temp_lib_objs
 
 # For each archive, create a unique subdirectory and extract objects there
-for lib in $(find . -name '*.a'); do
-    lib_name=$(basename $lib .a); echo $lib_name
-    mkdir -p temp_lib_objs/$lib_name
-    cd temp_lib_objs/$lib_name
-    ${CMAKE_AR} x ../../$lib
+for lib in \$(find . -name '*.a'); do
+    lib_name=\$(basename \$lib .a); echo \$lib_name
+    mkdir -p temp_lib_objs/\$lib_name
+    cd temp_lib_objs/\$lib_name
+    \"${CMAKE_AR}\" x ../../\$lib
     cd ../..
 done
 
 # Create the new library from ALL object files in ALL subdirectories
-${CMAKE_AR} cr libcpdn_zip.a temp_lib_objs/*/*.o
-ranlib libcpdn_zip.a
+\"${CMAKE_AR}\" cr libcpdn_zip.a temp_lib_objs/*/*.o
+\"${CMAKE_RANLIB}\" libcpdn_zip.a
 rm -rf temp_lib_objs
 ")
 
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/combine_libs.sh "${COMBINE_SCRIPT}")
+    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/combine_libs.sh "${COMBINE_SCRIPT}")
 
-# Add the custom command to run the script just created.
-add_custom_command(
-            TARGET test_zip POST_BUILD
-            COMMAND bash ${CMAKE_CURRENT_BINARY_DIR}/combine_libs.sh
-            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-            COMMENT "Bundling all static libraries into a single libcpdn_zip.a"
-)
+    add_custom_command(
+                TARGET test_zip POST_BUILD
+                COMMAND bash ${CMAKE_CURRENT_BINARY_DIR}/combine_libs.sh
+                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                COMMENT "Bundling all static libraries into a single libcpdn_zip.a"
+    )
+endif()
 
 # --- Install Rules ---
 # This section defines what happens when 'make install' is run.

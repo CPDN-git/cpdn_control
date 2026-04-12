@@ -79,7 +79,12 @@ int main()
     namelist.close();
 
     auto t = std::time( nullptr );
-    auto tm = *std::localtime( &t );
+    std::tm tm {};
+#if defined( _WIN32 ) || defined( _WIN64 )
+    localtime_s( &tm, &t );
+#else
+    tm = *std::localtime( &t );
+#endif
 
     //  Initial sleep to mimic model reading input files before main time loop
     std::this_thread::sleep_until( chrono::system_clock::now() + chrono::seconds( 5 ) );

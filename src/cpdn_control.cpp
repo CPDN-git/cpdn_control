@@ -144,7 +144,7 @@ int init_boinc( BoincConfig& config )
 
     // Set the task related paths.
     // The APP_INIT_DATA structure only has the slot number.
-    config.slot_path = fs::current_path();
+    config.slot_path = fs::current_path().string();
 
     // Set BOINC optional values
     BOINC_OPTIONS options;

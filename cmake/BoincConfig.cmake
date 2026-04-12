@@ -7,10 +7,28 @@ function(configure_boinc boinc_dir)
         )
         set(BOINC_LIB "" PARENT_SCOPE)
         set(BOINC_API "" PARENT_SCOPE)
+        set(BOINC_LINK_LIBS "" PARENT_SCOPE)
         set(BOINC_INCLUDE_DIR ${BOINC_INCLUDE_DIR} PARENT_SCOPE)
         set(BOINC_LIB_DIR "" PARENT_SCOPE)
         message(STATUS "Using compile-only BOINC stub headers")
         return()
+    endif()
+
+    if(WIN32)
+        find_package(boinc CONFIG QUIET)
+        if(boinc_FOUND)
+            set(BOINC_INCLUDE_DIR "" PARENT_SCOPE)
+            set(BOINC_LIB_DIR "" PARENT_SCOPE)
+            set(BOINC_LIB unofficial::boinc::boinc PARENT_SCOPE)
+            set(BOINC_API unofficial::boinc::boincapi PARENT_SCOPE)
+            set(BOINC_LINK_LIBS
+                unofficial::boinc::boincapi
+                unofficial::boinc::boinc
+                PARENT_SCOPE
+            )
+            message(STATUS "Using BOINC package from CMake package config")
+            return()
+        endif()
     endif()
 
     set(BOINC_LIB_NAME "boinc")
@@ -52,6 +70,7 @@ function(configure_boinc boinc_dir)
     # Promote variables so the parent scope can use them when linking.
     set(BOINC_LIB ${BOINC_LIB} PARENT_SCOPE)
     set(BOINC_API ${BOINC_API} PARENT_SCOPE)
+    set(BOINC_LINK_LIBS ${BOINC_API} ${BOINC_LIB} PARENT_SCOPE)
     set(BOINC_INCLUDE_DIR ${BOINC_INCLUDE_DIR} PARENT_SCOPE)
     set(BOINC_LIB_DIR ${BOINC_LIB_DIR} PARENT_SCOPE)
 endfunction()

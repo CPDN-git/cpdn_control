@@ -10,8 +10,9 @@ Already in place:
 
 - CMake derives a Windows platform triplet of `x86_64-pc-windows-msvc` and rejects 32-bit Windows builds.
 - BOINC library discovery in `cmake/BoincConfig.cmake` accepts Windows-style `.lib` files.
+- `cmake/BoincConfig.cmake` now also supports a Windows BOINC package path via `find_package(boinc CONFIG)`, while keeping the existing manual `BOINC_DIR` fallback for non-vcpkg builds.
 - The repo has a manual Windows compile-probe workflow at `.github/workflows/windows_build_probe.yml`.
-- That workflow currently uses compile-only BOINC stubs, builds `unit_tests` for extra compile coverage, and still skips functional tests so it can surface MSVC build errors before a real Windows BOINC build exists.
+- That workflow now bootstraps `vcpkg` under `${{ github.workspace }}/vcpkg`, installs a real BOINC package, builds `unit_tests` for extra compile coverage, and still skips functional tests so it can surface MSVC build errors before full Windows runtime validation exists.
 - Linux-specific compile and link flags such as `-pthread`, `-static`, and `-fsanitize=address` are not applied to the main controller targets on Windows.
 - `test_model` now uses platform-aware compile options instead of unconditional `-g -Wall`.
 - `lib/cpdn_cpu_time.cpp` has a Windows implementation using `GetProcessTimes`.
@@ -21,26 +22,31 @@ Already in place:
 - `src/cpdn_main.cpp` no longer depends on `mkdir` and the old unconditional POSIX directory headers for its upload-directory setup.
 - `move_and_unzip_app_file(...)` now uses the shared CMake `PLATFORM` triplet rather than hardcoded Linux/macOS filename suffixes.
 
-## Temporary Probe Infrastructure
+## Windows BOINC Provisioning
 
-The current Windows workflow is still a compile probe, not a runtime validation job.
+The current Windows workflow is still a compile probe, not a runtime validation job, but it now uses a real BOINC dependency path rather than compile-only stub headers.
 
-Temporary pieces now in use:
+Current Windows dependency path:
 
-- `CPDN_USE_BOINC_STUBS=ON`
-- compile-only BOINC headers from `cmake/boinc_stub/include`
+- `vcpkg` bootstrapped in the workflow
+- BOINC installed from the pinned vcpkg port
 - `unit_tests` built for extra compile coverage
 - functional tests disabled
 
-This is useful for short-term porting work, but the BOINC stubs should not remain in the code indefinitely.
+The BOINC stubs still exist in the repo as an emergency compile-only fallback, but they should not remain on the active Windows path for long.
 
-They should be removed or at least stopped from being the default Windows porting path soon, because long-lived stubs create drift risk:
+They should be removed soon, or at minimum left unused by normal Windows CI, because long-lived stubs create drift risk:
 
 - the controller can compile against interfaces that no longer match real BOINC headers/libs
 - Windows-specific BOINC link/runtime issues stay hidden
 - CI can start to look healthier than the real product state
 
-So treat the stubs as a temporary bridge only, and plan to replace them with a real Windows BOINC build/artifact path once the next round of compile blockers is cleared.
+So treat the stubs as a temporary safety net only, not as the intended Windows dependency path.
+
+Note:
+
+- the controller continues to use the in-repo `cpdn_zip` library from `zip/`
+- the BOINC `boinc_zip` library provided by the vcpkg port is not used here because that BOINC zip path has known problems on Windows
 
 ## Process Control Status
 
@@ -91,7 +97,7 @@ This still blocks:
 
 ### 2. Full Windows runtime has not yet been validated with real BOINC libraries
 
-The current workflow is intentionally a compile probe. It does not yet prove:
+The current workflow now compiles against a real BOINC package, but it is still intentionally a compile probe. It does not yet prove:
 
 - link/runtime behavior against real Windows BOINC headers/libs
 - BOINC DLL discovery and execution environment
@@ -100,8 +106,8 @@ The current workflow is intentionally a compile probe. It does not yet prove:
 
 To move beyond the probe:
 
-- provide a real Windows BOINC install/artifact under `BOINC_DIR/include` and `BOINC_DIR/lib`
-- disable and then retire `CPDN_USE_BOINC_STUBS` from the active Windows workflow path
+- keep the vcpkg-based BOINC path working and stable in CI
+- remove `CPDN_USE_BOINC_STUBS` once it is no longer needed as a fallback
 - re-enable the relevant test/build stages in the workflow
 
 ### 3. Some test coverage is still not Windows-ready
@@ -129,8 +135,8 @@ Do not promote it to required CI yet.
 Recommended near-term order:
 
 1. Clear the next compile/runtime portability issues while keeping changes small.
-2. Add a real Windows BOINC install/artifact path to the workflow.
-3. Stop using the BOINC stubs in the active Windows workflow path.
+2. Keep the real BOINC vcpkg path working in the Windows workflow and clear the next BOINC-backed Windows build issues.
+3. Remove the BOINC stubs from the repo once they are no longer needed even as a fallback.
 4. Implement the Windows branch of `run_process_with_timeout(...)`.
 5. Re-enable and then run the relevant tests on Windows.
 6. Validate runtime behavior, not just compilation.

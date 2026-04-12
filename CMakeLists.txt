@@ -163,12 +163,14 @@ add_library(cpdn_control
 # (merges model helpers without creating extra archives per model)
 target_sources(cpdn_control PRIVATE $<TARGET_OBJECTS:cpdn_models>)
 
-# Add external header paths for boinc and cpdnzip
-# These paths are PUBLIC because the main code needs them to compile.
-target_include_directories(cpdn_control PUBLIC 
-                    ${BOINC_INCLUDE_DIR}
-                    ${CPDNZIP_INCLUDE_DIR}
-)
+# Add external header paths for boinc and cpdnzip.
+# The vcpkg BOINC path supplies includes via imported targets, while the
+# manual BOINC_DIR path still needs an explicit include directory here.
+set(CPDN_EXTERNAL_INCLUDE_DIRS ${CPDNZIP_INCLUDE_DIR})
+if(BOINC_INCLUDE_DIR)
+    list(APPEND CPDN_EXTERNAL_INCLUDE_DIRS ${BOINC_INCLUDE_DIR})
+endif()
+target_include_directories(cpdn_control PUBLIC ${CPDN_EXTERNAL_INCLUDE_DIRS})
 
 # Add local header paths (needed by executables that include project headers)
 target_include_directories(cpdn_control PUBLIC ${LOCAL_INCLUDE_DIRS})
@@ -176,7 +178,7 @@ target_include_directories(cpdn_control PUBLIC ${LOCAL_INCLUDE_DIRS})
 # Link the external libraries
 # Marked PUBLIC so downstream executables inherit the requirement.
 target_link_libraries(cpdn_control PUBLIC
-                    ${BOINC_API} ${BOINC_LIB}
+                    ${BOINC_LINK_LIBS}
                     ${CPDNZIP_LIB}
                     Threads::Threads
                     fmt::fmt

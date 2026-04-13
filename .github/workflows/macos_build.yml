@@ -1,0 +1,106 @@
+name: macOS Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: Apple Silicon GitHub-hosted runner label
+        required: true
+        default: macos-15-xlarge
+        type: choice
+        options:
+          - macos-15-xlarge
+          - macos-14-xlarge
+
+env:
+  BUILD_TYPE: Release
+  CMAKE_OSX_DEPLOYMENT_TARGET: "11.0"
+  VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+  VCPKG_COMMIT: 197fa8bf282e537136e4cf196af167e7f79be07b
+  VCPKG_TRIPLET: arm64-osx-cpdn
+
+jobs:
+  macos_build:
+    runs-on: ${{ inputs.runner }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Restore vcpkg cache
+        id: restore-vcpkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ env.VCPKG_ROOT }}
+            ${{ github.workspace }}/vcpkg_installed
+          key: macos-vcpkg-${{ inputs.runner }}-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_triplets/*.cmake', '.github/workflows/macos_build.yml') }}
+
+      - name: Bootstrap vcpkg
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p logs
+          if [ ! -d "$VCPKG_ROOT/.git" ]; then
+            git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT" 2>&1 | tee logs/vcpkg_clone.log
+          fi
+          git -C "$VCPKG_ROOT" fetch --depth 1 origin "$VCPKG_COMMIT" 2>&1 | tee logs/vcpkg_fetch.log
+          git -C "$VCPKG_ROOT" checkout "$VCPKG_COMMIT" 2>&1 | tee logs/vcpkg_checkout.log
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" 2>&1 | tee logs/vcpkg_bootstrap.log
+
+      - name: Install BOINC via vcpkg
+        shell: bash
+        run: |
+          set -o pipefail
+          "$VCPKG_ROOT/vcpkg" install --x-manifest-root="$GITHUB_WORKSPACE" --triplet="$VCPKG_TRIPLET" 2>&1 | tee logs/vcpkg_install_boinc.log
+
+      - name: Save vcpkg cache
+        if: always() && steps.restore-vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.VCPKG_ROOT }}
+            ${{ github.workspace }}/vcpkg_installed
+          key: macos-vcpkg-${{ inputs.runner }}-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_triplets/*.cmake', '.github/workflows/macos_build.yml') }}
+
+      - name: Build cpdn_zip
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake -S zip -B zip/build \
+            -DCMAKE_INSTALL_PREFIX=zip/install \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="$CMAKE_OSX_DEPLOYMENT_TARGET" 2>&1 | tee logs/cpdn_zip_configure.log
+          cmake --build zip/build --config "$BUILD_TYPE" --target install 2>&1 | tee logs/cpdn_zip_build.log
+
+      - name: Configure controller
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake -S . -B build \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_TARGET_TRIPLET="$VCPKG_TRIPLET" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="$CMAKE_OSX_DEPLOYMENT_TARGET" \
+            -DCPDN_BUILD_UNIT_TESTS=OFF \
+            -DCPDN_BUILD_FUNCTIONAL_TESTS=OFF 2>&1 | tee logs/controller_configure.log
+
+      - name: Build controller
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake --build build --config "$BUILD_TYPE" 2>&1 | tee logs/controller_build.log
+
+      - name: Upload macOS build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          overwrite: true
+          name: macos-build-logs
+          path: logs
+
+      - name: Upload built controller
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          overwrite: true
+          name: macos-controller-binary
+          path: build/cpdn_control_1.0.0_*apple-darwin*

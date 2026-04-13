@@ -50,10 +50,10 @@ This repository builds the **CPDN controller** executable used to run/manage cli
 
 The preferred BOINC dependency path is now the repo-local `vcpkg` manifest in:
 
-- `vcpkg.json`
-- `vcpkg-configuration.json`
-- `vcpkg_triplets/`
-- `vcpkg_overlays/boinc/`
+- `vcpkg/vcpkg.json`
+- `vcpkg/vcpkg-configuration.json`
+- `vcpkg/triplets/`
+- `vcpkg/overlays/boinc/`
 
 Use `vcpkg` first:
 
@@ -68,7 +68,7 @@ Use `vcpkg` first:
 
 The repo pins the default BOINC version through the `vcpkg` baseline. If a BOINC release needs to be rolled back, prefer a manifest override rather than switching the repo back to a local BOINC build.
 
-The repo also carries a small BOINC overlay port under `vcpkg_overlays/boinc/`.
+The repo also carries a small BOINC overlay port under `vcpkg/overlays/boinc/`.
 That overlay is intentional and should remain the default on Linux, Windows, and macOS because this project uses `boinc` and `boincapi` but does not use BOINC's `boinc_zip` library.
 
 Why the overlay exists:

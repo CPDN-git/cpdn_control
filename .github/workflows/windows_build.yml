@@ -5,7 +5,7 @@ on:
 
 env:
   BUILD_TYPE: Release
-  VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+  VCPKG_ROOT: ${{ github.workspace }}/vcpkg_tool
   VCPKG_COMMIT: 197fa8bf282e537136e4cf196af167e7f79be07b
   VCPKG_TRIPLET: x64-windows-cpdn-static
 
@@ -23,7 +23,7 @@ jobs:
         with:
           path: |
             ${{ env.VCPKG_ROOT }}
-          key: windows-vcpkg-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_triplets/*.cmake', 'vcpkg_overlays/boinc/*', '.github/workflows/windows_build.yml') }}
+          key: windows-vcpkg-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg/vcpkg.json', 'vcpkg/vcpkg-configuration.json', 'vcpkg/triplets/*.cmake', 'vcpkg/overlays/boinc/*', '.github/workflows/windows_build.yml') }}
 
       - name: Bootstrap vcpkg
         shell: pwsh
@@ -50,7 +50,7 @@ jobs:
       - name: Install BOINC via vcpkg
         shell: pwsh
         run: |
-          & "$env:VCPKG_ROOT\vcpkg.exe" install --x-manifest-root="$env:GITHUB_WORKSPACE" --triplet="$env:VCPKG_TRIPLET" 2>&1 `
+          & "$env:VCPKG_ROOT\vcpkg.exe" install --x-manifest-root="$env:GITHUB_WORKSPACE\vcpkg" --triplet="$env:VCPKG_TRIPLET" 2>&1 `
             | Tee-Object -FilePath logs/vcpkg_install_boinc.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -60,7 +60,7 @@ jobs:
         with:
           path: |
             ${{ env.VCPKG_ROOT }}
-          key: windows-vcpkg-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_triplets/*.cmake', 'vcpkg_overlays/boinc/*', '.github/workflows/windows_build.yml') }}
+          key: windows-vcpkg-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg/vcpkg.json', 'vcpkg/vcpkg-configuration.json', 'vcpkg/triplets/*.cmake', 'vcpkg/overlays/boinc/*', '.github/workflows/windows_build.yml') }}
 
       - name: Inspect installed BOINC CMake package
         shell: pwsh

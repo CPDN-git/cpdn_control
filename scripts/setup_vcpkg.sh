@@ -19,6 +19,7 @@ EOF
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
+manifest_root="${repo_root}/vcpkg"
 
 vcpkg_root="/home/glenn/github/vcpkg"
 vcpkg_commit="197fa8bf282e537136e4cf196af167e7f79be07b"
@@ -88,4 +89,4 @@ if [[ -z "${triplet}" ]]; then
 fi
 
 echo "[setup_vcpkg] Installing repo manifest dependencies for triplet ${triplet}"
-"${vcpkg_root}/vcpkg" install --x-manifest-root="${repo_root}" --triplet="${triplet}"
+"${vcpkg_root}/vcpkg" install --x-manifest-root="${manifest_root}" --triplet="${triplet}"

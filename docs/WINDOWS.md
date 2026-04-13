@@ -12,8 +12,8 @@ Already in place:
 - BOINC library discovery in `cmake/BoincConfig.cmake` accepts Windows-style `.lib` files.
 - `cmake/BoincConfig.cmake` now prefers a BOINC package path via `find_package(boinc CONFIG)` and keeps the existing manual `BOINC_DIR` fallback for non-`vcpkg` builds.
 - The repo has a manual Windows build workflow at `.github/workflows/windows_build.yml`.
-- The repo now has checked-in `vcpkg` metadata in `vcpkg.json`, `vcpkg-configuration.json`, and `vcpkg_triplets/`.
-- That workflow now bootstraps `vcpkg` under `${{ github.workspace }}/vcpkg`, installs BOINC through the repo-local manifest, uses the repo-owned Windows static triplet, builds `unit_tests`, and is configured to run the full Windows unit test suite.
+- The repo now has checked-in `vcpkg` metadata under `vcpkg/`, including `vcpkg/vcpkg.json`, `vcpkg/vcpkg-configuration.json`, `vcpkg/triplets/`, and the BOINC overlay port under `vcpkg/overlays/boinc/`.
+- That workflow now bootstraps the external `vcpkg` tool under `${{ github.workspace }}/vcpkg_tool`, installs BOINC through the repo-local manifest under `${{ github.workspace }}/vcpkg`, uses the repo-owned Windows static triplet, builds `unit_tests`, and is configured to run the full Windows unit test suite.
 - Linux-specific compile and link flags such as `-pthread`, `-static`, and `-fsanitize=address` are not applied to the main controller targets on Windows.
 - `test_model` now uses platform-aware compile options instead of unconditional `-g -Wall`.
 - `lib/cpdn_cpu_time.cpp` has a Windows implementation using `GetProcessTimes`.

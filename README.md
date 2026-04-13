@@ -21,10 +21,11 @@ A number of prerequisite libraries are required detailed below.
 
 The preferred BOINC dependency path is now the repo-local `vcpkg` manifest in:
 
-- [vcpkg.json](/home/glenn/github/cpdn_control/vcpkg.json)
-- [vcpkg-configuration.json](/home/glenn/github/cpdn_control/vcpkg-configuration.json)
-- `vcpkg_triplets/`
-- `vcpkg_overlays/boinc/`
+- [vcpkg/README.md](/home/glenn/github/cpdn_control/vcpkg/README.md)
+- [vcpkg/vcpkg.json](/home/glenn/github/cpdn_control/vcpkg/vcpkg.json)
+- [vcpkg/vcpkg-configuration.json](/home/glenn/github/cpdn_control/vcpkg/vcpkg-configuration.json)
+- `vcpkg/triplets/`
+- `vcpkg/overlays/boinc/`
 
 This keeps the BOINC version pinned for the repo and avoids relying on a shared manual BOINC build used by other repositories.
 
@@ -61,7 +62,7 @@ The simplest setup step is now:
 scripts/setup_vcpkg.sh --triplet x64-linux-cpdn-static
 ```
 
-This clones `vcpkg` to `/home/glenn/github/vcpkg`, checks out the repo-pinned commit, bootstraps it, and installs the repo manifest dependencies for the selected triplet.
+This clones `vcpkg` to `/home/glenn/github/vcpkg`, checks out the repo-pinned commit, bootstraps it, and installs the repo manifest dependencies from `cpdn_control/vcpkg/` for the selected triplet.
 
 If you prefer a different checkout location:
 
@@ -104,7 +105,7 @@ For Linux development, the repo now includes thin bash wrappers under `scripts/`
 - [scripts/build_with_local_boinc.sh](/home/glenn/github/cpdn_control/scripts/build_with_local_boinc.sh)
 - [scripts/test_with_vcpkg.sh](/home/glenn/github/cpdn_control/scripts/test_with_vcpkg.sh)
 
-These scripts are convenience entry points only. CMake and `vcpkg.json` remain the canonical build configuration.
+These scripts are convenience entry points only. CMake and `vcpkg/vcpkg.json` remain the canonical build configuration.
 
 Typical usage:
 

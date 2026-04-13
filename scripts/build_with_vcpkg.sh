@@ -21,6 +21,7 @@ EOF
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
+manifest_root="${repo_root}/vcpkg"
 
 vcpkg_root="${VCPKG_ROOT:-}"
 build_dir="${repo_root}/build"
@@ -91,7 +92,7 @@ if [[ ! -x "${vcpkg_root}/vcpkg" ]]; then
 fi
 
 echo "[build_with_vcpkg] Installing manifest dependencies via vcpkg"
-"${vcpkg_root}/vcpkg" install --x-manifest-root="${repo_root}" --triplet="${vcpkg_triplet}"
+"${vcpkg_root}/vcpkg" install --x-manifest-root="${manifest_root}" --triplet="${vcpkg_triplet}"
 
 echo "[build_with_vcpkg] Building cpdn_zip"
 cmake -S "${repo_root}/zip" -B "${repo_root}/zip/build" \
@@ -113,4 +114,3 @@ if [[ "${skip_tests}" == "0" ]]; then
     echo "[build_with_vcpkg] Running tests"
     ctest --test-dir "${build_dir}" --output-on-failure -V
 fi
-

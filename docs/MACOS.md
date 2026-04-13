@@ -97,8 +97,8 @@ Add a separate manual-only workflow for the Apple Silicon port:
 - skip all tests for now
 
 Runner note:
-- GitHub's arm64 macOS hosted runners use the `-xlarge` labels
-- if this repository does not have access to those runners, use a self-hosted Apple Silicon runner instead
+- the current workflow uses the standard GitHub-hosted Apple Silicon runner labels such as `macos-14`
+- if those labels are unavailable to the repository, use a self-hosted Apple Silicon runner instead
 
 ## Proposed Apple Build Settings
 

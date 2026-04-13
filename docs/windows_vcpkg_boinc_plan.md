@@ -39,8 +39,8 @@ This document describes:
 
 The repo should move to a checked-in `vcpkg` manifest configuration:
 
-- `vcpkg.json`
-- `vcpkg-configuration.json`
+- `vcpkg/vcpkg.json`
+- `vcpkg/vcpkg-configuration.json`
 
 This keeps dependency selection inside the repo and removes the need for a shared external BOINC build tree.
 
@@ -82,8 +82,8 @@ The straightforward maintainable approach is to keep the static-linkage policy u
 
 Recommended structure:
 
-- `vcpkg_triplets/x64-linux-static-release.cmake`
-- `vcpkg_triplets/x64-windows-static-release.cmake` if the built-in Windows triplet is not sufficient for the repo's exact needs
+- `vcpkg/triplets/x64-linux-static-release.cmake`
+- `vcpkg/triplets/x64-windows-static-release.cmake` if the built-in Windows triplet is not sufficient for the repo's exact needs
 
 Minimum triplet expectations:
 
@@ -99,8 +99,8 @@ The repo should always build against the latest BOINC stable release that has be
 
 That should be implemented with:
 
-- a pinned `builtin-baseline` in `vcpkg.json` for the normal approved BOINC version
-- a BOINC-specific `overrides` entry in `vcpkg.json` when rollback to an older known-good BOINC version is required
+- a pinned `builtin-baseline` in `vcpkg/vcpkg.json` for the normal approved BOINC version
+- a BOINC-specific `overrides` entry in `vcpkg/vcpkg.json` when rollback to an older known-good BOINC version is required
 
 That gives two controlled modes:
 
@@ -180,8 +180,8 @@ That makes the final link behaviour visible and reduces misleading cache state.
 
 Add:
 
-- `vcpkg.json`
-- `vcpkg-configuration.json`
+- `vcpkg/vcpkg.json`
+- `vcpkg/vcpkg-configuration.json`
 - repo-owned triplets under a version-controlled directory
 
 Initial dependency scope should stay minimal:

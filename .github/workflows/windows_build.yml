@@ -145,6 +145,36 @@ jobs:
             | Tee-Object -FilePath logs/controller_configure.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Inspect generated controller project
+        shell: pwsh
+        run: |
+          "=== BOINC lines from controller configure ===" | Tee-Object -FilePath logs/controller_boinc_inspect.log
+          if (Test-Path logs/controller_configure.log) {
+            $configureMatches = Select-String -Path logs/controller_configure.log -Pattern 'BOINC|boinc'
+            if ($configureMatches) {
+              $configureMatches | ForEach-Object { $_.Line } `
+                | Tee-Object -FilePath logs/controller_boinc_inspect.log -Append
+            } else {
+              "No BOINC lines found in controller_configure.log" `
+                | Tee-Object -FilePath logs/controller_boinc_inspect.log -Append
+            }
+          }
+
+          $projectFile = Join-Path $env:GITHUB_WORKSPACE "build\cpdn_control.vcxproj"
+          "=== cpdn_control.vcxproj BOINC/include lines ===" | Tee-Object -FilePath logs/controller_vcxproj_inspect.log
+          if (Test-Path $projectFile) {
+            $projectMatches = Select-String -Path $projectFile -Pattern 'AdditionalIncludeDirectories|vcpkg_installed|boinc'
+            if ($projectMatches) {
+              $projectMatches | ForEach-Object { "$($_.LineNumber): $($_.Line.Trim())" } `
+                | Tee-Object -FilePath logs/controller_vcxproj_inspect.log -Append
+            } else {
+              "No BOINC or include lines found in $projectFile" `
+                | Tee-Object -FilePath logs/controller_vcxproj_inspect.log -Append
+            }
+          } else {
+            "$projectFile not found" | Tee-Object -FilePath logs/controller_vcxproj_inspect.log -Append
+          }
+
       - name: Build controller
         shell: pwsh
         run: |

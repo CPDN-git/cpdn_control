@@ -1,0 +1,144 @@
+name: Linux Build
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  BUILD_TYPE: Release
+  VCPKG_ROOT: ${{ github.workspace }}/vcpkg_tool
+  VCPKG_COMMIT: 197fa8bf282e537136e4cf196af167e7f79be07b
+  VCPKG_TRIPLET: x64-linux-cpdn-static
+  CPDN_VCPKG_MANIFEST_DIR: ${{ github.workspace }}/vcpkg
+  CPDN_VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed
+
+jobs:
+  unit_tests:
+    strategy:
+      matrix:
+        os: [ ubuntu-22.04, ubuntu-latest ]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Restore vcpkg cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.VCPKG_ROOT }}
+            ${{ env.CPDN_VCPKG_INSTALLED_DIR }}
+          key: linux-vcpkg-${{ matrix.os }}-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg/vcpkg.json', 'vcpkg/vcpkg-configuration.json', 'vcpkg/triplets/*.cmake', 'vcpkg/overlays/boinc/*', '.github/workflows/linux_build.yml') }}
+
+      - name: Bootstrap vcpkg
+        run: |
+          mkdir -p logs
+          if [ ! -d "$VCPKG_ROOT/.git" ]; then
+            git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT" 2>&1 | tee logs/vcpkg_clone.log
+          fi
+          git -C "$VCPKG_ROOT" fetch --depth 1 origin "$VCPKG_COMMIT" 2>&1 | tee logs/vcpkg_fetch.log
+          git -C "$VCPKG_ROOT" checkout "$VCPKG_COMMIT" 2>&1 | tee logs/vcpkg_checkout.log
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" 2>&1 | tee logs/vcpkg_bootstrap.log
+
+      - name: Install BOINC via vcpkg
+        run: |
+          "$VCPKG_ROOT/vcpkg" install --x-manifest-root="$CPDN_VCPKG_MANIFEST_DIR" --x-install-root="$CPDN_VCPKG_INSTALLED_DIR" --triplet="$VCPKG_TRIPLET" 2>&1 | tee logs/vcpkg_install_boinc.log
+
+      - name: Build cpdn-zip library
+        run:  cd zip && mkdir -p build && cd build && cmake -DCMAKE_INSTALL_PREFIX=../install .. && make && make install
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+              -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+              -DVCPKG_TARGET_TRIPLET="$VCPKG_TRIPLET" \
+              -DVCPKG_INSTALLED_DIR="$CPDN_VCPKG_INSTALLED_DIR" \
+              -DCPDN_BUILD_FUNCTIONAL_TESTS=OFF
+
+      - name: Build and Test Executable
+        # Compiles all targets, including the 'unit_tests' executable.
+        run: |
+          cmake --build build --config "$BUILD_TYPE"
+
+      - name: Verify release controller has no BOINC runtime dependency
+        run: |
+          mkdir -p logs
+          ldd build/cpdn_control_1.0.0_x86_64-pc-linux-gnu > logs/controller_ldd.log 2>&1 || true
+          cat logs/controller_ldd.log
+          if grep -qi "boinc" logs/controller_ldd.log; then
+            echo "Unexpected BOINC runtime dependency detected in release controller." >&2
+            exit 1
+          fi
+
+      - name: Run Unit Tests with CTest
+        # CTest runs all tests registered via add_test() in the build directory. -V flag (Verbose) prints test output to the CI log.
+        run: |
+          ctest --test-dir build --output-on-failure -V
+
+  functional_tests:
+    strategy:
+      matrix:
+        os: [ ubuntu-22.04, ubuntu-latest ]
+    runs-on: ${{ matrix.os }}
+
+    needs: unit_tests
+    if: needs.unit_tests.result == 'success'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore vcpkg cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.VCPKG_ROOT }}
+            ${{ env.CPDN_VCPKG_INSTALLED_DIR }}
+          key: linux-vcpkg-${{ matrix.os }}-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg/vcpkg.json', 'vcpkg/vcpkg-configuration.json', 'vcpkg/triplets/*.cmake', 'vcpkg/overlays/boinc/*', '.github/workflows/linux_build.yml') }}
+
+      - name: Bootstrap vcpkg
+        run: |
+          mkdir -p logs
+          if [ ! -d "$VCPKG_ROOT/.git" ]; then
+            git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT" 2>&1 | tee logs/vcpkg_clone.log
+          fi
+          git -C "$VCPKG_ROOT" fetch --depth 1 origin "$VCPKG_COMMIT" 2>&1 | tee logs/vcpkg_fetch.log
+          git -C "$VCPKG_ROOT" checkout "$VCPKG_COMMIT" 2>&1 | tee logs/vcpkg_checkout.log
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" 2>&1 | tee logs/vcpkg_bootstrap.log
+
+      - name: Install BOINC via vcpkg
+        run: |
+          "$VCPKG_ROOT/vcpkg" install --x-manifest-root="$CPDN_VCPKG_MANIFEST_DIR" --x-install-root="$CPDN_VCPKG_INSTALLED_DIR" --triplet="$VCPKG_TRIPLET" 2>&1 | tee logs/vcpkg_install_boinc.log
+
+      - name: Build cpdn-zip library
+        run:  cd zip && mkdir -p build && cd build && cmake -DCMAKE_INSTALL_PREFIX=../install .. && make && make install
+
+      - name: Build the CPDN control executable
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_TARGET_TRIPLET="$VCPKG_TRIPLET" \
+            -DVCPKG_INSTALLED_DIR="$CPDN_VCPKG_INSTALLED_DIR" \
+            -DCPDN_BUILD_FUNCTIONAL_TESTS=ON
+          cmake --build build --config "$BUILD_TYPE"
+
+      - name: Upload built executable
+        if: ${{ success() }}
+        uses: actions/upload-artifact@v4
+        with:
+          overwrite: true
+          name: Build-executable-${{ matrix.os }}
+          path: build/cpdn_control_1.0.0_x86_64-pc-linux-gnu
+
+      - name: Upload logs on fail
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          overwrite: true
+          name: Build-fail-log-${{ matrix.os }}
+          path: ${{ runner.temp }}/build_log
+
+      - name: Run functional tests with CTest
+        run: |
+          ctest --test-dir build --output-on-failure -V -L functional

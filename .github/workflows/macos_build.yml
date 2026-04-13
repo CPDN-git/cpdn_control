@@ -21,6 +21,8 @@ env:
   VCPKG_ROOT: ${{ github.workspace }}/vcpkg_tool
   VCPKG_COMMIT: 197fa8bf282e537136e4cf196af167e7f79be07b
   VCPKG_TRIPLET: arm64-osx-cpdn
+  CPDN_VCPKG_MANIFEST_DIR: ${{ github.workspace }}/vcpkg
+  CPDN_VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed
 
 jobs:
   macos_build:
@@ -36,7 +38,7 @@ jobs:
         with:
           path: |
             ${{ env.VCPKG_ROOT }}
-            ${{ github.workspace }}/vcpkg_installed
+            ${{ env.CPDN_VCPKG_INSTALLED_DIR }}
           key: macos-vcpkg-${{ inputs.runner }}-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg/vcpkg.json', 'vcpkg/vcpkg-configuration.json', 'vcpkg/triplets/*.cmake', 'vcpkg/overlays/boinc/*', '.github/workflows/macos_build.yml') }}
 
       - name: Bootstrap vcpkg
@@ -55,13 +57,13 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          "$VCPKG_ROOT/vcpkg" install --x-manifest-root="$GITHUB_WORKSPACE/vcpkg" --triplet="$VCPKG_TRIPLET" 2>&1 | tee logs/vcpkg_install_boinc.log
+          "$VCPKG_ROOT/vcpkg" install --x-manifest-root="$CPDN_VCPKG_MANIFEST_DIR" --x-install-root="$CPDN_VCPKG_INSTALLED_DIR" --triplet="$VCPKG_TRIPLET" 2>&1 | tee logs/vcpkg_install_boinc.log
 
       - name: Inspect installed BOINC package
         shell: bash
         run: |
           set -o pipefail
-          installed_root="$GITHUB_WORKSPACE/vcpkg_installed/$VCPKG_TRIPLET"
+          installed_root="$CPDN_VCPKG_INSTALLED_DIR/$VCPKG_TRIPLET"
           boinc_share_dir="$installed_root/share/boinc"
           boinc_include_dir="$installed_root/include"
 
@@ -100,7 +102,7 @@ jobs:
         with:
           path: |
             ${{ env.VCPKG_ROOT }}
-            ${{ github.workspace }}/vcpkg_installed
+            ${{ env.CPDN_VCPKG_INSTALLED_DIR }}
           key: macos-vcpkg-${{ inputs.runner }}-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg/vcpkg.json', 'vcpkg/vcpkg-configuration.json', 'vcpkg/triplets/*.cmake', 'vcpkg/overlays/boinc/*', '.github/workflows/macos_build.yml') }}
 
       - name: Build cpdn_zip
@@ -120,6 +122,7 @@ jobs:
           cmake -S . -B build \
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_TARGET_TRIPLET="$VCPKG_TRIPLET" \
+            -DVCPKG_INSTALLED_DIR="$CPDN_VCPKG_INSTALLED_DIR" \
             -DPLATFORM="$PLATFORM" \
             -DCPDN_REQUIRE_STATIC_BOINC=OFF \
             -DCMAKE_OSX_ARCHITECTURES="$CMAKE_OSX_ARCHITECTURES" \

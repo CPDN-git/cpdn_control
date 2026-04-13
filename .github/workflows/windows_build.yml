@@ -8,6 +8,8 @@ env:
   VCPKG_ROOT: ${{ github.workspace }}/vcpkg_tool
   VCPKG_COMMIT: 197fa8bf282e537136e4cf196af167e7f79be07b
   VCPKG_TRIPLET: x64-windows-cpdn-static
+  CPDN_VCPKG_MANIFEST_DIR: ${{ github.workspace }}/vcpkg
+  CPDN_VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed
 
 jobs:
   windows_build:
@@ -23,6 +25,7 @@ jobs:
         with:
           path: |
             ${{ env.VCPKG_ROOT }}
+            ${{ env.CPDN_VCPKG_INSTALLED_DIR }}
           key: windows-vcpkg-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg/vcpkg.json', 'vcpkg/vcpkg-configuration.json', 'vcpkg/triplets/*.cmake', 'vcpkg/overlays/boinc/*', '.github/workflows/windows_build.yml') }}
 
       - name: Bootstrap vcpkg
@@ -50,7 +53,7 @@ jobs:
       - name: Install BOINC via vcpkg
         shell: pwsh
         run: |
-          & "$env:VCPKG_ROOT\vcpkg.exe" install --x-manifest-root="$env:GITHUB_WORKSPACE\vcpkg" --triplet="$env:VCPKG_TRIPLET" 2>&1 `
+          & "$env:VCPKG_ROOT\vcpkg.exe" install --x-manifest-root="$env:CPDN_VCPKG_MANIFEST_DIR" --x-install-root="$env:CPDN_VCPKG_INSTALLED_DIR" --triplet="$env:VCPKG_TRIPLET" 2>&1 `
             | Tee-Object -FilePath logs/vcpkg_install_boinc.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -60,12 +63,13 @@ jobs:
         with:
           path: |
             ${{ env.VCPKG_ROOT }}
+            ${{ env.CPDN_VCPKG_INSTALLED_DIR }}
           key: windows-vcpkg-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg/vcpkg.json', 'vcpkg/vcpkg-configuration.json', 'vcpkg/triplets/*.cmake', 'vcpkg/overlays/boinc/*', '.github/workflows/windows_build.yml') }}
 
       - name: Inspect installed BOINC CMake package
         shell: pwsh
         run: |
-          $installedRoot = Join-Path $env:GITHUB_WORKSPACE "vcpkg_installed\$env:VCPKG_TRIPLET"
+          $installedRoot = Join-Path $env:CPDN_VCPKG_INSTALLED_DIR $env:VCPKG_TRIPLET
           $boincShareDir = Join-Path $installedRoot "share\boinc"
           $boincIncludeDir = Join-Path $installedRoot "include"
           $probeDir = Join-Path $env:GITHUB_WORKSPACE "logs\boinc_probe"
@@ -114,7 +118,7 @@ jobs:
           cmake -S $probeDir -B (Join-Path $probeDir "build") -G "Visual Studio 17 2022" -A x64 `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
             -DVCPKG_TARGET_TRIPLET="$env:VCPKG_TRIPLET" `
-            -DCMAKE_PREFIX_PATH="$installedRoot" 2>&1 `
+            -DVCPKG_INSTALLED_DIR="$env:CPDN_VCPKG_INSTALLED_DIR" 2>&1 `
             | Tee-Object -FilePath logs/vcpkg_boinc_probe.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -140,6 +144,7 @@ jobs:
           cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
             -DVCPKG_TARGET_TRIPLET="$env:VCPKG_TRIPLET" `
+            -DVCPKG_INSTALLED_DIR="$env:CPDN_VCPKG_INSTALLED_DIR" `
             -DCPDN_BUILD_UNIT_TESTS=ON `
             -DCPDN_BUILD_FUNCTIONAL_TESTS=OFF 2>&1 `
             | Tee-Object -FilePath logs/controller_configure.log

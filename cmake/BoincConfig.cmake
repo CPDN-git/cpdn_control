@@ -211,6 +211,15 @@ function(configure_boinc boinc_dir)
         message(STATUS "${_cpdn_boinc_message}")
     endif()
     if(_cpdn_have_boinc_package)
+        # _cpdn_use_boinc_package() sets these in this function scope.
+        # Promote them again so the caller's directory scope sees the resolved
+        # package targets, include dirs, and runtime-dir metadata.
+        set(BOINC_INCLUDE_DIR ${BOINC_INCLUDE_DIR} PARENT_SCOPE)
+        set(BOINC_LIB_DIR ${BOINC_LIB_DIR} PARENT_SCOPE)
+        set(BOINC_RUNTIME_LIB_DIR ${BOINC_RUNTIME_LIB_DIR} PARENT_SCOPE)
+        set(BOINC_LIB ${BOINC_LIB} PARENT_SCOPE)
+        set(BOINC_API ${BOINC_API} PARENT_SCOPE)
+        set(BOINC_LINK_LIBS ${BOINC_LINK_LIBS} PARENT_SCOPE)
         return()
     endif()
 

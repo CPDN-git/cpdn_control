@@ -80,6 +80,32 @@ function(_cpdn_get_imported_include_dirs target_name out_var)
     set(${out_var} "${_cpdn_normalized_include_dirs}" PARENT_SCOPE)
 endfunction()
 
+function(_cpdn_guess_package_include_dirs_from_library library_path out_var)
+    set(${out_var} "" PARENT_SCOPE)
+
+    if(NOT library_path)
+        return()
+    endif()
+
+    get_filename_component(_cpdn_library_dir "${library_path}" DIRECTORY)
+    set(_cpdn_candidate_roots
+        "${_cpdn_library_dir}/.."
+        "${_cpdn_library_dir}/../.."
+        "${_cpdn_library_dir}/../../.."
+    )
+
+    set(_cpdn_candidate_include_dirs)
+    foreach(_cpdn_candidate_root IN LISTS _cpdn_candidate_roots)
+        get_filename_component(_cpdn_candidate_root "${_cpdn_candidate_root}" ABSOLUTE)
+        if(EXISTS "${_cpdn_candidate_root}/include/boinc/boinc_api.h")
+            list(APPEND _cpdn_candidate_include_dirs "${_cpdn_candidate_root}/include")
+        endif()
+    endforeach()
+
+    list(REMOVE_DUPLICATES _cpdn_candidate_include_dirs)
+    set(${out_var} "${_cpdn_candidate_include_dirs}" PARENT_SCOPE)
+endfunction()
+
 function(_cpdn_library_is_static library_path out_var)
     if(NOT library_path)
         set(${out_var} FALSE PARENT_SCOPE)
@@ -133,6 +159,12 @@ function(_cpdn_use_boinc_package out_found_var out_message_var)
     if(NOT _cpdn_boinc_include_dirs)
         _cpdn_get_imported_include_dirs(${_cpdn_boinc_api_target} _cpdn_boinc_include_dirs)
     endif()
+    if(NOT _cpdn_boinc_include_dirs)
+        _cpdn_guess_package_include_dirs_from_library("${_cpdn_boinc_api_location}" _cpdn_boinc_include_dirs)
+    endif()
+    if(NOT _cpdn_boinc_include_dirs)
+        _cpdn_guess_package_include_dirs_from_library("${_cpdn_boinc_location}" _cpdn_boinc_include_dirs)
+    endif()
 
     if(CPDN_REQUIRE_STATIC_BOINC)
         _cpdn_library_is_static("${_cpdn_boinc_location}" _cpdn_boinc_is_static)
@@ -144,6 +176,14 @@ function(_cpdn_use_boinc_package out_found_var out_message_var)
             )
             return()
         endif()
+    endif()
+
+    if(NOT _cpdn_boinc_include_dirs)
+        set(${out_message_var}
+            "BOINC package config did not expose usable include directories; falling back to BOINC_DIR search"
+            PARENT_SCOPE
+        )
+        return()
     endif()
 
     _cpdn_runtime_dir_for_library("${_cpdn_boinc_api_location}" _cpdn_runtime_dir)

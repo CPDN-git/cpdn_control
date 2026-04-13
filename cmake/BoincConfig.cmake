@@ -43,6 +43,43 @@ function(_cpdn_get_imported_library_location target_name out_var)
     endforeach()
 endfunction()
 
+function(_cpdn_get_imported_include_dirs target_name out_var)
+    set(${out_var} "" PARENT_SCOPE)
+
+    if(NOT TARGET ${target_name})
+        return()
+    endif()
+
+    get_target_property(_aliased_target ${target_name} ALIASED_TARGET)
+    if(_aliased_target)
+        set(_target_to_query ${_aliased_target})
+    else()
+        set(_target_to_query ${target_name})
+    endif()
+
+    get_target_property(_cpdn_include_dirs ${_target_to_query} INTERFACE_INCLUDE_DIRECTORIES)
+    if(NOT _cpdn_include_dirs OR _cpdn_include_dirs MATCHES "-NOTFOUND$")
+        return()
+    endif()
+
+    set(_cpdn_normalized_include_dirs)
+    foreach(_cpdn_include_dir IN LISTS _cpdn_include_dirs)
+        if(NOT _cpdn_include_dir)
+            continue()
+        endif()
+
+        get_filename_component(_cpdn_include_leaf "${_cpdn_include_dir}" NAME)
+        if(_cpdn_include_leaf STREQUAL "boinc")
+            get_filename_component(_cpdn_include_dir "${_cpdn_include_dir}" DIRECTORY)
+        endif()
+
+        list(APPEND _cpdn_normalized_include_dirs "${_cpdn_include_dir}")
+    endforeach()
+
+    list(REMOVE_DUPLICATES _cpdn_normalized_include_dirs)
+    set(${out_var} "${_cpdn_normalized_include_dirs}" PARENT_SCOPE)
+endfunction()
+
 function(_cpdn_library_is_static library_path out_var)
     if(NOT library_path)
         set(${out_var} FALSE PARENT_SCOPE)
@@ -92,6 +129,10 @@ function(_cpdn_use_boinc_package out_found_var out_message_var)
 
     _cpdn_get_imported_library_location(${_cpdn_boinc_target} _cpdn_boinc_location)
     _cpdn_get_imported_library_location(${_cpdn_boinc_api_target} _cpdn_boinc_api_location)
+    _cpdn_get_imported_include_dirs(${_cpdn_boinc_target} _cpdn_boinc_include_dirs)
+    if(NOT _cpdn_boinc_include_dirs)
+        _cpdn_get_imported_include_dirs(${_cpdn_boinc_api_target} _cpdn_boinc_include_dirs)
+    endif()
 
     if(CPDN_REQUIRE_STATIC_BOINC)
         _cpdn_library_is_static("${_cpdn_boinc_location}" _cpdn_boinc_is_static)
@@ -110,7 +151,7 @@ function(_cpdn_use_boinc_package out_found_var out_message_var)
         _cpdn_runtime_dir_for_library("${_cpdn_boinc_location}" _cpdn_runtime_dir)
     endif()
 
-    set(BOINC_INCLUDE_DIR "" PARENT_SCOPE)
+    set(BOINC_INCLUDE_DIR "${_cpdn_boinc_include_dirs}" PARENT_SCOPE)
     set(BOINC_LIB_DIR "" PARENT_SCOPE)
     set(BOINC_RUNTIME_LIB_DIR "${_cpdn_runtime_dir}" PARENT_SCOPE)
     set(BOINC_LIB ${_cpdn_boinc_target} PARENT_SCOPE)

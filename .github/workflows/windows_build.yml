@@ -18,7 +18,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Restore vcpkg cache
-        uses: actions/cache@v4
+        id: restore-vcpkg-cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             ${{ env.VCPKG_ROOT }}
@@ -52,6 +53,14 @@ jobs:
           & "$env:VCPKG_ROOT\vcpkg.exe" install --x-manifest-root="$env:GITHUB_WORKSPACE" --triplet="$env:VCPKG_TRIPLET" 2>&1 `
             | Tee-Object -FilePath logs/vcpkg_install_boinc.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Save vcpkg cache
+        if: always() && steps.restore-vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.VCPKG_ROOT }}
+          key: windows-vcpkg-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_triplets/*.cmake', '.github/workflows/windows_build.yml') }}
 
       - name: Build cpdn_zip
         shell: pwsh

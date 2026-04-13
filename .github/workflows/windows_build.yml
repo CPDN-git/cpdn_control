@@ -62,6 +62,61 @@ jobs:
             ${{ env.VCPKG_ROOT }}
           key: windows-vcpkg-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_triplets/*.cmake', '.github/workflows/windows_build.yml') }}
 
+      - name: Inspect installed BOINC CMake package
+        shell: pwsh
+        run: |
+          $installedRoot = Join-Path $env:VCPKG_ROOT "installed\$env:VCPKG_TRIPLET"
+          $boincShareDir = Join-Path $installedRoot "share\boinc"
+          $boincIncludeDir = Join-Path $installedRoot "include"
+          $probeDir = Join-Path $env:GITHUB_WORKSPACE "logs\boinc_probe"
+          New-Item -ItemType Directory -Force -Path $probeDir | Out-Null
+
+          "=== installed/share/boinc tree ===" | Tee-Object -FilePath logs/vcpkg_boinc_share_tree.log
+          if (Test-Path $boincShareDir) {
+            Get-ChildItem $boincShareDir -Recurse | Select-Object FullName | Format-Table -AutoSize `
+              | Tee-Object -FilePath logs/vcpkg_boinc_share_tree.log -Append
+          } else {
+            "share/boinc directory not found: $boincShareDir" `
+              | Tee-Object -FilePath logs/vcpkg_boinc_share_tree.log -Append
+          }
+
+          "=== include tree probe ===" | Tee-Object -FilePath logs/vcpkg_boinc_include_tree.log
+          if (Test-Path $boincIncludeDir) {
+            Get-ChildItem $boincIncludeDir -Recurse -Filter boinc_api.h | Select-Object FullName | Format-Table -AutoSize `
+              | Tee-Object -FilePath logs/vcpkg_boinc_include_tree.log -Append
+          } else {
+            "include directory not found: $boincIncludeDir" `
+              | Tee-Object -FilePath logs/vcpkg_boinc_include_tree.log -Append
+          }
+
+          "=== boinc CMake package files ===" | Tee-Object -FilePath logs/vcpkg_boinc_cmake_files.log
+          if (Test-Path $boincShareDir) {
+            Get-ChildItem $boincShareDir -Filter *.cmake | ForEach-Object {
+              "----- $($_.FullName) -----" | Tee-Object -FilePath logs/vcpkg_boinc_cmake_files.log -Append
+              Get-Content $_.FullName | Tee-Object -FilePath logs/vcpkg_boinc_cmake_files.log -Append
+            }
+          }
+
+          @'
+          cmake_minimum_required(VERSION 3.16)
+          project(boinc_probe LANGUAGES CXX)
+          find_package(boinc CONFIG REQUIRED)
+          get_target_property(boinc_inc unofficial::boinc::boinc INTERFACE_INCLUDE_DIRECTORIES)
+          get_target_property(boincapi_inc unofficial::boinc::boincapi INTERFACE_INCLUDE_DIRECTORIES)
+          get_target_property(boinc_link_libs unofficial::boinc::boinc INTERFACE_LINK_LIBRARIES)
+          get_target_property(boincapi_link_libs unofficial::boinc::boincapi INTERFACE_LINK_LIBRARIES)
+          message(STATUS "probe unofficial::boinc::boinc include dirs=[${boinc_inc}]")
+          message(STATUS "probe unofficial::boinc::boincapi include dirs=[${boincapi_inc}]")
+          message(STATUS "probe unofficial::boinc::boinc link libs=[${boinc_link_libs}]")
+          message(STATUS "probe unofficial::boinc::boincapi link libs=[${boincapi_link_libs}]")
+          '@ | Set-Content -Path (Join-Path $probeDir "CMakeLists.txt")
+
+          cmake -S $probeDir -B (Join-Path $probeDir "build") -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET="$env:VCPKG_TRIPLET" 2>&1 `
+            | Tee-Object -FilePath logs/vcpkg_boinc_probe.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Build cpdn_zip
         shell: pwsh
         run: |

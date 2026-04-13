@@ -90,10 +90,7 @@ jobs:
       - name: Run Windows unit tests
         shell: pwsh
         run: |
-          # Keep the known Windows run_process_with_timeout stub gap out of this run
-          # until that helper has a real Windows implementation.
-          ctest --test-dir build -C $env:BUILD_TYPE --output-on-failure `
-            -E "RunProcessWithTimeoutTest" 2>&1 `
+          ctest --test-dir build -C $env:BUILD_TYPE --output-on-failure 2>&1 `
             | Tee-Object -FilePath logs/controller_ctest.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

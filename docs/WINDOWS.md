@@ -12,12 +12,13 @@ Already in place:
 - BOINC library discovery in `cmake/BoincConfig.cmake` accepts Windows-style `.lib` files.
 - `cmake/BoincConfig.cmake` now also supports a Windows BOINC package path via `find_package(boinc CONFIG)`, while keeping the existing manual `BOINC_DIR` fallback for non-vcpkg builds.
 - The repo has a manual Windows compile-probe workflow at `.github/workflows/windows_build_probe.yml`.
-- That workflow now bootstraps `vcpkg` under `${{ github.workspace }}/vcpkg`, installs a real BOINC package, builds `unit_tests`, and runs the Windows unit tests with `RunProcessWithTimeoutTest` excluded.
+- That workflow now bootstraps `vcpkg` under `${{ github.workspace }}/vcpkg`, installs a real BOINC package, builds `unit_tests`, and is configured to run the full Windows unit test suite.
 - Linux-specific compile and link flags such as `-pthread`, `-static`, and `-fsanitize=address` are not applied to the main controller targets on Windows.
 - `test_model` now uses platform-aware compile options instead of unconditional `-g -Wall`.
 - `lib/cpdn_cpu_time.cpp` has a Windows implementation using `GetProcessTimes`.
 - `lib/logging_utils.cpp` already uses `localtime_s` on Windows.
 - `set_env_var(...)` now uses `_putenv_s(...)` on Windows.
+- `run_process_with_timeout(...)` now has a Windows implementation using `CreateProcessW`, a child-only environment block, timeout handling, Job Object cleanup, and optional combined stdout/stderr capture.
 - `api/progressfile_handler.cpp` now uses `_getpid()` on Windows.
 - `src/cpdn_main.cpp` no longer depends on `mkdir` and the old unconditional POSIX directory headers for its upload-directory setup.
 - `move_and_unzip_app_file(...)` now uses the shared CMake `PLATFORM` triplet rather than hardcoded Linux/macOS filename suffixes.
@@ -25,14 +26,13 @@ Already in place:
 
 ## Windows BOINC Provisioning
 
-The current Windows workflow is still not a full runtime-validation job, but it now uses a real BOINC dependency path and runs most of the Windows unit tests.
+The current Windows workflow is still not a full runtime-validation job, but it now uses a real BOINC dependency path and is configured to run the Windows unit tests.
 
 Current Windows dependency path:
 
 - `vcpkg` bootstrapped in the workflow
 - BOINC installed from the pinned vcpkg port
 - `unit_tests` built and run in the workflow
-- `RunProcessWithTimeoutTest` currently excluded from the Windows run
 - functional tests disabled
 
 The old BOINC stubs have now been removed from the repo.
@@ -80,18 +80,9 @@ The obsolete `process_env_overrides()` testing path has been removed. Model envi
 
 ## Remaining Windows Blockers
 
-### 1. Timed external-process execution is still stubbed on Windows
+### 1. Full Windows runtime has not yet been validated with real BOINC libraries
 
-`lib/utils.cpp` still returns a default result from the Windows branch of `run_process_with_timeout(...)`.
-
-This still blocks:
-
-- the experimental diagnostics path in `src/external_diagnostics.cpp`
-- meaningful Windows coverage for `t_run_process_with_timeout`
-
-### 2. Full Windows runtime has not yet been validated with real BOINC libraries
-
-The current workflow now compiles and runs most unit tests against a real BOINC package, but it still does not prove:
+The current workflow now compiles and runs unit tests against a real BOINC package, but it still does not prove:
 
 - link/runtime behavior against real Windows BOINC headers/libs
 - BOINC DLL discovery and execution environment
@@ -101,16 +92,16 @@ The current workflow now compiles and runs most unit tests against a real BOINC 
 To move beyond the probe:
 
 - keep the vcpkg-based BOINC path working and stable in CI
-- re-enable the relevant test/build stages in the workflow
+- validate the re-enabled full Windows unit-test run in CI
 
-### 3. Some test coverage is still not Windows-ready
+### 2. Some test coverage is still not Windows-ready
 
 The launch/status unit test has been refactored to use the new cross-platform process-control seam, but broader Windows test support is still incomplete.
 
 Known follow-up areas:
 
-- `t_run_process_with_timeout.cpp` will still fail at runtime on Windows until `run_process_with_timeout(...)` is implemented there
-- several tests still use Unix-centric environment helpers directly
+- the full Windows unit-test run now needs GitHub Actions validation after re-enabling `RunProcessWithTimeoutTest`
+- several tests still use Unix-centric assumptions or helpers directly
 - the Windows workflow still disables functional tests
 - the threaded suspend/resume and descendant-process termination paths need Windows-specific runtime coverage, not just compile success
 
@@ -127,10 +118,9 @@ Do not promote it to required CI yet.
 
 Recommended near-term order:
 
-1. Implement the Windows branch of `run_process_with_timeout(...)`.
-2. Re-enable `RunProcessWithTimeoutTest` on Windows.
-3. Keep clearing any remaining Windows unit-test/runtime issues in small patches.
-4. Consider when to enable functional tests on Windows.
-5. Validate runtime behavior, not just compilation.
+1. Validate the full Windows unit-test run in GitHub Actions and clear any remaining platform-specific failures.
+2. Keep clearing any remaining Windows unit-test/runtime issues in small patches.
+3. Consider when to enable functional tests on Windows.
+4. Validate runtime behavior, not just compilation.
 
 The current Windows path now uses the static vcpkg BOINC build, and the repo's MSVC runtime has been aligned to match it.

@@ -10,11 +10,13 @@
 #include <charconv>    // for std::from_chars
 #include <chrono>
 #include <cstdio>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -22,6 +24,7 @@
 #include <vector>
 
 #if defined( _WIN32 ) || defined( _WIN64 )
+#include <cwctype>
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -73,7 +76,193 @@ bool file_was_updated( const fs::path& path, const std::optional<fs::file_time_t
     return current_mtime.value() != previous_mtime.value();
 }
 
-#if !defined( _WIN32 ) && !defined( _WIN64 )
+#if defined( _WIN32 ) || defined( _WIN64 )
+struct WideCaseInsensitiveLess {
+    bool operator()( const std::wstring& lhs, const std::wstring& rhs ) const
+    {
+        return std::lexicographical_compare( lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), []( wchar_t left, wchar_t right ) {
+            return std::towlower( left ) < std::towlower( right );
+        } );
+    }
+};
+
+bool contains_embedded_nul( const std::string& text ) { return text.find( '\0' ) != std::string::npos; }
+
+std::optional<std::wstring> utf8_to_wide( const std::string& text )
+{
+    if ( text.empty() ) {
+        return std::wstring{};
+    }
+
+    int size = MultiByteToWideChar( CP_UTF8, MB_ERR_INVALID_CHARS, text.c_str(), -1, nullptr, 0 );
+    if ( size <= 0 ) {
+        return std::nullopt;
+    }
+
+    std::wstring wide_text( static_cast<std::size_t>( size ), L'\0' );
+    if ( MultiByteToWideChar( CP_UTF8, MB_ERR_INVALID_CHARS, text.c_str(), -1, wide_text.data(), size ) <= 0 ) {
+        return std::nullopt;
+    }
+
+    wide_text.pop_back();
+    return wide_text;
+}
+
+bool is_valid_env_name( const std::string& name )
+{
+    return !name.empty() && name.find( '=' ) == std::string::npos && !contains_embedded_nul( name );
+}
+
+bool build_windows_environment_block( const std::vector<std::pair<std::string, std::string>>& env_vars, std::vector<wchar_t>& env_block )
+{
+    std::vector<std::wstring> special_entries;
+    std::map<std::wstring, std::wstring, WideCaseInsensitiveLess> merged_env;
+    env_block.clear();
+
+    if ( LPWCH current_env = GetEnvironmentStringsW(); current_env != nullptr ) {
+        LPWCH cursor = current_env;
+        while ( *cursor != L'\0' ) {
+            std::wstring entry = cursor;
+            cursor += entry.size() + 1;
+
+            if ( !entry.empty() && entry.front() == L'=' ) {
+                special_entries.push_back( entry );
+                continue;
+            }
+
+            auto sep = entry.find( L'=' );
+            if ( sep == std::wstring::npos ) {
+                continue;
+            }
+
+            merged_env[entry.substr( 0, sep )] = entry.substr( sep + 1 );
+        }
+        FreeEnvironmentStringsW( current_env );
+    }
+
+    for ( const auto& [name, value] : env_vars ) {
+        if ( !is_valid_env_name( name ) || contains_embedded_nul( value ) ) {
+            return false;
+        }
+
+        auto wide_name = utf8_to_wide( name );
+        auto wide_value = utf8_to_wide( value );
+        if ( !wide_name.has_value() || !wide_value.has_value() ) {
+            return false;
+        }
+
+        merged_env[wide_name.value()] = wide_value.value();
+    }
+
+    auto append_entry = [&env_block]( const std::wstring& entry ) {
+        env_block.insert( env_block.end(), entry.begin(), entry.end() );
+        env_block.push_back( L'\0' );
+    };
+
+    for ( const auto& entry : special_entries ) {
+        append_entry( entry );
+    }
+    for ( const auto& [name, value] : merged_env ) {
+        append_entry( name + L"=" + value );
+    }
+    env_block.push_back( L'\0' );
+    return true;
+}
+
+std::wstring quote_windows_command_arg( const std::wstring& arg )
+{
+    std::wstring quoted;
+    quoted.push_back( L'"' );
+
+    std::size_t backslash_count = 0;
+    for ( wchar_t ch : arg ) {
+        if ( ch == L'\\' ) {
+            ++backslash_count;
+            continue;
+        }
+
+        if ( ch == L'"' ) {
+            quoted.append( backslash_count * 2 + 1, L'\\' );
+            quoted.push_back( L'"' );
+            backslash_count = 0;
+            continue;
+        }
+
+        quoted.append( backslash_count, L'\\' );
+        backslash_count = 0;
+        quoted.push_back( ch );
+    }
+
+    quoted.append( backslash_count * 2, L'\\' );
+    quoted.push_back( L'"' );
+    return quoted;
+}
+
+bool build_windows_command_line( const std::string& executable, const std::vector<std::string>& args, std::vector<wchar_t>& command_line_buffer )
+{
+    auto executable_w = utf8_to_wide( executable );
+    if ( !executable_w.has_value() || executable_w->empty() ) {
+        return false;
+    }
+
+    std::wstring command_line = quote_windows_command_arg( executable_w.value() );
+    for ( const auto& arg : args ) {
+        if ( contains_embedded_nul( arg ) ) {
+            return false;
+        }
+
+        auto arg_w = utf8_to_wide( arg );
+        if ( !arg_w.has_value() ) {
+            return false;
+        }
+
+        command_line.push_back( L' ' );
+        command_line += quote_windows_command_arg( arg_w.value() );
+    }
+
+    command_line_buffer.assign( command_line.begin(), command_line.end() );
+    command_line_buffer.push_back( L'\0' );
+    return true;
+}
+
+bool create_kill_on_close_job( HANDLE& job_handle )
+{
+    job_handle = CreateJobObjectW( nullptr, nullptr );
+    if ( job_handle == nullptr ) {
+        return false;
+    }
+
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION limit_info{};
+    limit_info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    if ( !SetInformationJobObject( job_handle, JobObjectExtendedLimitInformation, &limit_info, sizeof( limit_info ) ) ) {
+        CloseHandle( job_handle );
+        job_handle = nullptr;
+        return false;
+    }
+
+    return true;
+}
+
+HANDLE open_combined_output_handle( const fs::path& combined_output_file )
+{
+    SECURITY_ATTRIBUTES security_attributes{};
+    security_attributes.nLength = sizeof( security_attributes );
+    security_attributes.bInheritHandle = TRUE;
+
+    auto combined_output_w = utf8_to_wide( combined_output_file.string() );
+    if ( !combined_output_w.has_value() || combined_output_w->empty() ) {
+        return INVALID_HANDLE_VALUE;
+    }
+
+    return CreateFileW( combined_output_w->c_str(),
+                        FILE_APPEND_DATA,
+                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                        &security_attributes,
+                        OPEN_ALWAYS,
+                        FILE_ATTRIBUTE_NORMAL,
+                        nullptr );
+}
+#else
 bool terminate_child_process( pid_t pid )
 {
     int status = 0;
@@ -559,13 +748,130 @@ TimedProcessResult run_process_with_timeout( const std::string& executable, cons
     TimedProcessResult result;
 
 #if defined( _WIN32 ) || defined( _WIN64 )
-    (void)executable;
-    (void)args;
-    (void)working_dir;
-    (void)timeout_seconds;
-    (void)expected_output_file;
-    (void)child_env_vars;
-    (void)combined_output_file;
+    if ( executable.empty() || timeout_seconds <= 0 || contains_embedded_nul( executable ) || contains_embedded_nul( working_dir ) ) {
+        return result;
+    }
+
+    auto executable_w = utf8_to_wide( executable );
+    auto working_dir_w = utf8_to_wide( working_dir );
+    if ( !executable_w.has_value() || executable_w->empty() || !working_dir_w.has_value() ) {
+        return result;
+    }
+
+    std::vector<wchar_t> command_line_buffer;
+    if ( !build_windows_command_line( executable, args, command_line_buffer ) ) {
+        return result;
+    }
+
+    std::vector<wchar_t> env_block;
+    if ( !build_windows_environment_block( child_env_vars, env_block ) ) {
+        return result;
+    }
+
+    auto previous_output_mtime = get_file_mtime( expected_output_file );
+
+    HANDLE combined_output_handle = INVALID_HANDLE_VALUE;
+    STARTUPINFOW startup_info{};
+    startup_info.cb = sizeof( startup_info );
+    BOOL inherit_handles = FALSE;
+
+    if ( !combined_output_file.empty() ) {
+        combined_output_handle = open_combined_output_handle( combined_output_file );
+        if ( combined_output_handle == INVALID_HANDLE_VALUE ) {
+            return result;
+        }
+
+        startup_info.dwFlags |= STARTF_USESTDHANDLES;
+        startup_info.hStdInput = GetStdHandle( STD_INPUT_HANDLE );
+        startup_info.hStdOutput = combined_output_handle;
+        startup_info.hStdError = combined_output_handle;
+        inherit_handles = TRUE;
+    }
+
+    HANDLE job_handle = nullptr;
+    if ( !create_kill_on_close_job( job_handle ) ) {
+        if ( combined_output_handle != INVALID_HANDLE_VALUE ) {
+            CloseHandle( combined_output_handle );
+        }
+        return result;
+    }
+
+    PROCESS_INFORMATION process_info{};
+    if ( !CreateProcessW( executable_w->c_str(),
+                          command_line_buffer.data(),
+                          nullptr,
+                          nullptr,
+                          inherit_handles,
+                          CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED,
+                          env_block.data(),
+                          working_dir_w->empty() ? nullptr : working_dir_w->c_str(),
+                          &startup_info,
+                          &process_info ) ) {
+        if ( combined_output_handle != INVALID_HANDLE_VALUE ) {
+            CloseHandle( combined_output_handle );
+        }
+        CloseHandle( job_handle );
+        return result;
+    }
+
+    if ( combined_output_handle != INVALID_HANDLE_VALUE ) {
+        CloseHandle( combined_output_handle );
+    }
+
+    if ( !AssignProcessToJobObject( job_handle, process_info.hProcess ) ) {
+        TerminateProcess( process_info.hProcess, 1 );
+        CloseHandle( process_info.hThread );
+        CloseHandle( process_info.hProcess );
+        CloseHandle( job_handle );
+        return result;
+    }
+
+    if ( ResumeThread( process_info.hThread ) == static_cast<DWORD>( -1 ) ) {
+        TerminateJobObject( job_handle, 1 );
+        CloseHandle( process_info.hThread );
+        CloseHandle( process_info.hProcess );
+        CloseHandle( job_handle );
+        return result;
+    }
+
+    CloseHandle( process_info.hThread );
+
+    constexpr auto kPollInterval = std::chrono::milliseconds( 100 );
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds( timeout_seconds );
+
+    while ( true ) {
+        DWORD wait_result = WaitForSingleObject( process_info.hProcess, static_cast<DWORD>( kPollInterval.count() ) );
+        if ( wait_result == WAIT_OBJECT_0 ) {
+            DWORD child_exit_code = 0;
+            if ( !GetExitCodeProcess( process_info.hProcess, &child_exit_code ) ) {
+                result.status = TimedProcessStatus::wait_failed;
+            } else {
+                result.exit_code = static_cast<int>( child_exit_code );
+                result.status = ( result.exit_code == 0 ) ? TimedProcessStatus::success : TimedProcessStatus::child_failed;
+                result.output_updated = expected_output_file.empty() ? true : file_was_updated( expected_output_file, previous_output_mtime );
+            }
+
+            CloseHandle( process_info.hProcess );
+            CloseHandle( job_handle );
+            return result;
+        }
+
+        if ( wait_result == WAIT_FAILED ) {
+            result.status = TimedProcessStatus::wait_failed;
+            CloseHandle( process_info.hProcess );
+            CloseHandle( job_handle );
+            return result;
+        }
+
+        if ( std::chrono::steady_clock::now() >= deadline ) {
+            TerminateJobObject( job_handle, 1 );
+            result.status = TimedProcessStatus::timed_out;
+            CloseHandle( process_info.hProcess );
+            CloseHandle( job_handle );
+            return result;
+        }
+    }
+
     return result;
 #else
     if ( executable.empty() || timeout_seconds <= 0 ) {

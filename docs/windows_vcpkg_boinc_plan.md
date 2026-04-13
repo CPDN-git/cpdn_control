@@ -28,9 +28,10 @@ This note started as the implementation plan for replacing the temporary Windows
   - installs BOINC from the pinned vcpkg port
   - configures this repo with the vcpkg toolchain
   - builds the controller and `unit_tests`
-  - runs the Windows unit tests except for the known `RunProcessWithTimeoutTest` blocker
+  - is configured to run the full Windows unit test suite
 - the main repo and the separate `zip` project both now use the static MSVC runtime on Windows so they match the static vcpkg BOINC build
 - the Windows build is now successful in GitHub Actions
+- `lib/utils.cpp` now has a real Windows `run_process_with_timeout(...)` implementation using `CreateProcessW`, a child-only environment block, timeout handling, Job Object cleanup, and optional combined stdout/stderr capture
 
 Notes:
 
@@ -87,7 +88,7 @@ The Windows workflow now:
 2. install BOINC and its dependencies for the Windows triplet
 3. configure this repo with the vcpkg toolchain file
 4. build the controller and `unit_tests`
-5. run the Windows unit tests, excluding `RunProcessWithTimeoutTest`
+5. run the Windows unit tests
 6. keep functional tests disabled for now
 
 ## GitHub Actions caching plan
@@ -125,10 +126,8 @@ Important:
 
 Still not done:
 
-- implementing the Windows `run_process_with_timeout(...)` path
-- re-enabling `RunProcessWithTimeoutTest` on Windows once that helper exists
 - enabling functional tests on Windows
-- validating end-to-end Windows BOINC runtime behavior rather than just build plus filtered unit tests
+- validating end-to-end Windows BOINC runtime behavior rather than just build plus unit tests
 
 Not planned as part of the current Windows work:
 
@@ -162,7 +161,7 @@ The initial vcpkg integration should now be considered successful because:
 
 Recommended next order from here:
 
-1. Implement the Windows branch of `run_process_with_timeout(...)`.
-2. Re-enable `RunProcessWithTimeoutTest` on Windows.
-3. Decide whether any further Windows unit tests need platform gating or cleanup.
-4. Only after that, consider enabling functional tests on Windows.
+1. Validate the full Windows unit-test run in GitHub Actions and clear any remaining platform-specific failures.
+2. Decide whether any further Windows unit tests need platform gating or cleanup.
+3. Only after that, consider enabling functional tests on Windows.
+4. Validate end-to-end Windows BOINC runtime behavior, not just build plus unit tests.

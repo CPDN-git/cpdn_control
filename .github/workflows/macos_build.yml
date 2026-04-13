@@ -6,11 +6,12 @@ on:
       runner:
         description: Apple Silicon GitHub-hosted runner label
         required: true
-        default: macos-15-xlarge
+        default: macos-14
         type: choice
         options:
-          - macos-15-xlarge
-          - macos-14-xlarge
+          - macos-14
+          - macos-15
+          - macos-latest
 
 env:
   BUILD_TYPE: Release

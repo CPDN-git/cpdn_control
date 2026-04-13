@@ -139,7 +139,11 @@ ChildProcessState poll_child_process( ChildProcessHandle& child_process, int& ex
     }
 
     int stat = 0;
-    pid_t wait_result = waitpid( static_cast<pid_t>( child_process.process_id ), &stat, WNOHANG | WUNTRACED | WCONTINUED );
+    int wait_options = WNOHANG | WUNTRACED;
+#ifdef WCONTINUED
+    wait_options |= WCONTINUED;
+#endif
+    pid_t wait_result = waitpid( static_cast<pid_t>( child_process.process_id ), &stat, wait_options );
     if ( wait_result == 0 ) {
         return child_process.suspended ? ChildProcessState::suspended : ChildProcessState::running;
     }

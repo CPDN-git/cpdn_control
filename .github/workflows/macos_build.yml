@@ -14,7 +14,9 @@ on:
 
 env:
   BUILD_TYPE: Release
+  CMAKE_OSX_ARCHITECTURES: arm64
   CMAKE_OSX_DEPLOYMENT_TARGET: "11.0"
+  PLATFORM: arm64-apple-darwin
   VCPKG_ROOT: ${{ github.workspace }}/vcpkg
   VCPKG_COMMIT: 197fa8bf282e537136e4cf196af167e7f79be07b
   VCPKG_TRIPLET: arm64-osx-cpdn
@@ -54,6 +56,43 @@ jobs:
           set -o pipefail
           "$VCPKG_ROOT/vcpkg" install --x-manifest-root="$GITHUB_WORKSPACE" --triplet="$VCPKG_TRIPLET" 2>&1 | tee logs/vcpkg_install_boinc.log
 
+      - name: Inspect installed BOINC package
+        shell: bash
+        run: |
+          set -o pipefail
+          installed_root="$GITHUB_WORKSPACE/vcpkg_installed/$VCPKG_TRIPLET"
+          boinc_share_dir="$installed_root/share/boinc"
+          boinc_include_dir="$installed_root/include"
+
+          {
+            echo "=== installed/share/boinc tree ==="
+            if [ -d "$boinc_share_dir" ]; then
+              find "$boinc_share_dir" -maxdepth 2 -type f | sort
+            else
+              echo "share/boinc directory not found: $boinc_share_dir"
+            fi
+          } | tee logs/vcpkg_boinc_share_tree.log
+
+          {
+            echo "=== include tree probe ==="
+            if [ -d "$boinc_include_dir" ]; then
+              find "$boinc_include_dir" -name boinc_api.h | sort
+            else
+              echo "include directory not found: $boinc_include_dir"
+            fi
+          } | tee logs/vcpkg_boinc_include_tree.log
+
+          {
+            echo "=== boinc CMake package files ==="
+            if [ -d "$boinc_share_dir" ]; then
+              for file in "$boinc_share_dir"/*.cmake; do
+                [ -f "$file" ] || continue
+                echo "----- $file -----"
+                cat "$file"
+              done
+            fi
+          } | tee logs/vcpkg_boinc_cmake_files.log
+
       - name: Save vcpkg cache
         if: always() && steps.restore-vcpkg-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
@@ -69,6 +108,7 @@ jobs:
           set -o pipefail
           cmake -S zip -B zip/build \
             -DCMAKE_INSTALL_PREFIX=zip/install \
+            -DCMAKE_OSX_ARCHITECTURES="$CMAKE_OSX_ARCHITECTURES" \
             -DCMAKE_OSX_DEPLOYMENT_TARGET="$CMAKE_OSX_DEPLOYMENT_TARGET" 2>&1 | tee logs/cpdn_zip_configure.log
           cmake --build zip/build --config "$BUILD_TYPE" --target install 2>&1 | tee logs/cpdn_zip_build.log
 
@@ -79,6 +119,9 @@ jobs:
           cmake -S . -B build \
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_TARGET_TRIPLET="$VCPKG_TRIPLET" \
+            -DPLATFORM="$PLATFORM" \
+            -DCPDN_REQUIRE_STATIC_BOINC=OFF \
+            -DCMAKE_OSX_ARCHITECTURES="$CMAKE_OSX_ARCHITECTURES" \
             -DCMAKE_OSX_DEPLOYMENT_TARGET="$CMAKE_OSX_DEPLOYMENT_TARGET" \
             -DCPDN_BUILD_UNIT_TESTS=OFF \
             -DCPDN_BUILD_FUNCTIONAL_TESTS=OFF 2>&1 | tee logs/controller_configure.log

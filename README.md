@@ -176,19 +176,15 @@ The version number of the executable is best left as-is and changed when transfe
 
 ### Windows
 
-Not yet ported to Windows. In progress.
+Supported as of commit : 312a18d8721 (April/2026)
 
 #### macOS
 
-Not ported.
-
-[comment]: # (OLD: Build the BOINC and cpdn_zip libraries using Xcode. Modify the Makefile to use `clang++` as the compiler and the object file as `oifs_43r3_100_x86_64-apple-darwin`.)
+Not yet ported.
 
 #### ARM
 
-Not ported.
-
-[comment]: # (OLD: To build OpenIFS on an ARM architecture machine modify the Makefile and set `-D_ARM` and the object file becomes `oifs_43r3_1.00_aarch64-poky-linux`.)
+Not supported.
 
 ## How to run the controller executable with OpenIFS
 

@@ -87,6 +87,16 @@ jobs:
             | Tee-Object -FilePath logs/controller_build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Run Windows unit tests
+        shell: pwsh
+        run: |
+          # Keep the known Windows run_process_with_timeout stub gap out of this run
+          # until that helper has a real Windows implementation.
+          ctest --test-dir build -C $env:BUILD_TYPE --output-on-failure `
+            -E "RunProcessWithTimeoutTest" 2>&1 `
+            | Tee-Object -FilePath logs/controller_ctest.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Upload Windows probe logs
         if: always()
         uses: actions/upload-artifact@v4

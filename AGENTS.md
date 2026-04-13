@@ -48,13 +48,31 @@ This repository builds the **CPDN controller** executable used to run/manage cli
 
 ### 1) BOINC libraries
 
-The controller links against BOINC libraries. By default, the top-level `CMakeLists.txt` expects BOINC installed at:
+The preferred BOINC dependency path is now the repo-local `vcpkg` manifest in:
 
-- `../boinc-8.0.2-x86_64`
-  - headers in `include/`
-  - libs in `lib/` (static `.a` preferred)
+- `vcpkg.json`
+- `vcpkg-configuration.json`
+- `vcpkg_triplets/`
 
-Override at configure time if your BOINC install path differs:
+Use `vcpkg` first:
+
+- Linux:
+  - `scripts/setup_vcpkg.sh --triplet x64-linux-cpdn-static`
+  - `scripts/build_with_vcpkg.sh --vcpkg-root /home/glenn/github/vcpkg`
+- Windows:
+  - configure with `-DCMAKE_TOOLCHAIN_FILE=/PATH/TO/vcpkg/scripts/buildsystems/vcpkg.cmake`
+  - use `-DVCPKG_TARGET_TRIPLET=x64-windows-cpdn-static`
+- macOS Apple Silicon:
+  - use `-DVCPKG_TARGET_TRIPLET=arm64-osx-cpdn`
+
+The repo pins the default BOINC version through the `vcpkg` baseline. If a BOINC release needs to be rolled back, prefer a manifest override rather than switching the repo back to a local BOINC build.
+
+Keep the local BOINC install only as a fallback when the `vcpkg` package path is unavailable or broken. The manual path still expects:
+
+- headers in `include/`
+- libraries in `lib/`
+
+Override at configure time if the manual BOINC install path differs:
 
 - `cmake -S . -B build -DBOINC_DIR=/path/to/boinc-install`
 
@@ -75,7 +93,22 @@ Build/install it first:
 
 From repo root:
 
-- `cmake -S . -B build -DBOINC_DIR=/path/to/boinc-install` (optional if using default)
+Preferred `vcpkg` path:
+
+- `scripts/build_with_vcpkg.sh --vcpkg-root /home/glenn/github/vcpkg`
+
+Equivalent manual CMake flow:
+
+- `cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=/PATH/TO/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-linux-cpdn-static`
+- `cmake --build build -j`
+
+Fallback manual BOINC flow:
+
+- `scripts/build_with_local_boinc.sh --boinc-dir /path/to/boinc-install`
+
+or:
+
+- `cmake -S . -B build -DBOINC_DIR=/path/to/boinc-install`
 - `cmake --build build -j`
 
 Outputs are placed in `build/` (not installed). Notable binaries:
@@ -102,7 +135,9 @@ Functional tests are labeled `functional` (see `tests/functional/CMakeLists.txt`
 
 Notes:
 - Functional tests require `python3`.
-- `tests/functional/CMakeLists.txt` currently sets `BOINC_LIB_DIR` as `${CMAKE_SOURCE_DIR}/../boinc-8.0.2-x86_64/lib` for `LD_LIBRARY_PATH` during the run step. If BOINC is installed elsewhere, update this or make it configurable alongside `BOINC_DIR`.
+- `tests/functional/CMakeLists.txt` now uses `BOINC_RUNTIME_LIB_DIR` when BOINC runtime libraries exist.
+- For Linux static BOINC builds this is typically empty, which is the desired release-style behaviour.
+- For Windows and macOS package builds, the test harness may still need the BOINC runtime directory injected via `PATH` or `DYLD_LIBRARY_PATH`.
 
 ## Adding a new model integration
 

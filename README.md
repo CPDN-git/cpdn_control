@@ -32,15 +32,25 @@ The boinczip library is a buggy code that should not be used.
 
 ### Preferred: use `vcpkg`
 
-1. Clone and bootstrap `vcpkg` outside this repo:
+Install `vcpkg` outside this repo. Recommended local path:
 
 ```bash
-git clone https://github.com/microsoft/vcpkg.git /PATH/TO/vcpkg
-git -C /PATH/TO/vcpkg checkout 197fa8bf282e537136e4cf196af167e7f79be07b
-/PATH/TO/vcpkg/bootstrap-vcpkg.sh
+/home/glenn/github/vcpkg
 ```
 
-On Windows, use `bootstrap-vcpkg.bat` instead of `bootstrap-vcpkg.sh`.
+The simplest setup step is now:
+
+```bash
+scripts/setup_vcpkg.sh --triplet x64-linux-cpdn-static
+```
+
+This clones `vcpkg` to `/home/glenn/github/vcpkg`, checks out the repo-pinned commit, bootstraps it, and installs the repo manifest dependencies for the selected triplet.
+
+If you prefer a different checkout location:
+
+```bash
+scripts/setup_vcpkg.sh --vcpkg-root /PATH/TO/vcpkg --triplet x64-linux-cpdn-static
+```
 
 2. Configure this repo with the `vcpkg` toolchain and the repo-owned triplet:
 
@@ -67,6 +77,35 @@ BOINC version policy:
 - the default BOINC version is pinned by the repo's `vcpkg` baseline
 - if a BOINC release needs to be rolled back, prefer a `vcpkg` manifest override for `boinc`
 - keep the manual `BOINC_DIR` path as fallback only if the `vcpkg` route is unavailable or broken
+
+## Convenience Scripts
+
+For Linux development, the repo now includes thin bash wrappers under `scripts/`:
+
+- [scripts/build_with_vcpkg.sh](/home/glenn/github/cpdn_control/scripts/build_with_vcpkg.sh)
+- [scripts/build_with_local_boinc.sh](/home/glenn/github/cpdn_control/scripts/build_with_local_boinc.sh)
+- [scripts/test_with_vcpkg.sh](/home/glenn/github/cpdn_control/scripts/test_with_vcpkg.sh)
+
+These scripts are convenience entry points only. CMake and `vcpkg.json` remain the canonical build configuration.
+
+Typical usage:
+
+```bash
+scripts/build_with_vcpkg.sh --vcpkg-root /PATH/TO/vcpkg
+scripts/build_with_local_boinc.sh --boinc-dir /PATH/TO/boinc-install
+scripts/test_with_vcpkg.sh --build-dir build
+```
+
+Typical Linux `vcpkg` workflow:
+
+```bash
+scripts/setup_vcpkg.sh --triplet x64-linux-cpdn-static
+scripts/build_with_vcpkg.sh --vcpkg-root /home/glenn/github/vcpkg
+scripts/test_with_vcpkg.sh --build-dir build
+```
+
+Use `--functional` with the build scripts to configure and run functional tests as part of the build.
+Use `--functional` with `test_with_vcpkg.sh` to rerun only functional tests from an existing `vcpkg` build.
 
 ### Fallback: manual BOINC build
 
@@ -198,14 +237,20 @@ Fallback BOINC path on Linux:
 #### Steps to build
 
 In the top level directory:
-1. build `cpdn_zip`:
+1. simplest one-shot path:
+
+```bash
+scripts/build_with_vcpkg.sh --vcpkg-root /PATH/TO/vcpkg
+```
+
+2. equivalent manual steps if you do not want to use the wrapper script:
 
 ```bash
 cmake -S zip -B zip/build -DCMAKE_INSTALL_PREFIX=zip/install
 cmake --build zip/build --target install
 ```
 
-2. configure the controller with `vcpkg`:
+3. configure the controller with `vcpkg`:
 
 ```bash
 cmake -S . -B build \
@@ -213,7 +258,7 @@ cmake -S . -B build \
   -DVCPKG_TARGET_TRIPLET=x64-linux-cpdn-static
 ```
 
-3. build and test:
+4. build and test:
 
 ```bash
 cmake --build build --verbose    # omit --verbose if not interested in compile commands

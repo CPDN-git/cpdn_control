@@ -24,11 +24,28 @@ The preferred BOINC dependency path is now the repo-local `vcpkg` manifest in:
 - [vcpkg.json](/home/glenn/github/cpdn_control/vcpkg.json)
 - [vcpkg-configuration.json](/home/glenn/github/cpdn_control/vcpkg-configuration.json)
 - `vcpkg_triplets/`
+- `vcpkg_overlays/boinc/`
 
 This keeps the BOINC version pinned for the repo and avoids relying on a shared manual BOINC build used by other repositories.
 
-The boinczip library is no longer used as this repository contains an improved compression/zip library.
-The boinczip library is a buggy code that should not be used.
+The repo also carries a small BOINC overlay port. This is a deliberate maintenance choice:
+
+- `cpdn_control` needs `boinc` and `boincapi`, but does not use BOINC's `boinc_zip`
+- this repo uses the in-repo `cpdn_zip` library instead
+- the upstream `vcpkg` BOINC port builds and exports `boinc_zip` anyway
+- keeping a small overlay lets the project skip that extra library on Linux, Windows, and macOS
+
+Why this was done:
+
+- it keeps the BOINC dependency contract aligned with what the code actually uses
+- it removes an unnecessary build product from all supported platforms
+- it avoids platform-specific failures in BOINC's `boinc_zip` path, including the Apple Silicon `vcpkg` failure
+- it slightly reduces dependency build time and package surface area
+
+Maintenance note:
+
+- this introduces a small repo-local divergence from the upstream `vcpkg` BOINC port
+- that divergence is intentional and should be reviewed whenever the pinned BOINC version or `vcpkg` baseline is updated
 
 ### Preferred: use `vcpkg`
 
@@ -71,6 +88,7 @@ cmake -S . -B build `
 ```
 
 The manifest currently declares `boinc` as the BOINC dependency.
+That dependency is resolved through the repo's BOINC overlay port so the installed package exports only the BOINC libraries this project uses.
 
 BOINC version policy:
 

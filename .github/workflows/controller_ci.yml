@@ -27,7 +27,7 @@ jobs:
         with:
           path: |
             ${{ env.VCPKG_ROOT }}
-          key: linux-vcpkg-${{ matrix.os }}-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_triplets/*.cmake', '.github/workflows/controller_ci.yml') }}
+          key: linux-vcpkg-${{ matrix.os }}-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_triplets/*.cmake', 'vcpkg_overlays/boinc/*', '.github/workflows/controller_ci.yml') }}
 
       - name: Bootstrap vcpkg
         run: |
@@ -90,7 +90,7 @@ jobs:
         with:
           path: |
             ${{ env.VCPKG_ROOT }}
-          key: linux-vcpkg-${{ matrix.os }}-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_triplets/*.cmake', '.github/workflows/controller_ci.yml') }}
+          key: linux-vcpkg-${{ matrix.os }}-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_triplets/*.cmake', 'vcpkg_overlays/boinc/*', '.github/workflows/controller_ci.yml') }}
 
       - name: Bootstrap vcpkg
         run: |

@@ -23,7 +23,7 @@ jobs:
         with:
           path: |
             ${{ env.VCPKG_ROOT }}
-          key: windows-vcpkg-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_triplets/*.cmake', '.github/workflows/windows_build.yml') }}
+          key: windows-vcpkg-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_triplets/*.cmake', 'vcpkg_overlays/boinc/*', '.github/workflows/windows_build.yml') }}
 
       - name: Bootstrap vcpkg
         shell: pwsh
@@ -60,7 +60,7 @@ jobs:
         with:
           path: |
             ${{ env.VCPKG_ROOT }}
-          key: windows-vcpkg-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_triplets/*.cmake', '.github/workflows/windows_build.yml') }}
+          key: windows-vcpkg-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_triplets/*.cmake', 'vcpkg_overlays/boinc/*', '.github/workflows/windows_build.yml') }}
 
       - name: Inspect installed BOINC CMake package
         shell: pwsh

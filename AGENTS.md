@@ -53,6 +53,7 @@ The preferred BOINC dependency path is now the repo-local `vcpkg` manifest in:
 - `vcpkg.json`
 - `vcpkg-configuration.json`
 - `vcpkg_triplets/`
+- `vcpkg_overlays/boinc/`
 
 Use `vcpkg` first:
 
@@ -66,6 +67,16 @@ Use `vcpkg` first:
   - use `-DVCPKG_TARGET_TRIPLET=arm64-osx-cpdn`
 
 The repo pins the default BOINC version through the `vcpkg` baseline. If a BOINC release needs to be rolled back, prefer a manifest override rather than switching the repo back to a local BOINC build.
+
+The repo also carries a small BOINC overlay port under `vcpkg_overlays/boinc/`.
+That overlay is intentional and should remain the default on Linux, Windows, and macOS because this project uses `boinc` and `boincapi` but does not use BOINC's `boinc_zip` library.
+
+Why the overlay exists:
+
+- `cpdn_control` uses the in-repo `cpdn_zip`, not BOINC `boinc_zip`
+- the upstream `vcpkg` BOINC port still builds and exports `boinc_zip`
+- carrying the overlay keeps the package surface aligned with the repo's actual dependency needs
+- the overlay should be reviewed when updating the pinned BOINC version or `vcpkg` baseline
 
 Keep the local BOINC install only as a fallback when the `vcpkg` package path is unavailable or broken. The manual path still expects:
 

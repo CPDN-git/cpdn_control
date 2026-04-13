@@ -7,16 +7,18 @@ know that it is running under a BOINC client. The advantage of doing this is the
 needs a minimal set of changes. The BOINC client only knows about this application and only 
 this application knows how to manage the model.
 
-The design of this code allows it to be (mostly) agnostic about the underlying model. The
-model details and configuration are read from input XML files, then used to instantiate
-a base class for each model type.
+The design of this code allows it to be (mostly) agnostic about the underlying model.
+
+The code is under active development.
 
 [![CodeQL Advanced](https://github.com/CPDN-git/cpdn_control/actions/workflows/codeql.yml/badge.svg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/codeql.yml)
 [![Linux Build](https://github.com/CPDN-git/cpdn_control/actions/workflows/linux_build.yml/badge.svg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/linux_build.yml)
 [![Windows Build](https://github.com/CPDN-git/cpdn_control/actions/workflows/windows_build.yml/badge.svg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/windows_build.yml)
 [![macOS Build](https://github.com/CPDN-git/cpdn_control/actions/workflows/macos_build.yml/badge.svg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/macos_build.yml)
 
-A number of prerequisite libraries are required detailed below.
+A number of prerequisite libraries are required detailed below. The `vcpkg` application
+from Microsoft is used to manage cross-platform dependencies. It must be installed 
+before building the controller.
 
 ## Prerequisite: BOINC library
 
@@ -28,7 +30,7 @@ The preferred BOINC dependency path is now the repo-local `vcpkg` manifest in:
 - `vcpkg/triplets/`
 - `vcpkg/overlays/boinc/`
 
-This keeps the BOINC version pinned for the repo and avoids relying on a shared manual BOINC build used by other repositories.
+This keeps the BOINC version set for the repo and avoids relying on a shared manual BOINC build.
 
 The repo also carries a small BOINC overlay port. This is a deliberate maintenance choice:
 
@@ -47,14 +49,15 @@ Why this was done:
 Maintenance note:
 
 - this introduces a small repo-local divergence from the upstream `vcpkg` BOINC port
-- that divergence is intentional and should be reviewed whenever the pinned BOINC version or `vcpkg` baseline is updated
+- that divergence is intentional and should be reviewed whenever the set BOINC 
+version or `vcpkg` baseline is updated
 
 ### Preferred: use `vcpkg`
 
 Install `vcpkg` outside this repo. Recommended local path:
 
 ```bash
-/home/glenn/github/vcpkg
+${HOME}/github/vcpkg
 ```
 
 The simplest setup step is now:
@@ -63,7 +66,8 @@ The simplest setup step is now:
 scripts/setup_vcpkg.sh --triplet x64-linux-cpdn-static
 ```
 
-This clones `vcpkg` to `/home/glenn/github/vcpkg`, checks out the repo-pinned commit, bootstraps it, and installs the repo manifest dependencies from `cpdn_control/vcpkg/` for the selected triplet.
+This clones `vcpkg` to `${HOME}/github/vcpkg`, checks out the repo-pinned commit, 
+bootstraps it, and installs the repo manifest dependencies from `cpdn_control/vcpkg/` for the selected triplet.
 
 If you prefer a different checkout location:
 
@@ -90,7 +94,8 @@ cmake -S . -B build `
 ```
 
 The manifest currently declares `boinc` as the BOINC dependency.
-That dependency is resolved through the repo's BOINC overlay port so the installed package exports only the BOINC libraries this project uses.
+That dependency is resolved through the repo's BOINC overlay port so 
+the installed package exports only the BOINC libraries this project uses.
 
 BOINC version policy:
 
@@ -102,11 +107,12 @@ BOINC version policy:
 
 For Linux development, the repo now includes thin bash wrappers under `scripts/`:
 
-- [scripts/build_with_vcpkg.sh](/home/glenn/github/cpdn_control/scripts/build_with_vcpkg.sh)
-- [scripts/build_with_local_boinc.sh](/home/glenn/github/cpdn_control/scripts/build_with_local_boinc.sh)
-- [scripts/test_with_vcpkg.sh](/home/glenn/github/cpdn_control/scripts/test_with_vcpkg.sh)
+- [scripts/build_with_vcpkg.sh](${HOME}/github/cpdn_control/scripts/build_with_vcpkg.sh)
+- [scripts/build_with_local_boinc.sh](${HOME}/github/cpdn_control/scripts/build_with_local_boinc.sh)
+- [scripts/test_with_vcpkg.sh](${HOME}/github/cpdn_control/scripts/test_with_vcpkg.sh)
 
-These scripts are convenience entry points only. CMake and `vcpkg/vcpkg.json` remain the canonical build configuration.
+These scripts are convenience entry points only. CMake and `vcpkg/vcpkg.json` 
+remain the canonical build configuration.
 
 Typical usage:
 
@@ -120,7 +126,7 @@ Typical Linux `vcpkg` workflow:
 
 ```bash
 scripts/setup_vcpkg.sh --triplet x64-linux-cpdn-static
-scripts/build_with_vcpkg.sh --vcpkg-root /home/glenn/github/vcpkg
+scripts/build_with_vcpkg.sh --vcpkg-root ${HOME}/github/vcpkg
 scripts/test_with_vcpkg.sh --build-dir build
 ```
 
@@ -157,7 +163,7 @@ As of Oct 2025, the control application no longer uses the BOINC library zip rou
 These old routines are not memory safe; they use fixed sized buffers and unbounded string copy routines.
 They also do not work correctly under Windows (their low-level file handling breaks in Windows Update environments).
 
-The 'zip' subdirectory in this repo now contains code to build `cpdn_zip` and `cpdn_unzip` functions to replace
+The `zip` subdirectory in this repo now contains code to build `cpdn_zip` and `cpdn_unzip` functions to replace
 `boinc_zip` and `boinc_unzip`.
 
 ### ZipLib
@@ -302,14 +308,14 @@ The version number of the executable is best left as-is and changed when transfe
 ### Windows
 
 Windows now uses the same repo-local `vcpkg` BOINC path, with the `x64-windows-cpdn-static` triplet.
+The `Windows Build` github Action builds the cpdn_control Windows executable and can be downloaded from there.
 
 #### macOS
 
-Not yet ported.
+As above Apple macOS uses the same repo-local `vcpkg` BOINC path, with the `arm64-osx-cpdn.cmake` triplet.
+Note this is not currently statically linked. The macOS build can be downloaded from the macOS Build 
+github Action as above.
 
-#### ARM
-
-Not supported.
 
 ## How to run the controller executable with OpenIFS
 

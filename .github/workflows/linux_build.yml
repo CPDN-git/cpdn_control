@@ -59,6 +59,7 @@ jobs:
               -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
               -DVCPKG_TARGET_TRIPLET="$VCPKG_TRIPLET" \
               -DVCPKG_INSTALLED_DIR="$CPDN_VCPKG_INSTALLED_DIR" \
+              -DCPDN_BUILD_UNIT_TESTS=ON \
               -DCPDN_BUILD_FUNCTIONAL_TESTS=OFF
 
       - name: Build and Test Executable
@@ -79,7 +80,15 @@ jobs:
       - name: Run Unit Tests with CTest
         # CTest runs all tests registered via add_test() in the build directory. -V flag (Verbose) prints test output to the CI log.
         run: |
-          ctest --test-dir build --output-on-failure -V
+          ctest --test-dir build --output-on-failure -V 2>&1 | tee logs/controller_ctest.log
+
+      - name: Upload Linux unit test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          overwrite: true
+          name: linux-unit-logs-${{ matrix.os }}
+          path: logs
 
   functional_tests:
     strategy:
@@ -124,6 +133,7 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_TARGET_TRIPLET="$VCPKG_TRIPLET" \
             -DVCPKG_INSTALLED_DIR="$CPDN_VCPKG_INSTALLED_DIR" \
+            -DCPDN_BUILD_UNIT_TESTS=ON \
             -DCPDN_BUILD_FUNCTIONAL_TESTS=ON
           cmake --build build --config "$BUILD_TYPE"
 
@@ -135,14 +145,14 @@ jobs:
           name: Build-executable-${{ matrix.os }}
           path: build/cpdn_control_1.0.0_x86_64-pc-linux-gnu
 
-      - name: Upload logs on fail
-        if: ${{ failure() }}
+      - name: Run functional tests with CTest
+        run: |
+          ctest --test-dir build --output-on-failure -V -L functional 2>&1 | tee logs/functional_ctest.log
+
+      - name: Upload Linux functional test logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           overwrite: true
-          name: Build-fail-log-${{ matrix.os }}
-          path: ${{ runner.temp }}/build_log
-
-      - name: Run functional tests with CTest
-        run: |
-          ctest --test-dir build --output-on-failure -V -L functional
+          name: linux-functional-logs-${{ matrix.os }}
+          path: logs

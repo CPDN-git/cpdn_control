@@ -131,7 +131,7 @@ jobs:
             -DCPDN_REQUIRE_STATIC_BOINC=OFF \
             -DCMAKE_OSX_ARCHITECTURES="$CMAKE_OSX_ARCHITECTURES" \
             -DCMAKE_OSX_DEPLOYMENT_TARGET="$CMAKE_OSX_DEPLOYMENT_TARGET" \
-            -DCPDN_BUILD_UNIT_TESTS=OFF \
+            -DCPDN_BUILD_UNIT_TESTS=ON \
             -DCPDN_BUILD_FUNCTIONAL_TESTS=OFF 2>&1 | tee logs/controller_configure.log
 
       - name: Build controller
@@ -139,6 +139,12 @@ jobs:
         run: |
           set -o pipefail
           cmake --build build --config "$BUILD_TYPE" 2>&1 | tee logs/controller_build.log
+
+      - name: Run macOS unit tests
+        shell: bash
+        run: |
+          set -o pipefail
+          ctest --test-dir build --output-on-failure -V 2>&1 | tee logs/controller_ctest.log
 
       - name: Upload macOS build logs
         if: always()

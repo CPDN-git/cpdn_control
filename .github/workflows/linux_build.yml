@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  actions: read
+
 env:
   BUILD_TYPE: Release
   VCPKG_ROOT: ${{ github.workspace }}/vcpkg_tool

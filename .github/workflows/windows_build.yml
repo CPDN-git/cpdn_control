@@ -3,6 +3,10 @@ name: Windows Build
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+
 env:
   BUILD_TYPE: Release
   VCPKG_ROOT: ${{ github.workspace }}/vcpkg_tool

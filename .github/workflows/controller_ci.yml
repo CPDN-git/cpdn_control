@@ -6,9 +6,10 @@ on:
       - main
 
 env:
-  BOINC_VERSION: client_release/8.0/8.0.2
-  # Reminder placeholder. Github actions does not support 20.04, only 22.04 and up.
-  RELEASE_IMAGE: ubuntu-20.04
+  BUILD_TYPE: Release
+  VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+  VCPKG_COMMIT: 197fa8bf282e537136e4cf196af167e7f79be07b
+  VCPKG_TRIPLET: x64-linux-cpdn-static
 
 jobs:
   unit_tests:
@@ -21,55 +22,56 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Restore BOINC build from cache
-        id: cache-boinc
+      - name: Restore vcpkg cache
         uses: actions/cache@v4
         with:
-          path: boinc-install
-          key: boinc-${{ env.BOINC_VERSION }}-${{ matrix.os }}-v1
+          path: |
+            ${{ env.VCPKG_ROOT }}
+          key: linux-vcpkg-${{ matrix.os }}-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_triplets/*.cmake', '.github/workflows/controller_ci.yml') }}
 
-      - name: Clone BOINC/boinc PUBLIC repository
-        if: steps.cache-boinc.outputs.cache-hit != 'true'
-        run: git clone https://github.com/BOINC/boinc.git
+      - name: Bootstrap vcpkg
+        run: |
+          mkdir -p logs
+          if [ ! -d "$VCPKG_ROOT/.git" ]; then
+            git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT" 2>&1 | tee logs/vcpkg_clone.log
+          fi
+          git -C "$VCPKG_ROOT" fetch --depth 1 origin "$VCPKG_COMMIT" 2>&1 | tee logs/vcpkg_fetch.log
+          git -C "$VCPKG_ROOT" checkout "$VCPKG_COMMIT" 2>&1 | tee logs/vcpkg_checkout.log
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" 2>&1 | tee logs/vcpkg_bootstrap.log
 
-      - name: Run autosetup
-        if: steps.cache-boinc.outputs.cache-hit != 'true'
-        run: cd boinc && git checkout "$BOINC_VERSION" && ./_autosetup
-
-      - name: Build BOINC
-        if: steps.cache-boinc.outputs.cache-hit != 'true'
-        run: cd boinc && ./configure --disable-server --disable-fcgi --disable-manager --disable-client --enable-libraries --disable-boinczip --prefix=$PWD/../boinc-install CXXFLAGS='-O3'
-
-      - name: Run make install
-        if: steps.cache-boinc.outputs.cache-hit != 'true'
-        run: cd boinc && make install
+      - name: Install BOINC via vcpkg
+        run: |
+          "$VCPKG_ROOT/vcpkg" install --x-manifest-root="$GITHUB_WORKSPACE" --triplet="$VCPKG_TRIPLET" 2>&1 | tee logs/vcpkg_install_boinc.log
 
       - name: Build cpdn-zip library
         run:  cd zip && mkdir -p build && cd build && cmake -DCMAKE_INSTALL_PREFIX=../install .. && make && make install
 
-      - name: Create Build Directory for testing
-        run: mkdir build
-
       - name: Configure CMake
         run: |
-          cd build
-          cmake .. \
-              -DBOINC_INCLUDE_DIR="../boinc-install/include" \
-              -DBOINC_LIB_DIR="../boinc-install/lib" \
-              -DCPDNZIP_INCLUDE_DIR="../zip/install/include" \
-              -DCPDNZIP_LIB_DIR="../zip/install/lib"
+          cmake -S . -B build \
+              -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+              -DVCPKG_TARGET_TRIPLET="$VCPKG_TRIPLET" \
+              -DCPDN_BUILD_FUNCTIONAL_TESTS=OFF
 
       - name: Build and Test Executable
         # Compiles all targets, including the 'unit_tests' executable.
         run: |
-          cd build
-          cmake --build .
+          cmake --build build --config "$BUILD_TYPE"
+
+      - name: Verify release controller has no BOINC runtime dependency
+        run: |
+          mkdir -p logs
+          ldd build/cpdn_control_1.0.0_x86_64-pc-linux-gnu > logs/controller_ldd.log 2>&1 || true
+          cat logs/controller_ldd.log
+          if grep -qi "boinc" logs/controller_ldd.log; then
+            echo "Unexpected BOINC runtime dependency detected in release controller." >&2
+            exit 1
+          fi
 
       - name: Run Unit Tests with CTest
         # CTest runs all tests registered via add_test() in the build directory. -V flag (Verbose) prints test output to the CI log.
         run: |
-          cd build
-          ctest --output-on-failure -V -LE functional
+          ctest --test-dir build --output-on-failure -V
 
   functional_tests:
     strategy:
@@ -83,32 +85,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Restore BOINC build from cache
-        id: cache-boinc
+      - name: Restore vcpkg cache
         uses: actions/cache@v4
         with:
-          path: boinc-install
-          key: boinc-${{ env.BOINC_VERSION }}-${{ matrix.os }}-v1
+          path: |
+            ${{ env.VCPKG_ROOT }}
+          key: linux-vcpkg-${{ matrix.os }}-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_triplets/*.cmake', '.github/workflows/controller_ci.yml') }}
 
-      - name: Fail if BOINC cache missing
-        if: steps.cache-boinc.outputs.cache-hit != 'true'
+      - name: Bootstrap vcpkg
         run: |
-          echo "BOINC cache not found; unit_tests job should have populated it." >&2
-          exit 1
+          mkdir -p logs
+          if [ ! -d "$VCPKG_ROOT/.git" ]; then
+            git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT" 2>&1 | tee logs/vcpkg_clone.log
+          fi
+          git -C "$VCPKG_ROOT" fetch --depth 1 origin "$VCPKG_COMMIT" 2>&1 | tee logs/vcpkg_fetch.log
+          git -C "$VCPKG_ROOT" checkout "$VCPKG_COMMIT" 2>&1 | tee logs/vcpkg_checkout.log
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" 2>&1 | tee logs/vcpkg_bootstrap.log
+
+      - name: Install BOINC via vcpkg
+        run: |
+          "$VCPKG_ROOT/vcpkg" install --x-manifest-root="$GITHUB_WORKSPACE" --triplet="$VCPKG_TRIPLET" 2>&1 | tee logs/vcpkg_install_boinc.log
 
       - name: Build cpdn-zip library
         run:  cd zip && mkdir -p build && cd build && cmake -DCMAKE_INSTALL_PREFIX=../install .. && make && make install
 
       - name: Build the CPDN control executable
         run: |
-          mkdir build
-          cd build
-          cmake .. \
-            -DBOINC_INCLUDE_DIR="../boinc-install/include" \
-            -DBOINC_LIB_DIR="../boinc-install/lib" \
-            -DCPDNZIP_INCLUDE_DIR="../zip/install/include" \
-            -DCPDNZIP_LIB_DIR="../zip/install/lib"
-          cmake --build .
+          cmake -S . -B build \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_TARGET_TRIPLET="$VCPKG_TRIPLET" \
+            -DCPDN_BUILD_FUNCTIONAL_TESTS=ON
+          cmake --build build --config "$BUILD_TYPE"
 
       - name: Upload built executable
         if: ${{ success() }}
@@ -128,5 +135,4 @@ jobs:
 
       - name: Run functional tests with CTest
         run: |
-          cd build
-          ctest --output-on-failure -V -L functional
+          ctest --test-dir build --output-on-failure -V -L functional

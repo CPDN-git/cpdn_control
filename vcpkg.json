@@ -1,0 +1,9 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "cpdn-control",
+  "version-semver": "1.0.0",
+  "builtin-baseline": "197fa8bf282e537136e4cf196af167e7f79be07b",
+  "dependencies": [
+    "boinc"
+  ]
+}

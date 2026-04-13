@@ -13,41 +13,84 @@ a base class for each model type.
 
 [![Controller CI](https://github.com/CPDN-git/cpdn_control/actions/workflows/controller_ci.yml/badge.svg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/controller_ci.yml)
 [![CodeQL Advanced](https://github.com/CPDN-git/cpdn_control/actions/workflows/codeql.yml/badge.svg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/codeql.yml)
-[![Windows Build](https://github.com/CPDN-git/cpdn_control/actions/workflows/windows_build_probe.yml/badge.svg?branch=win_port_vpkg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/windows_build_probe.yml)
+[![Windows Build](https://github.com/CPDN-git/cpdn_control/actions/workflows/windows_build.yml/badge.svg?branch=win_port_vpkg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/windows_build.yml)
 
 A number of prerequisite libraries are required detailed below.
 
 ## Prerequisite: BOINC library
 
-Download and build the BOINC libraries required for linking. 
-(BOINC is available from: https://github.com/BOINC/boinc). 
-For instructions on building BOINC see: [BOINC github](https://github.com/BOINC/boinc/wiki/).
+The preferred BOINC dependency path is now the repo-local `vcpkg` manifest in:
 
-As only the BOINC libraries are required, the boinc client and manager can be disabled (reduces system packages required).
+- [vcpkg.json](/home/glenn/github/cpdn_control/vcpkg.json)
+- [vcpkg-configuration.json](/home/glenn/github/cpdn_control/vcpkg-configuration.json)
+- `vcpkg_triplets/`
 
-Install and build the boinc library to a directory **outside** this repository and note the install path.
+This keeps the BOINC version pinned for the repo and avoids relying on a shared manual BOINC build used by other repositories.
 
 The boinczip library is no longer used as this repository contains an improved compression/zip library.
 The boinczip library is a buggy code that should not be used.
 
-In short, outside this repo do:
-```
-    git clone https://github.com/BOINC/boinc.git
-    cd boinc
-    ./_autosetup
-    ./configure --disable-server --disable-fcgi --disable-manager --disable-client  \
-                --enable-libraries --disable-boinczip  \
-                --prefix=/PATH_TO_BOINC_INSTALL/boinc-install  \
-                CXXFLAGS='-O2'
-    make install
-    cd ..
+### Preferred: use `vcpkg`
+
+1. Clone and bootstrap `vcpkg` outside this repo:
+
+```bash
+git clone https://github.com/microsoft/vcpkg.git /PATH/TO/vcpkg
+git -C /PATH/TO/vcpkg checkout 197fa8bf282e537136e4cf196af167e7f79be07b
+/PATH/TO/vcpkg/bootstrap-vcpkg.sh
 ```
 
-This installs the boinc libraries and include files to the directory specified in the `--prefix` argument.
-Change the value of prefix to suit.
-It's preferable not to install into the same directory as the source. 
-When compiling the control application, specify the location of the include files using the -I argument and the 
-libraries using -L argument on the compiler command line (see the CMakeLists.txt file in the top dir).
+On Windows, use `bootstrap-vcpkg.bat` instead of `bootstrap-vcpkg.sh`.
+
+2. Configure this repo with the `vcpkg` toolchain and the repo-owned triplet:
+
+Linux:
+
+```bash
+cmake -S . -B build \
+  -DCMAKE_TOOLCHAIN_FILE=/PATH/TO/vcpkg/scripts/buildsystems/vcpkg.cmake \
+  -DVCPKG_TARGET_TRIPLET=x64-linux-cpdn-static
+```
+
+Windows:
+
+```powershell
+cmake -S . -B build `
+  -DCMAKE_TOOLCHAIN_FILE=C:\PATH\TO\vcpkg\scripts\buildsystems\vcpkg.cmake `
+  -DVCPKG_TARGET_TRIPLET=x64-windows-cpdn-static
+```
+
+The manifest currently declares `boinc` as the BOINC dependency.
+
+BOINC version policy:
+
+- the default BOINC version is pinned by the repo's `vcpkg` baseline
+- if a BOINC release needs to be rolled back, prefer a `vcpkg` manifest override for `boinc`
+- keep the manual `BOINC_DIR` path as fallback only if the `vcpkg` route is unavailable or broken
+
+### Fallback: manual BOINC build
+
+If you need to bypass `vcpkg`, build BOINC outside this repo and point CMake at it with `BOINC_DIR`.
+
+In short, outside this repo do:
+
+```bash
+git clone https://github.com/BOINC/boinc.git
+cd boinc
+./_autosetup
+./configure --disable-server --disable-fcgi --disable-manager --disable-client \
+            --enable-libraries --disable-boinczip \
+            --prefix=/PATH_TO_BOINC_INSTALL/boinc-install \
+            CXXFLAGS='-O2'
+make install
+cd ..
+```
+
+Then configure `cpdn_control` with:
+
+```bash
+cmake -S . -B build -DBOINC_DIR=/PATH_TO_BOINC_INSTALL/boinc-install
+```
 
 ## Prerequisite: ZipLib and cpdn_zip library
 
@@ -144,21 +187,38 @@ The test model is built when the control application is built using CMake (see b
 CMake is used to build the controller application. Ensure the prerequisite steps
 above have been completed.
 
-BOINC libraries: These can either be specified by editing the CMakeLists.txt file directly
-and changing the line:
-```
-set(BOINC_DIR "../boinc-8.0.2-x86_64" CACHE STRING "Root directory of BOINC install." )
-```
-Or make a temporary change on the cmake command line by using the -DBOINC_DIR argument.
+Preferred BOINC path on Linux:
+
+- `vcpkg` manifest mode with `x64-linux-cpdn-static`
+
+Fallback BOINC path on Linux:
+
+- manual `BOINC_DIR` configure override
 
 #### Steps to build
 
 In the top level directory:
-1. mkdir build (or remove it for fresh build).
-2. cd build
-3. cmake ..
-4. cmake --build . --verbose    # omit --verbose if not interested in compile commands
-5. ctest -V                     # see below for more details
+1. build `cpdn_zip`:
+
+```bash
+cmake -S zip -B zip/build -DCMAKE_INSTALL_PREFIX=zip/install
+cmake --build zip/build --target install
+```
+
+2. configure the controller with `vcpkg`:
+
+```bash
+cmake -S . -B build \
+  -DCMAKE_TOOLCHAIN_FILE=/PATH/TO/vcpkg/scripts/buildsystems/vcpkg.cmake \
+  -DVCPKG_TARGET_TRIPLET=x64-linux-cpdn-static
+```
+
+3. build and test:
+
+```bash
+cmake --build build --verbose    # omit --verbose if not interested in compile commands
+ctest --test-dir build -V
+```
 
 This creates 3 executables in the build directory:
 ```
@@ -176,7 +236,7 @@ The version number of the executable is best left as-is and changed when transfe
 
 ### Windows
 
-Supported as of commit : 312a18d8721 (April/2026)
+Windows now uses the same repo-local `vcpkg` BOINC path, with the `x64-windows-cpdn-static` triplet.
 
 #### macOS
 

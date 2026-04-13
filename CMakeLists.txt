@@ -35,6 +35,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 option(CPDN_BUILD_UNIT_TESTS "Build the unit test executable and register unit tests." ON)
 option(CPDN_BUILD_FUNCTIONAL_TESTS "Register functional tests." ON)
+if (APPLE)
+    set(_CPDN_REQUIRE_STATIC_BOINC_DEFAULT OFF)
+else()
+    set(_CPDN_REQUIRE_STATIC_BOINC_DEFAULT ON)
+endif()
+option(CPDN_REQUIRE_STATIC_BOINC "Require BOINC static libraries for supported deployment builds." ${_CPDN_REQUIRE_STATIC_BOINC_DEFAULT})
+option(CPDN_LINK_RELEASE_STATIC "Link the Linux release controller executable statically." ON)
+unset(_CPDN_REQUIRE_STATIC_BOINC_DEFAULT)
 
 # Enforce 64-bit builds on Windows.
 if (WIN32 AND CMAKE_SIZEOF_VOID_P LESS 8)
@@ -80,20 +88,20 @@ set(DEBUG_OUTPUT_NAME   "cpdn_control_${CMAKE_PROJECT_VERSION}_${PLATFORM}-debug
 
 # Compiler configuration
 if (MSVC)
-    set(RELEASE_COMPILE_OPTIONS /W3 CACHE STRING "Compile options for release target.")
-    set(RELEASE_LINK_OPTIONS    ""   CACHE STRING "Linker options for release target.")
-    set(DEBUG_COMPILE_OPTIONS   /W3 CACHE STRING "Compile options for debug target.")
-    set(DEBUG_LINK_OPTIONS      ""   CACHE STRING "Linker options for debug target.")
+    set(CPDN_RELEASE_COMPILE_OPTIONS /W3)
+    set(CPDN_RELEASE_LINK_OPTIONS)
+    set(CPDN_DEBUG_COMPILE_OPTIONS /W3)
+    set(CPDN_DEBUG_LINK_OPTIONS)
 else()
-    set(RELEASE_COMPILE_OPTIONS -g -Wall CACHE STRING "Compile options for release target.")
-    set(RELEASE_LINK_OPTIONS    ""     CACHE STRING "Linker options for release target.")
-    set(DEBUG_COMPILE_OPTIONS   -fsanitize=address -ggdb3 -Wall CACHE STRING "Compile options for debug target.")
-    set(DEBUG_LINK_OPTIONS      -fsanitize=address      CACHE STRING "Linker options for debug target.")
+    set(CPDN_RELEASE_COMPILE_OPTIONS -g -Wall)
+    set(CPDN_RELEASE_LINK_OPTIONS)
+    set(CPDN_DEBUG_COMPILE_OPTIONS -fsanitize=address -ggdb3 -Wall)
+    set(CPDN_DEBUG_LINK_OPTIONS -fsanitize=address)
     if (NOT APPLE)
-        list(APPEND RELEASE_COMPILE_OPTIONS -pthread)
-        list(APPEND DEBUG_COMPILE_OPTIONS -pthread)
-        if (NOT RELEASE_LINK_OPTIONS)
-            set(RELEASE_LINK_OPTIONS -static)
+        list(APPEND CPDN_RELEASE_COMPILE_OPTIONS -pthread)
+        list(APPEND CPDN_DEBUG_COMPILE_OPTIONS -pthread)
+        if (CPDN_LINK_RELEASE_STATIC)
+            list(APPEND CPDN_RELEASE_LINK_OPTIONS -static)
         endif()
     endif()
 endif()
@@ -200,12 +208,12 @@ target_compile_definitions(cpdn_control PUBLIC
 # Configure release and debug targets using the helper function
 # (If more executables are added, keep using add_cpdn_executable to stay consistent.)
 add_cpdn_executable(${RELEASE_TARGET_NAME} ./src/cpdn_main.cpp ${RELEASE_OUTPUT_NAME} 
-                    "${RELEASE_COMPILE_OPTIONS}" 
-                    "${RELEASE_LINK_OPTIONS}")
+                    "${CPDN_RELEASE_COMPILE_OPTIONS}" 
+                    "${CPDN_RELEASE_LINK_OPTIONS}")
 
 add_cpdn_executable(${DEBUG_TARGET_NAME} ./src/cpdn_main.cpp ${DEBUG_OUTPUT_NAME}
-                    "${DEBUG_COMPILE_OPTIONS}" 
-                    "${DEBUG_LINK_OPTIONS}")
+                    "${CPDN_DEBUG_COMPILE_OPTIONS}" 
+                    "${CPDN_DEBUG_LINK_OPTIONS}")
 
 # Test model executable - standalone program for simulating the atmospheric model
 add_executable(test_model ./models/test/test_model.cpp)

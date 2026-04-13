@@ -1,4 +1,4 @@
-name: Windows Build Probe
+name: Windows Build
 
 on:
   workflow_dispatch:
@@ -7,10 +7,10 @@ env:
   BUILD_TYPE: Release
   VCPKG_ROOT: ${{ github.workspace }}/vcpkg
   VCPKG_COMMIT: 197fa8bf282e537136e4cf196af167e7f79be07b
-  VCPKG_TRIPLET: x64-windows-static
+  VCPKG_TRIPLET: x64-windows-cpdn-static
 
 jobs:
-  windows_build_probe:
+  windows_build:
     runs-on: windows-latest
 
     steps:
@@ -22,7 +22,7 @@ jobs:
         with:
           path: |
             ${{ env.VCPKG_ROOT }}
-          key: windows-vcpkg-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('.github/workflows/windows_build_probe.yml') }}
+          key: windows-vcpkg-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_triplets/*.cmake', '.github/workflows/windows_build.yml') }}
 
       - name: Bootstrap vcpkg
         shell: pwsh
@@ -49,7 +49,7 @@ jobs:
       - name: Install BOINC via vcpkg
         shell: pwsh
         run: |
-          & "$env:VCPKG_ROOT\vcpkg.exe" install "boinc:$env:VCPKG_TRIPLET" 2>&1 `
+          & "$env:VCPKG_ROOT\vcpkg.exe" install --x-manifest-root="$env:GITHUB_WORKSPACE" --triplet="$env:VCPKG_TRIPLET" 2>&1 `
             | Tee-Object -FilePath logs/vcpkg_install_boinc.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -94,10 +94,10 @@ jobs:
             | Tee-Object -FilePath logs/controller_ctest.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Upload Windows probe logs
+      - name: Upload Windows build logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           overwrite: true
-          name: windows-build-probe-logs
+          name: windows-build-logs
           path: logs

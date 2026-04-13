@@ -2,7 +2,7 @@
 
 Target: Windows 10+, x86_64, MSVC/Visual Studio.
 
-This note tracks the current state of the Windows port after the recent controller refactors. The repo now has a usable Windows compile-probe workflow and a platform-specific child-process seam, but it is still not ready for a full Windows BOINC runtime.
+This note tracks the current state of the Windows port after the recent controller refactors. The repo now has a usable Windows build workflow and a platform-specific child-process seam, but it is still not ready for a full Windows BOINC runtime.
 
 ## Current status
 
@@ -10,9 +10,10 @@ Already in place:
 
 - CMake derives a Windows platform triplet of `x86_64-pc-windows-msvc` and rejects 32-bit Windows builds.
 - BOINC library discovery in `cmake/BoincConfig.cmake` accepts Windows-style `.lib` files.
-- `cmake/BoincConfig.cmake` now also supports a Windows BOINC package path via `find_package(boinc CONFIG)`, while keeping the existing manual `BOINC_DIR` fallback for non-vcpkg builds.
-- The repo has a manual Windows compile-probe workflow at `.github/workflows/windows_build_probe.yml`.
-- That workflow now bootstraps `vcpkg` under `${{ github.workspace }}/vcpkg`, installs a real BOINC package, builds `unit_tests`, and is configured to run the full Windows unit test suite.
+- `cmake/BoincConfig.cmake` now prefers a BOINC package path via `find_package(boinc CONFIG)` and keeps the existing manual `BOINC_DIR` fallback for non-`vcpkg` builds.
+- The repo has a manual Windows build workflow at `.github/workflows/windows_build.yml`.
+- The repo now has checked-in `vcpkg` metadata in `vcpkg.json`, `vcpkg-configuration.json`, and `vcpkg_triplets/`.
+- That workflow now bootstraps `vcpkg` under `${{ github.workspace }}/vcpkg`, installs BOINC through the repo-local manifest, uses the repo-owned Windows static triplet, builds `unit_tests`, and is configured to run the full Windows unit test suite.
 - Linux-specific compile and link flags such as `-pthread`, `-static`, and `-fsanitize=address` are not applied to the main controller targets on Windows.
 - `test_model` now uses platform-aware compile options instead of unconditional `-g -Wall`.
 - `lib/cpdn_cpu_time.cpp` has a Windows implementation using `GetProcessTimes`.
@@ -31,7 +32,8 @@ The current Windows workflow is still not a full runtime-validation job, but it 
 Current Windows dependency path:
 
 - `vcpkg` bootstrapped in the workflow
-- BOINC installed from the pinned vcpkg port
+- BOINC installed from the repo-local pinned `vcpkg` manifest
+- repo-owned static Windows triplet used for BOINC linkage
 - `unit_tests` built and run in the workflow
 - functional tests disabled
 
@@ -89,7 +91,7 @@ The current workflow now compiles and runs unit tests against a real BOINC packa
 - end-to-end controller behavior under a Windows BOINC-style task layout
 - runtime behavior of the new Job Object suspend/resume and tree-termination logic under real model workloads
 
-To move beyond the probe:
+To move beyond the current build-only validation:
 
 - keep the vcpkg-based BOINC path working and stable in CI
 - validate the re-enabled full Windows unit-test run in CI
@@ -107,7 +109,7 @@ Known follow-up areas:
 
 ## Next practical milestones
 
-The current Windows workflow is still useful as a development probe:
+The current Windows workflow is still useful as a development build/test path:
 
 - trigger it manually
 - inspect the uploaded build logs

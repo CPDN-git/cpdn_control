@@ -13,6 +13,7 @@ a base class for each model type.
 
 [![Controller CI](https://github.com/CPDN-git/cpdn_control/actions/workflows/controller_ci.yml/badge.svg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/controller_ci.yml)
 [![CodeQL Advanced](https://github.com/CPDN-git/cpdn_control/actions/workflows/codeql.yml/badge.svg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/codeql.yml)
+[![Windows Build](https://github.com/CPDN-git/cpdn_control/actions/workflows/windows_build_probe.yml/badge.svg?branch=win_port_vpkg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/windows_build_probe.yml)
 
 A number of prerequisite libraries are required detailed below.
 

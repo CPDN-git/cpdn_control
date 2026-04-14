@@ -9,7 +9,7 @@ Clone/bootstrap the pinned vcpkg checkout used by this repo and optionally
 install the repo manifest dependencies for a chosen triplet.
 
 Options:
-  --vcpkg-root DIR   vcpkg checkout path. Default: /home/glenn/github/vcpkg
+  --vcpkg-root DIR   vcpkg checkout path. Default: \$HOME/github/vcpkg
   --triplet NAME     Install manifest dependencies for this triplet after bootstrap
   --skip-install     Bootstrap vcpkg only; do not run `vcpkg install`
   --force-bootstrap  Run the bootstrap step even if the vcpkg executable already exists
@@ -21,7 +21,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 manifest_root="${repo_root}/vcpkg"
 
-vcpkg_root="/home/glenn/github/vcpkg"
+vcpkg_root="${HOME}/github/vcpkg"
+# pinned commit to ensure consistency
 vcpkg_commit="197fa8bf282e537136e4cf196af167e7f79be07b"
 triplet=""
 skip_install="0"

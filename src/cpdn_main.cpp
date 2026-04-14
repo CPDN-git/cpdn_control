@@ -332,40 +332,56 @@ static UploadSendResult zip_and_send_upload( const BoincConfig& bconfig, BoincRu
 
 
 /**
- * @brief Parse and validate the --nthreads argument from app_config.xml.
- * 
- * @param app_config_nthreads The string value of the nthreads argument.
- * @param nthreads Altered number of threads as a string.
+ * @brief Parse and validate an optional trailing --nthreads argument from app_config.xml.
+ *
+ * @param argc Program argument count.
+ * @param argv Program argument vector.
+ * @param nthreads In/out thread count. Caller seeds the default from BOINC init_data.xml.
+ * @param used_app_config_nthreads True when a valid app_config.xml override was applied.
  * @param err_msg Error string if parsing fails.
- * @returns True if the nthreads argument was valid and changed, false otherwise.
+ * @returns True when the optional override was handled successfully, false on parse failure.
  */
-static bool get_app_config_nthreads( const std::string& app_config_nthreads, std::string& nthreads, std::string& err_msg )
+static bool get_app_config_nthreads( int argc, char** argv, int& nthreads, bool& used_app_config_nthreads, std::string& err_msg )
 {
     err_msg.clear();
-    if ( app_config_nthreads.empty() ) {
-        std::cerr << "Warning. --nthreads argument present but has no value! Ignoring.\n";
-    } else {
-        // GC. The best max as parallel efficiency markedly drops after this many threads, even at T319.
-        int max_threads = 8;
-        int min_threads = 1;    // minimum number of threads.
-        int ithreads = -1;
+    used_app_config_nthreads = false;
 
-        std::string nthreads_value = app_config_nthreads;
-        if ( !parse_int( nthreads_value, ithreads, err_msg ) ) {
-            std::cerr << "Warning. --nthreads argument must be a valid integer! " << err_msg << '\n';
-            return false;
-        }
-
-        if ( ithreads > max_threads ) {
-            std::cerr << "Warning. --nthreads value too high. Setting to max number of threads : " << max_threads << '\n';
-            nthreads = std::to_string( max_threads );
-        } else if ( ithreads < min_threads ) {
-            std::cerr << "Warning. --nthreads is too low for this configuration. Minimum #threads is 2. Resetting.\n";
-            nthreads = std::to_string( min_threads );
-        }
+    if ( argc < 2 ) {
         return true;
     }
-    return false;
+
+    if ( std::string( argv[argc - 1] ) == "--nthreads" ) {
+        std::cerr << "Warning. --nthreads argument present but has no value! Ignoring.\n";
+        return true;
+    }
+
+    if ( argc < 3 || std::string( argv[argc - 2] ) != "--nthreads" ) {
+        return true;
+    }
+
+    // GC. The best max as parallel efficiency markedly drops after this many threads, even at T319.
+    int max_threads = 8;
+    int min_threads = 1;    // minimum number of threads.
+    int requested_nthreads = -1;
+
+    std::string nthreads_value = argv[argc - 1];
+    if ( !parse_int( nthreads_value, requested_nthreads, err_msg ) ) {
+        std::cerr << "Warning. --nthreads argument must be a valid integer! " << err_msg << '\n';
+        return false;
+    }
+
+    used_app_config_nthreads = true;
+    nthreads = requested_nthreads;
+
+    if ( requested_nthreads > max_threads ) {
+        std::cerr << "Warning. --nthreads value too high. Setting to max number of threads : " << max_threads << '\n';
+        nthreads = max_threads;
+    } else if ( requested_nthreads < min_threads ) {
+        std::cerr << "Warning. --nthreads is too low for this configuration. Minimum #threads is 1. Resetting.\n";
+        nthreads = min_threads;
+    }
+
+    return true;
 }
 
 
@@ -539,22 +555,15 @@ int main( int argc, char** argv )
 
     // Check for optional '--nthreads <value>' at end of arg list optionally set by app_config.xml on user's machine.
 
-    std::string nthreads = std::to_string( bconfig.ncpus );    // default number of threads from BOINC init_data.xml
-    int nthreads_int = bconfig.ncpus;
-    if ( std::string( argv[argc - 2] ) == "--nthreads" ) {
-        std::string app_config_nthreads = argv[argc - 1];
-        if ( !get_app_config_nthreads( app_config_nthreads, nthreads, err_msg ) && !err_msg.empty() ) {
-            std::cerr << "..Failed to parse --nthreads argument: " << err_msg << '\n';
-            return finish_task( tstate, 1 );
-        }
-        std::string nthreads_value = nthreads;
-        if ( !parse_int( nthreads_value, nthreads_int, err_msg ) ) {
-            std::cerr << "..Failed to parse --nthreads value: " << err_msg << '\n';
-            return finish_task( tstate, 1 );
-        }
-        bconfig.ncpus = nthreads_int;
-        std::cerr << "Using --nthreads from app_config.xml: " << nthreads << '\n';
+    bool using_app_config_nthreads = false;
+    if ( !get_app_config_nthreads( argc, argv, bconfig.ncpus, using_app_config_nthreads, err_msg ) ) {
+        std::cerr << "..Failed to parse --nthreads argument: " << err_msg << '\n';
+        return finish_task( tstate, 1 );
     }
+    if ( using_app_config_nthreads ) {
+        std::cerr << "Using --nthreads from app_config.xml: " << bconfig.ncpus << '\n';
+    }
+    std::string nthreads = std::to_string( bconfig.ncpus );    // default or resolved thread count for model launch
 
     double num_days = 0.0;
     if ( !parse_double_arg( tconfig.filename_fclen, num_days, err_msg ) ) {
@@ -878,7 +887,7 @@ int main( int argc, char** argv )
         }
 
         // Calculate the fraction done
-        tstate.fraction_done = model_frac_done( static_cast<double>( tstate.current_step ), static_cast<double>( total_steps ), nthreads_int );
+        tstate.fraction_done = model_frac_done( static_cast<double>( tstate.current_step ), static_cast<double>( total_steps ), bconfig.ncpus );
 
         if ( !bconfig.standalone ) {
             // If the current model step is at a restart interval, update restart cpu time for boinc.

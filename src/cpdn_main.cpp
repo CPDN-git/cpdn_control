@@ -20,8 +20,8 @@
 #include "boinc/boinc_api.h"
 #include "boinc/error_numbers.h"
 
-#include "cpdn_control.h"
 #include "control_start.h"
+#include "cpdn_control.h"
 #include "cpdn_zip.h"
 #include "external_diagnostics.h"
 #include "lib/cpdn_cpu_time.h"
@@ -51,6 +51,20 @@ constexpr int LOOP_DELAY_DEFAULT = 7;
 constexpr int LOOP_DELAY_FAST = 1;
 
 
+// Data structures for capturing rich context for error reporting.
+struct UploadSendResult {
+    bool ok = true;
+    bool archive_created = false;
+    bool upload_attempted = false;
+    fs::path archive_path;
+    std::string logical_upload_name;
+    std::string error_step;
+    int error_code = 0;
+    int finish_code = 1;
+    std::string error_message;
+};
+
+
 // ------------------------------------------
 // --------------- Functions ----------------
 
@@ -78,6 +92,7 @@ static std::unique_ptr<ModelControl> create_model_control( std::string_view mode
 
     return model;
 }
+
 
 /**
  * @brief Report failure to stage an input file with as much context as possible.
@@ -139,6 +154,9 @@ static void refresh_current_cpu_time( TaskState& tstate )
 }
 
 
+/**
+ * @brief Parse a string as a double and validate that entire string was consumed and the value is in range.
+ */
 static bool parse_double_arg( const std::string& text, double& value, std::string& err_msg )
 {
     char* end = nullptr;
@@ -161,20 +179,10 @@ static bool parse_double_arg( const std::string& text, double& value, std::strin
 }
 
 
+/**
+ * @brief Convert a model step count to elapsed model time in seconds based on the timestep interval.
+ */
 static double step_to_model_time( int step, int timestep_seconds ) { return static_cast<double>( step ) * static_cast<double>( timestep_seconds ); }
-
-
-struct UploadSendResult {
-    bool ok = true;
-    bool archive_created = false;
-    bool upload_attempted = false;
-    fs::path archive_path;
-    std::string logical_upload_name;
-    std::string error_step;
-    int error_code = 0;
-    int finish_code = 1;
-    std::string error_message;
-};
 
 
 /**
@@ -202,8 +210,59 @@ static void report_upload_send_failure( std::string_view context, const UploadSe
 }
 
 
-static int get_task_finish_code( const TaskState& tstate, const BoincRuntime& bruntime );
-static bool sleep_with_boinc_poll( BoincRuntime& bruntime, bool standalone, int total_seconds );
+/**
+ * @brief Determine the appropriate exit code for the task based on the child process status and BOINC runtime status.
+ *       Returns 0 for normal completion or if a quit request was made, 
+ *       and 1 for abort/no heartbeat or if the child process did not exit normally.
+ */
+static int get_task_finish_code( const TaskState& tstate, const BoincRuntime& bruntime )
+{
+    if ( bruntime.client_status.quit_request ) {
+        return 0;
+    }
+    if ( bruntime.client_status.abort_request || bruntime.client_status.no_heartbeat ) {
+        return 1;
+    }
+    if ( tstate.child_status == 1 ) {
+        return 0;
+    }
+    return 1;
+}
+
+
+/**
+ * @brief Sleep in short chunks and poll BOINC state between chunks.
+ *        Returns false if BOINC status changed and the caller should handle it.
+ *
+ * @note This function only polls BOINC. It does not stop, resume, or kill the child.
+ */
+static bool sleep_with_boinc_poll( BoincRuntime& bruntime, const bool standalone, const int total_seconds )
+{
+    if ( total_seconds <= 0 ) {
+        return true;
+    }
+
+    auto deadline = chrono::steady_clock::now() + chrono::seconds( total_seconds );
+    constexpr auto poll_interval = chrono::seconds( 5 );
+
+    while ( chrono::steady_clock::now() < deadline ) {
+        auto remaining = chrono::duration_cast<chrono::seconds>( deadline - chrono::steady_clock::now() );
+        auto sleep_chunk = std::min( poll_interval, remaining );
+        sleep_seconds( static_cast<double>( sleep_chunk.count() ) );
+
+        if ( standalone ) {
+            continue;
+        }
+
+        boinc_get_status( &bruntime.client_status );
+        if ( bruntime.client_status.suspended || bruntime.client_status.quit_request || bruntime.client_status.abort_request ||
+             bruntime.client_status.no_heartbeat ) {
+            return false;
+        }
+    }
+
+    return true;
+}
 
 
 /**
@@ -269,60 +328,6 @@ static UploadSendResult zip_and_send_upload( const BoincConfig& bconfig, BoincRu
     }
 
     return result;
-}
-
-
-/**
- * @brief Determine the appropriate exit code for the task based on the child process status and BOINC runtime status.
- *       Returns 0 for normal completion or if a quit request was made, 
- *       and 1 for abort/no heartbeat or if the child process did not exit normally.
- */
-static int get_task_finish_code( const TaskState& tstate, const BoincRuntime& bruntime )
-{
-    if ( bruntime.client_status.quit_request ) {
-        return 0;
-    }
-    if ( bruntime.client_status.abort_request || bruntime.client_status.no_heartbeat ) {
-        return 1;
-    }
-    if ( tstate.child_status == 1 ) {
-        return 0;
-    }
-    return 1;
-}
-
-/**
- * @brief Sleep in short chunks and poll BOINC state between chunks.
- *        Returns false if BOINC status changed and the caller should handle it.
- *
- * @note This function only polls BOINC. It does not stop, resume, or kill the child.
- */
-static bool sleep_with_boinc_poll( BoincRuntime& bruntime, const bool standalone, const int total_seconds )
-{
-    if ( total_seconds <= 0 ) {
-        return true;
-    }
-
-    auto deadline = chrono::steady_clock::now() + chrono::seconds( total_seconds );
-    constexpr auto poll_interval = chrono::seconds( 5 );
-
-    while ( chrono::steady_clock::now() < deadline ) {
-        auto remaining = chrono::duration_cast<chrono::seconds>( deadline - chrono::steady_clock::now() );
-        auto sleep_chunk = std::min( poll_interval, remaining );
-        sleep_seconds( static_cast<double>( sleep_chunk.count() ) );
-
-        if ( standalone ) {
-            continue;
-        }
-
-        boinc_get_status( &bruntime.client_status );
-        if ( bruntime.client_status.suspended || bruntime.client_status.quit_request || bruntime.client_status.abort_request ||
-             bruntime.client_status.no_heartbeat ) {
-            return false;
-        }
-    }
-
-    return true;
 }
 
 

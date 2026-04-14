@@ -16,51 +16,55 @@ The code is under active development.
 [![Windows Build](https://github.com/CPDN-git/cpdn_control/actions/workflows/windows_build.yml/badge.svg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/windows_build.yml)
 [![macOS Build](https://github.com/CPDN-git/cpdn_control/actions/workflows/macos_build.yml/badge.svg)](https://github.com/CPDN-git/cpdn_control/actions/workflows/macos_build.yml)
 
-A number of prerequisite libraries are required detailed below. The `vcpkg` application
-from Microsoft is used to manage cross-platform dependencies. It must be installed 
-before building the controller.
+The `vcpkg` application from Microsoft is used to manage cross-platform dependencies. 
+It must be installed before building the controller.
+
+A number of prerequisite libraries are required detailed below. 
 
 ## Prerequisite: BOINC library
 
-The preferred BOINC dependency path is now the repo-local `vcpkg` manifest in:
+The preferred BOINC dependency path is the repo-local `vcpkg` manifest in:
 
-- [vcpkg/README.md](/home/glenn/github/cpdn_control/vcpkg/README.md)
-- [vcpkg/vcpkg.json](/home/glenn/github/cpdn_control/vcpkg/vcpkg.json)
-- [vcpkg/vcpkg-configuration.json](/home/glenn/github/cpdn_control/vcpkg/vcpkg-configuration.json)
+- [vcpkg/README.md]($HOME/github/cpdn_control/vcpkg/README.md)
+- [vcpkg/vcpkg.json]($HOME/github/cpdn_control/vcpkg/vcpkg.json)
+- [vcpkg/vcpkg-configuration.json]($HOME/github/cpdn_control/vcpkg/vcpkg-configuration.json)
 - `vcpkg/triplets/`
 - `vcpkg/overlays/boinc/`
 
-This keeps the BOINC version set for the repo and avoids relying on a shared manual BOINC build.
+This keeps the BOINC version set for the repo across all build platforms 
+and avoids relying on separate manual BOINC builds.
 
 The repo also carries a small BOINC overlay port. This is a deliberate maintenance choice:
 
-- `cpdn_control` needs `boinc` and `boincapi`, but does not use BOINC's `boinc_zip`
-- this repo uses the in-repo `cpdn_zip` library instead
-- the upstream `vcpkg` BOINC port builds and exports `boinc_zip` anyway
-- keeping a small overlay lets the project skip that extra library on Linux, Windows, and macOS
+- `cpdn_control` needs `boinc` and `boincapi`, but does not use BOINC's `boinc_zip`.
+- this repo uses the in-repo `cpdn_zip` library instead.
+- the upstream `vcpkg` BOINC port builds and exports `boinc_zip` anyway.
+- keeping a small overlay lets the project skip that extra library on Linux, Windows, and macOS.
 
 Why this was done:
 
-- it keeps the BOINC dependency contract aligned with what the code actually uses
-- it removes an unnecessary build product from all supported platforms
-- it avoids platform-specific failures in BOINC's `boinc_zip` path, including the Apple Silicon `vcpkg` failure
-- it slightly reduces dependency build time and package surface area
+- it keeps the BOINC dependency contract aligned with what the code actually uses.
+- it removes an unnecessary build product from all supported platforms.
+- it avoids platform-specific failures in BOINC's `boinc_zip` path, including the Apple Silicon `vcpkg` failure.
+- it slightly reduces dependency build time and package surface area.
 
 Maintenance note:
 
-- this introduces a small repo-local divergence from the upstream `vcpkg` BOINC port
-- that divergence is intentional and should be reviewed whenever the set BOINC 
-version or `vcpkg` baseline is updated
+- this introduces a small repo-local divergence from the upstream `vcpkg` BOINC port.
+- that divergence is intentional and should be reviewed whenever the set BOINC version or `vcpkg` baseline is updated.
 
-### Preferred: use `vcpkg`
+## Install `vcpkg` and build boinc
 
-Install `vcpkg` outside this repo. Recommended local path:
+vcpkg is a cross-platform Microsoft tool that manages the installation of external libraries
+for builds using CMake. It first needs to be cloned and correctly configured for the build platform.
+
+Install `vcpkg` outside this repo. Recommended install path:
 
 ```bash
 ${HOME}/github/vcpkg
 ```
 
-The simplest setup step is now:
+The simplest way to setup vcpkg AND build the BOINC library is using the script provided in this repository:
 
 ```bash
 scripts/setup_vcpkg.sh --triplet x64-linux-cpdn-static
@@ -68,6 +72,10 @@ scripts/setup_vcpkg.sh --triplet x64-linux-cpdn-static
 
 This clones `vcpkg` to `${HOME}/github/vcpkg`, checks out the repo-pinned commit, 
 bootstraps it, and installs the repo manifest dependencies from `cpdn_control/vcpkg/` for the selected triplet.
+The manifest currently only includes the BOINC library.  We use a fixed (pinned) vcpkg commit to ensure
+consistency across platforms and avoid problems from vcpkg changes. This should be tested from time to time.
+
+The `static` label indicates static linking.
 
 If you prefer a different checkout location:
 
@@ -75,7 +83,12 @@ If you prefer a different checkout location:
 scripts/setup_vcpkg.sh --vcpkg-root /PATH/TO/vcpkg --triplet x64-linux-cpdn-static
 ```
 
-2. Configure this repo with the `vcpkg` toolchain and the repo-owned triplet:
+## Configure CMake for cpdn_control with vcpkg BOINC installation.
+
+In the top-level directory of this repo, create a directory `build` if it doesn't exist.
+This is the location of all the built executables and tests.
+
+Configure this repo (ie. cpdn_control) with the `vcpkg` toolchain and the repo-owned triplet:
 
 Linux:
 
@@ -93,6 +106,14 @@ cmake -S . -B build `
   -DVCPKG_TARGET_TRIPLET=x64-windows-cpdn-static
 ```
 
+MacOS:
+
+```bash
+cmake -S . -B build \
+  -DCMAKE_TOOLCHAIN_FILE=/PATH/TO/vcpkg/scripts/buildsystems/vcpkg.cmake \
+  -DVCPKG_TARGET_TRIPLET=arm64-osx-cpdn
+```
+
 The manifest currently declares `boinc` as the BOINC dependency.
 That dependency is resolved through the repo's BOINC overlay port so 
 the installed package exports only the BOINC libraries this project uses.
@@ -105,7 +126,7 @@ BOINC version policy:
 
 ## Convenience Scripts
 
-For Linux development, the repo now includes thin bash wrappers under `scripts/`:
+For Linux development, the repo now includes bash helper scripts under `scripts/`:
 
 - [scripts/build_with_vcpkg.sh](${HOME}/github/cpdn_control/scripts/build_with_vcpkg.sh)
 - [scripts/build_with_local_boinc.sh](${HOME}/github/cpdn_control/scripts/build_with_local_boinc.sh)

@@ -26,6 +26,7 @@ ModelControlInputData make_parse_error( const fs::path& source_file, std::string
 
 }    // namespace
 
+
 // Implementations of the pure virtual functions from ModelControl
 
 /**

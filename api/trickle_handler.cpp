@@ -138,7 +138,7 @@ int TrickleHandler::process_trickle( double current_cpu_time, int current_step )
 
 /**
  * @brief Calculate the trickle frequency based on timestep (secs) and total number of model timesteps.
- *        Returns a trickle frequency of 10% of model run, with a minimum of every 24 model hours.
+ *        Returns a positive trickle frequency in model steps, with a minimum of one trickle every 24 model hours.
  * @param timestep     The model timestep in seconds.
  * @param total_nsteps The total number of steps in the model run.
  * @return The trickle frequency in model steps.
@@ -152,7 +152,7 @@ int TrickleHandler::get_trickle_frequency( int timestep, int total_timesteps )
 
     double freq = static_cast<double>( total_timesteps ) * static_cast<double>( trickle_percent ) / 100.0;
     auto trickle_freq = static_cast<int>( freq );
-    if ( trickle_freq < freq_min ) {
+    if ( trickle_freq < freq_min || trickle_freq <= 0 ) {
         trickle_freq = freq_min;
     }
     return trickle_freq;

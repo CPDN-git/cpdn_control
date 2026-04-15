@@ -869,10 +869,12 @@ int main( int argc, char** argv )
                 }    // end of upload new output file block.
 
                 // Trickle every required fraction of the model run
-                if ( ( observed_step % trickle_freq ) == 0 ) {
-                    std::cerr << "Sending progress trickle message to CPDN at step: " << observed_step << '\n';
-                    trickler.process_trickle( tstate.current_cpu_time, observed_step );
-                    tstate.last_trickle_step = observed_step;
+                if ( trickle_freq > 0 ) {
+                    if ( ( observed_step % trickle_freq ) == 0 ) {
+                        std::cerr << "Sending progress trickle message to CPDN at step: " << observed_step << '\n';
+                        trickler.process_trickle( tstate.current_cpu_time, observed_step );
+                        tstate.last_trickle_step = observed_step;
+                    }
                 }
 
                 tstate.last_completed_step = observed_step;

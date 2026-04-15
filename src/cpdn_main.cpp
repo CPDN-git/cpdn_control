@@ -564,7 +564,6 @@ int main( int argc, char** argv )
         std::cerr << "Using --nthreads from app_config.xml: " << bconfig.ncpus << '\n';
     }
     std::string nthreads = std::to_string( bconfig.ncpus );    // default or resolved thread count for model launch
-    const int upload_interval = tconfig.upload_interval;       // controller upload policy in model steps
 
     double num_days = 0.0;
     if ( !parse_double_arg( tconfig.filename_fclen, num_days, err_msg ) ) {
@@ -579,9 +578,9 @@ int main( int argc, char** argv )
     // Create temp upload folder for moving the results to and uploading the results from.
     // BOINC measures the disk usage on the slots directory so we must move all results out of this folder
     std::string upload_dir = bconfig.project_dir + bconfig.app_name + "_" + tconfig.workunit;
-    std::cerr << "Location of temp folder: " << upload_dir << '\n';
+    std::cerr << "Location of temp upload folder: " << upload_dir << '\n';
     if ( !ensure_directory( upload_dir, &err_msg ) ) {
-        std::cerr << "..Failed to create temp folder for results: " << err_msg << std::endl;
+        std::cerr << "..Failed to create temp upload folder for results: " << err_msg << std::endl;
         return finish_task( tstate, 1 );
     }
 
@@ -691,11 +690,11 @@ int main( int argc, char** argv )
 
     // upload_interval is controller/task policy in model steps.
     // upload_interval == 0 disables intermediate and final result uploads, but does not disable trickles.
-    if ( upload_interval < 0 || timestep_seconds <= 0 ) {
+    if ( tconfig.upload_interval < 0 || timestep_seconds <= 0 ) {
         std::cerr << "..upload_interval or timestep_seconds is invalid" << std::endl;
         return finish_task( tstate, 1 );
     }
-    if ( upload_interval == 0 ) {
+    if ( tconfig.upload_interval == 0 ) {
         std::cerr << "Result uploads disabled (--upload_interval=0). Trickle messages remain enabled.\n";
     }
 
@@ -816,8 +815,8 @@ int main( int argc, char** argv )
 
                 // upload_interval == 0 disables result uploads, but trickles still run below.
                 // GC. TODO. Why not combine adding to the zip file with moving the result files above?
-                if ( upload_interval > 0 &&
-                     ( ( current_step_time - tstate.last_upload_time ) >= ( static_cast<double>( upload_interval ) * timestep_seconds ) ) &&
+                if ( tconfig.upload_interval > 0 &&
+                     ( ( current_step_time - tstate.last_upload_time ) >= ( static_cast<double>( tconfig.upload_interval ) * timestep_seconds ) ) &&
                      ( current_step_time < total_length_of_simulation_time ) ) {
                     // Create an intermediate results zip file
                     zfl.clear();
@@ -963,7 +962,7 @@ int main( int argc, char** argv )
         }
     }
 
-    if ( upload_interval > 0 ) {
+    if ( tconfig.upload_interval > 0 ) {
         zfl.clear();
 
         // Add the model log files to the final upload

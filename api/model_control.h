@@ -118,7 +118,7 @@ class ModelControl {
     // Use init list here, no need to use 'setters' in constructor.
     // C++ note. Allows keeping member variables private while still enabling derived classes to use init-list construction.
     ModelControl( std::string_view vendor, std::string_view model, std::string_view version, std::string_view exe )
-        : vendor_name( vendor ), model_name( model ), model_version( version ), executable( exe ){};
+        : vendor_name( vendor ), model_name( model ), model_version( version ), executable( exe ) {};
 
     // Setters for model information (protected so only accessible to derived classes)
 
@@ -129,7 +129,6 @@ class ModelControl {
 
   private:
     // Private member variables (not visible to derived classes; derived classes should use getters/setters)
-    // Relates to the model XML input file read by the controller.
     // C++ note. Order here must match the order in ModelControl().
 
     std::string vendor_name;      // e.g. "ECMWF"

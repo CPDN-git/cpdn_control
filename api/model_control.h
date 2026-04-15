@@ -32,7 +32,6 @@ struct ModelControlInputData {
     int timestep_seconds = 0;    // UTSTEP
     int output_interval = 0;     // NFRPOS raw value: +ve model steps, -ve hours
     int restart_interval = 0;    // NFRRES raw value: +ve model steps, -ve hours
-    int upload_interval = 0;     // current controller semantics still treat this as step-based
     int total_steps = 0;         // CUSTOP
     double forecast_length_time = 0.0;
 };

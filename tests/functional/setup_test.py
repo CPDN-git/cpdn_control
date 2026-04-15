@@ -91,7 +91,6 @@ if __name__ == "__main__":
     member_id = config["member_id"]
     batch_id = config["batch_id"]
     wu_name = config["wu_name"]
-    upload_interval = config["upload_interval"]
     timestep = float(config["timestep"])
     nfrres = config["nfrres"]
     nfrpos = config["nfrpos"]
@@ -171,7 +170,6 @@ if __name__ == "__main__":
     # HORIZ_RESOLUTION = 159 : Horizontal resolution l159
     # VERT_RESOLUTION = 91 : Vertical resolution 91 levels
     # GRID_TYPE = l_2 : Reduced Gaussian grid type l_2
-    # UPLOAD_INTERVAL = Upload interval in model steps
     # UTSTEP = Model time step in seconds
     # CUSTOP = Total number of model time steps to run
     # CNMEXP = Dummy experiment ID
@@ -187,7 +185,6 @@ if __name__ == "__main__":
                          "!HORIZ_RESOLUTION=159\n" +\
                          "!VERT_RESOLUTION=91\n" +\
                          "!GRID_TYPE=l_2\n" +\
-                         f"!UPLOAD_INTERVAL={upload_interval}\n" +\
                          "\n"+\
                          "&NAMARG\n"+\
                          f" UTSTEP={timestep:.1f},\n" +\

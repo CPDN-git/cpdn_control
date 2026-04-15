@@ -26,7 +26,8 @@ ParseResult parse_args( int argc, char** argv )
         ->capture_default_str();
     cpdn->add_option( "--filename_fclen", result.filename_fclen, "Forecast-length token embedded in CPDN download filenames." )
         ->capture_default_str();
-    cpdn->add_option( "--upload_interval", result.upload_interval, "Upload interval in seconds" )
+    // upload_interval is controller/task policy in model steps; 0 disables result uploads but does not disable trickles.
+    cpdn->add_option( "--upload_interval", result.upload_interval, "Upload interval in model steps" )
         ->check( CLI::NonNegativeNumber )
         ->capture_default_str();
 
@@ -50,22 +51,24 @@ ParseResult parse_args( int argc, char** argv )
 
 bool process_args( const ParseResult& parse_result, TaskConfig& tconfig, std::string& err_msg )
 {
-    // These CLI values are CPDN task/download naming metadata only.
-    // They are used to resolve the app-bundle filename before the model control input is parsed.
-    // They are not passed to the model and do not define model runtime behaviour.
+    // These CLI values are controller/task configuration.
+    // The filename metadata is used to resolve the app bundle before the model control input is parsed.
+    // upload_interval is controller upload policy, not model configuration.
     tconfig.filename_startdate = parse_result.filename_startdate;
     tconfig.exptid.clear();                      // Model experiment id is read later from CNMEXP in fort.4.
     tconfig.memberid = parse_result.memberid;    // CPDN's unique member id (umid)
     tconfig.batch = parse_result.batch;          // batch id
     tconfig.workunit = parse_result.workunit;    // workunit id
     tconfig.filename_fclen = parse_result.filename_fclen;
+    tconfig.upload_interval = parse_result.upload_interval;
 
     std::cerr << "Parsed arguments:\n"
               << "  filename_startdate: " << tconfig.filename_startdate << '\n'
               << "  memberid: " << tconfig.memberid << '\n'
               << "  batch: " << tconfig.batch << '\n'
               << "  workunit: " << tconfig.workunit << '\n'
-              << "  filename_fclen: " << tconfig.filename_fclen << '\n';
+              << "  filename_fclen: " << tconfig.filename_fclen << '\n'
+              << "  upload_interval: " << tconfig.upload_interval << '\n';
 
     std::vector<std::string> missing_args;
     if ( tconfig.filename_startdate.empty() ) {

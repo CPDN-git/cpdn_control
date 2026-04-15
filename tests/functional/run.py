@@ -170,6 +170,7 @@ def main():
     workunit = config["wu_name"]
     member_id = config["member_id"]
     forecast_length = int(config["forecast_length"])
+    upload_interval = int(config["upload_interval"])
 
     # create a copy for the correct forecast length.
     ensure_forecast_zip(slot0_dir, member_id, batch_id, forecast_length)
@@ -194,6 +195,7 @@ def main():
         f"--workunit={workunit}",
         f"--memberid={member_id}",
         f"--filename_fclen={forecast_length}",
+        f"--upload_interval={upload_interval}",
     ]
 
     if running_in_github_actions():

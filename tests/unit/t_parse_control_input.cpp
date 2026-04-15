@@ -46,7 +46,6 @@ int t_parse_control_input()
                                       "!HORIZ_RESOLUTION=159\n"
                                       "!VERT_RESOLUTION=91\n"
                                       "!GRID_TYPE=l_2\n"
-                                      "!UPLOAD_INTERVAL=6\n"
                                       "\n"
                                       "&NAMARG\n"
                                       " UTSTEP=3600.0,\n"
@@ -71,14 +70,13 @@ int t_parse_control_input()
     std::cout << "Subtest: parse valid control input\n";
     auto parsed = model.parse_control_input();
     if ( !parsed.ok || parsed.horiz_resolution != "159" || parsed.vert_resolution != "91" || parsed.grid_type != "l_2" ||
-         parsed.experiment_id != "ABCD" || parsed.upload_interval != 6 || parsed.timestep_seconds != 3600 || parsed.output_interval != 6 ||
-         parsed.restart_interval != -24 || parsed.total_steps != 48 || parsed.forecast_length_time != 172800.0 ) {
+         parsed.experiment_id != "ABCD" || parsed.timestep_seconds != 3600 || parsed.output_interval != 6 || parsed.restart_interval != -24 ||
+         parsed.total_steps != 48 || parsed.forecast_length_time != 172800.0 ) {
         TEST_FAIL;
         std::cout << "Unexpected parse result:" << " ok=" << parsed.ok << ", horiz=" << parsed.horiz_resolution << ", vert=" << parsed.vert_resolution
-                  << ", grid=" << parsed.grid_type << ", exptid=" << parsed.experiment_id << ", upload=" << parsed.upload_interval
-                  << ", timestep_seconds=" << parsed.timestep_seconds << ", output_interval=" << parsed.output_interval
-                  << ", restart_interval=" << parsed.restart_interval << ", total_steps=" << parsed.total_steps
-                  << ", forecast_length_time=" << parsed.forecast_length_time << "\n";
+                  << ", grid=" << parsed.grid_type << ", exptid=" << parsed.experiment_id << ", timestep_seconds=" << parsed.timestep_seconds
+                  << ", output_interval=" << parsed.output_interval << ", restart_interval=" << parsed.restart_interval
+                  << ", total_steps=" << parsed.total_steps << ", forecast_length_time=" << parsed.forecast_length_time << "\n";
         fs::current_path( original_cwd );
         fs::remove_all( tmp_dir, ec );
         return EXIT_FAILURE;

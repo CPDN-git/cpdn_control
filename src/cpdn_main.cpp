@@ -564,6 +564,7 @@ int main( int argc, char** argv )
         std::cerr << "Using --nthreads from app_config.xml: " << bconfig.ncpus << '\n';
     }
     std::string nthreads = std::to_string( bconfig.ncpus );    // default or resolved thread count for model launch
+    const int upload_interval = tconfig.upload_interval;       // controller upload policy in model steps
 
     double num_days = 0.0;
     if ( !parse_double_arg( tconfig.filename_fclen, num_days, err_msg ) ) {
@@ -623,7 +624,6 @@ int main( int argc, char** argv )
     const std::string& horiz_resolution = control_input.horiz_resolution;
     const std::string& vert_resolution = control_input.vert_resolution;
     const std::string& grid_type = control_input.grid_type;
-    const int upload_interval = control_input.upload_interval;
     const int timestep_seconds = control_input.timestep_seconds;
     const int output_interval = control_input.output_interval;
     int restart_interval_steps = control_input.restart_interval;
@@ -641,7 +641,6 @@ int main( int argc, char** argv )
               << " vert_resolution: " << vert_resolution << '\n'
               << " grid_type: " << grid_type << '\n'
               << " exptid (CNMEXP): " << tconfig.exptid << '\n'
-              << " Upload_interval: " << upload_interval << '\n'
               << " UTSTEP (timestep interval): " << timestep_seconds << '\n'
               << " NFRPOS (frequency of model output): " << output_interval << '\n'
               << " NFRRES (frequency of restarts/checkpoints): " << restart_interval_steps << '\n'
@@ -690,10 +689,14 @@ int main( int argc, char** argv )
         return finish_task( tstate, 1 );
     }
 
-    // Current controller behaviour still interprets UPLOAD_INTERVAL as a step-based quantity.
-    if ( upload_interval <= 0 || timestep_seconds <= 0 ) {
+    // upload_interval is controller/task policy in model steps.
+    // upload_interval == 0 disables intermediate and final result uploads, but does not disable trickles.
+    if ( upload_interval < 0 || timestep_seconds <= 0 ) {
         std::cerr << "..upload_interval or timestep_seconds is invalid" << std::endl;
         return finish_task( tstate, 1 );
+    }
+    if ( upload_interval == 0 ) {
+        std::cerr << "Result uploads disabled (--upload_interval=0). Trickle messages remain enabled.\n";
     }
 
     std::cerr << "Total_length_of_simulation_time: " << total_length_of_simulation_time << '\n';
@@ -811,9 +814,10 @@ int main( int argc, char** argv )
 
                 const double current_step_time = step_to_model_time( observed_step, timestep_seconds );
 
-                // Upload a new upload file if the end of an upload_interval has been reached
+                // upload_interval == 0 disables result uploads, but trickles still run below.
                 // GC. TODO. Why not combine adding to the zip file with moving the result files above?
-                if ( ( ( current_step_time - tstate.last_upload_time ) >= ( static_cast<double>( upload_interval ) * timestep_seconds ) ) &&
+                if ( upload_interval > 0 &&
+                     ( ( current_step_time - tstate.last_upload_time ) >= ( static_cast<double>( upload_interval ) * timestep_seconds ) ) &&
                      ( current_step_time < total_length_of_simulation_time ) ) {
                     // Create an intermediate results zip file
                     zfl.clear();
@@ -947,18 +951,6 @@ int main( int argc, char** argv )
 
     boinc_begin_critical_section();
 
-    zfl.clear();
-
-    // Add the model log files to the final upload
-    for ( const auto& logfile : model_ctrl->get_log_filenames() ) {
-        fs::path logpath = bconfig.slot_path;
-        logpath /= logfile;
-        if ( fs::exists( logpath ) ) {
-            zfl.push_back( logpath.string() );
-            std::cerr << "Adding model log file to the upload zipfile: " << logpath << '\n';
-        }
-    }
-
     // Move the final model result files ready for upload
     auto output_files = model_ctrl->get_output_filenames( tstate.last_completed_step, tconfig.exptid );
     run_step_diagnostics( diag_exe, bconfig.slot_path, output_files );
@@ -969,33 +961,47 @@ int main( int argc, char** argv )
         }
     }
 
-    // Read the remaining list of files from the temp upload directory and
-    // add the matching files to the upload zip
-    retval = add_upload_files( upload_dir, zfl, model_ctrl->get_output_filename_regex() );
-    if ( retval ) {
-        std::cerr << "Adding model output files to the upload zip failed!\n";
+    if ( upload_interval > 0 ) {
+        zfl.clear();
+
+        // Add the model log files to the final upload
+        for ( const auto& logfile : model_ctrl->get_log_filenames() ) {
+            fs::path logpath = bconfig.slot_path;
+            logpath /= logfile;
+            if ( fs::exists( logpath ) ) {
+                zfl.push_back( logpath.string() );
+                std::cerr << "Adding model log file to the upload zipfile: " << logpath << '\n';
+            }
+        }
+
+        // Read the remaining list of files from the temp upload directory and
+        // add the matching files to the upload zip
+        retval = add_upload_files( upload_dir, zfl, model_ctrl->get_output_filename_regex() );
+        if ( retval ) {
+            std::cerr << "Adding model output files to the upload zip failed!\n";
+        }
+
+        if ( !zfl.empty() ) {
+            std::string upload_file_name = "upload_file_" + std::to_string( tstate.upload_file_number ) + ".zip";
+            if ( !bconfig.standalone ) {
+                std::cerr << "Uploading the final file: " << upload_file_name << '\n';
+            }
+
+            auto upload_result = zip_and_send_upload( bconfig, bruntime, tstate, result_base_name, tstate.upload_file_number, zfl );
+            if ( !upload_result.ok ) {
+                report_upload_send_failure( "final upload", upload_result );
+                return finish_task( tstate, upload_result.finish_code );
+            }
+            if ( upload_result.upload_attempted ) {
+                std::cerr << "Finished the upload of the final file" << '\n';
+            }
+        }
     }
 
-    if ( !zfl.empty() ) {
-        std::string upload_file_name = "upload_file_" + std::to_string( tstate.upload_file_number ) + ".zip";
-        if ( !bconfig.standalone ) {
-            std::cerr << "Uploading the final file: " << upload_file_name << '\n';
-        }
-
-        auto upload_result = zip_and_send_upload( bconfig, bruntime, tstate, result_base_name, tstate.upload_file_number, zfl );
-        if ( !upload_result.ok ) {
-            report_upload_send_failure( "final upload", upload_result );
-            return finish_task( tstate, upload_result.finish_code );
-        }
-        if ( upload_result.upload_attempted ) {
-            std::cerr << "Finished the upload of the final file" << '\n';
-        }
-
-        // Produce final trickle it's the same timestep as the last main loop trickle
-        if ( !bconfig.standalone && tstate.current_step > tstate.last_trickle_step ) {
-            refresh_current_cpu_time( tstate );
-            trickler.process_trickle( tstate.current_cpu_time, tstate.current_step );
-        }
+    // upload_interval == 0 disables result uploads, but trickles remain enabled.
+    if ( !bconfig.standalone && tstate.current_step > tstate.last_trickle_step ) {
+        refresh_current_cpu_time( tstate );
+        trickler.process_trickle( tstate.current_cpu_time, tstate.current_step );
     }
 
     //---------------- Cleanup ---------------------------------------

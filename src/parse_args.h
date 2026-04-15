@@ -13,7 +13,7 @@ struct ParseResult {
     std::string app_name = "";
     std::string filename_startdate = "";
     std::string filename_fclen = "";    // Forecast-length token embedded in CPDN download filenames; not passed to the model.
-    int upload_interval = 0;
+    int upload_interval = 0;          // Controller upload interval in model steps; 0 disables result uploads.
 
     int exit_code = 0;
     bool ok = true;

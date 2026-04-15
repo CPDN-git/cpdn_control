@@ -92,7 +92,7 @@ ModelControlInputData OpenIFSControl::parse_control_input() const
         return make_parse_error( control_input_file, "open", "", "failed to open model control input file" );
     }
 
-    const std::unordered_set<std::string> header_keys = { "HORIZ_RESOLUTION", "VERT_RESOLUTION", "GRID_TYPE", "UPLOAD_INTERVAL" };
+    const std::unordered_set<std::string> header_keys = { "HORIZ_RESOLUTION", "VERT_RESOLUTION", "GRID_TYPE" };
     std::string input_line;
     std::string parsed_key;
     std::string parsed_value;
@@ -130,11 +130,6 @@ ModelControlInputData OpenIFSControl::parse_control_input() const
             parsed.vert_resolution = parsed_value;
         } else if ( parsed_key == "GRID_TYPE" ) {
             parsed.grid_type = parsed_value;
-        } else if ( parsed_key == "UPLOAD_INTERVAL" ) {
-            tmpstr = parsed_value;
-            if ( !parse_int( tmpstr, parsed.upload_interval, err_msg ) ) {
-                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
-            }
         } else if ( parsed_key == "UTSTEP" ) {
             tmpstr = parsed_value;
             if ( auto decimal_point = tmpstr.find( '.' ); decimal_point != std::string::npos ) {
@@ -178,9 +173,6 @@ ModelControlInputData OpenIFSControl::parse_control_input() const
     }
     if ( parsed.experiment_id.empty() ) {
         missing_fields.push_back( "CNMEXP" );
-    }
-    if ( parsed.upload_interval == 0 ) {
-        missing_fields.push_back( "UPLOAD_INTERVAL" );
     }
     if ( parsed.timestep_seconds <= 0 ) {
         missing_fields.push_back( "UTSTEP" );

@@ -53,6 +53,7 @@ struct TaskConfig {
     std::string filename_startdate;    // CPDN filename token used to resolve task download filenames; not passed to the model.
     std::string exptid;                // Model experiment ID currently populated from CNMEXP for controller/model filename handling.
     std::string filename_fclen;        // CPDN filename token used to resolve task download filenames; not passed to the model.
+    int upload_interval = 0;           // Upload interval in model steps; 0 disables result uploads but not trickles.
 };
 
 

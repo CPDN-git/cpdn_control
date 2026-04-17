@@ -556,12 +556,18 @@ int main( int argc, char** argv )
     // Check for optional '--nthreads <value>' at end of arg list optionally set by app_config.xml on user's machine.
 
     bool using_app_config_nthreads = false;
-    if ( !get_app_config_nthreads( argc, argv, bconfig.ncpus, using_app_config_nthreads, err_msg ) ) {
+    int app_config_nthreads = 0;
+    if ( !get_app_config_nthreads( argc, argv, app_config_nthreads, using_app_config_nthreads, err_msg ) ) {
         std::cerr << "..Failed to parse --nthreads argument: " << err_msg << '\n';
         return finish_task( tstate, 1 );
     }
     if ( using_app_config_nthreads ) {
-        std::cerr << "Using --nthreads from app_config.xml: " << bconfig.ncpus << '\n';
+        // GC. Enabling this causes the model to deadlock. Not clear why as this just
+        //     sets the env variable. I suspect there's some boinc interaction that
+        //     prohibits the number of threads to go up. TODO.
+        //std::cerr << "Using --nthreads from app_config.xml: " << bconfig.ncpus << '\n';
+        //bconfig.ncpus = app_config_nthreads;
+        std::cerr << "Note: Ignoring app_config.xml avg_ncpus override. Not currently working.\n";
     }
     std::string nthreads = std::to_string( bconfig.ncpus );    // default or resolved thread count for model launch
 

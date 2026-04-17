@@ -667,6 +667,8 @@ int main( int argc, char** argv )
         return finish_task( tstate, 1 );    // should terminate, the model won't run.
     }
 
+    // -------------- Initialise the task state and progress tracking ----------------
+
     // Initialise the ProgressFile handler
     ProgressFileHandler progress_file( bconfig.slot_path );
 
@@ -734,7 +736,7 @@ int main( int argc, char** argv )
         return finish_task( tstate, 1 );
     }
 
-    // GC. -- EXPERIMENTAL CODE
+    // ------------- EXPERIMENTAL DIAGNOSTICS CODE SETUP ---------------
     // This code is hardwired while I test the use of external diagnostics program
     // The test is Chris O'Reilly's batches where we run a modified sptogp to compute
     // the zonal mean zonal wind.
@@ -748,13 +750,14 @@ int main( int argc, char** argv )
     } else {
         // Set execute permissions on diagnostics program if it exists (as above)
         if ( !set_exec_perms( diag_exe.string() ) ) {
-            std::cerr << "..Cannot set execute permission for diagnostics program: " << diag_exe << std::endl;
-            return finish_task( tstate, 1 );
+            std::cerr << "..WARNING. Will not run diagnostics. Cannot set execute permission for diagnostics program: " << diag_exe << std::endl;
+            diag_exe.clear();
         }
     }
-    // -- END OF EXPERIMENTAL CODE
+    // -- END OF EXPERIMENTAL CODE --
 
     // --------------- Start the model process -----------------
+
     std::cerr << "Launching model executable: " << model_exe << std::endl;
     tstate.child_process = launch_process( bconfig.project_dir, bconfig.slot_path, model_exe.string(), nthreads );
 

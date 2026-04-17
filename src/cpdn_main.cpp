@@ -627,7 +627,6 @@ int main( int argc, char** argv )
     tconfig.exptid = control_input.experiment_id;
 
     const std::string& horiz_resolution = control_input.horiz_resolution;
-    const std::string& vert_resolution = control_input.vert_resolution;
     const std::string& grid_type = control_input.grid_type;
     const int timestep_seconds = control_input.timestep_seconds;
     const int output_interval = control_input.output_interval;
@@ -643,7 +642,6 @@ int main( int argc, char** argv )
 
     std::cerr << "Values read from model control input are: \n"
               << " Horizontal_resolution: " << horiz_resolution << '\n'
-              << " Vertical_resolution: " << vert_resolution << '\n'
               << " Horizontal grid type: " << grid_type << '\n'
               << " Experiment ID: " << tconfig.exptid << '\n'
               << " Timestep interval (secs): " << timestep_seconds << '\n'
@@ -923,7 +921,9 @@ int main( int argc, char** argv )
         tstate.child_status = check_child_status( tstate.child_process, tstate.child_status, tstate.exit_code );
     }
 
-    //----- End of main loop
+    //--------- End of main loop ---------
+
+    // -------- Task cleanup & final uploads -----------
 
     // Do NOT execute a return until the final upload is done after the boinc_end_critical_section() below.
 
@@ -1028,7 +1028,7 @@ int main( int argc, char** argv )
             return finish_task( tstate, get_task_finish_code( tstate, bruntime ) );
         }
     }
-    std::cerr << "Task finished." << std::endl;
 
-    return finish_task( tstate, get_task_finish_code( tstate, bruntime ) );    // I could return the task return code here?
+    std::cerr << "Task finished." << std::endl;
+    return finish_task( tstate, get_task_finish_code( tstate, bruntime ) );
 }

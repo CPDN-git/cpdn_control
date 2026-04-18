@@ -1,0 +1,3 @@
+/home/glenn/github/eccodes/ecbuild-subbuild/CMakeFiles/ecbuild-populate.dir
+/home/glenn/github/eccodes/ecbuild-subbuild/CMakeFiles/edit_cache.dir
+/home/glenn/github/eccodes/ecbuild-subbuild/CMakeFiles/rebuild_cache.dir

@@ -1,0 +1,240 @@
+#!/bin/sh
+# (C) Copyright 2005- ECMWF.
+#
+# This software is licensed under the terms of the Apache Licence Version 2.0
+# which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
+#
+# In applying this licence, ECMWF does not waive the privileges and immunities granted to it by
+# virtue of its status as an intergovernmental organisation nor does it submit to any jurisdiction.
+#
+
+. ./include.ctest.sh
+
+# ---------------------------------------------------------
+# Tests for data quality checks
+# ---------------------------------------------------------
+label="grib_data_quality_test"
+tempOut=temp.1.${label}.out
+tempLog=temp.1.${label}.log
+tempErr=temp.${label}.err
+tempGrib1=temp.${label}.grib1
+tempGrib2=temp.${label}.grib2
+
+sample_g1=$ECCODES_SAMPLES_PATH/GRIB1.tmpl
+sample_g2=$ECCODES_SAMPLES_PATH/GRIB2.tmpl
+sample_ccsds=$ECCODES_SAMPLES_PATH/ccsds_grib2.tmpl
+
+# Start with clean environment
+unset ECCODES_GRIB_DATA_QUALITY_CHECKS
+unset ECCODES_EXTRA_DEFINITION_PATH
+
+echo "Data quality checks enabled. Packing samples should work"
+# -------------------------------------------------------------
+export ECCODES_GRIB_DATA_QUALITY_CHECKS=1
+${tools_dir}/grib_copy -r $sample_g1 /dev/null
+${tools_dir}/grib_copy -r $sample_g2 /dev/null
+unset ECCODES_GRIB_DATA_QUALITY_CHECKS
+
+# These input files are 2m temperature with min=221.76 and max=311.619
+input1=${data_dir}/reduced_gaussian_surface.grib1
+input2=${data_dir}/reduced_gaussian_surface.grib2
+grib_check_key_equals $input1 paramId 167
+grib_check_key_equals $input2 paramId 167
+
+echo "Data quality checks disabled. Create huge values for temperature..."
+# --------------------------------------------------------------------------
+${tools_dir}/grib_set -s scaleValuesBy=100 $input1 $tempOut
+${tools_dir}/grib_set -s scaleValuesBy=100 $input2 $tempOut
+
+echo "Data quality checks enabled. Repacking should fail..."
+# -----------------------------------------------------------
+export ECCODES_GRIB_DATA_QUALITY_CHECKS=1
+export ECCODES_DEBUG=-1
+set +e
+${tools_dir}/grib_copy -r $tempOut /dev/null  2>$tempErr
+status=$?
+set -e
+[ $status -ne 0 ]
+grep -q 'more than the allowable limit' $tempErr
+unset ECCODES_DEBUG
+
+
+echo "Data quality checks enabled but only as a warning. Repacking should pass..."
+# --------------------------------------------------------------------------------
+export ECCODES_GRIB_DATA_QUALITY_CHECKS=2
+${tools_dir}/grib_copy -r $tempOut /dev/null  2>$tempErr
+grep -q 'more than the allowable limit' $tempErr
+
+
+echo "Data quality checks enabled. Scaling should fail..."
+# --------------------------------------------------------
+export ECCODES_GRIB_DATA_QUALITY_CHECKS=1
+set +e
+${tools_dir}/grib_set -s scaleValuesBy=100 $input1 $tempOut 2>$tempErr
+status=$?
+set -e
+[ $status -ne 0 ]
+grep -q 'GRIB1 simple packing: unable to set values' $tempErr
+grep -q 'allowable limit' $tempErr
+
+set +e
+${tools_dir}/grib_set -s scaleValuesBy=100 $input2 $tempOut 2>$tempErr
+status=$?
+set -e
+[ $status -ne 0 ]
+grep -q 'GRIB2 simple packing: unable to set values' $tempErr
+grep -q 'allowable limit' $tempErr
+
+
+echo "Test limits which are doubles..."
+# -------------------------------------
+pid=262140 # has limits -3.5 and +3.5
+${tools_dir}/grib_set -s paramId=$pid $input2 $tempGrib2
+minval2=`${tools_dir}/grib_get -p param_value_min:d $tempGrib2`
+maxval2=`${tools_dir}/grib_get -p param_value_max:d $tempGrib2`
+[ "$minval2" = "-3.5" ]
+[ "$maxval2" = "3.5"  ]
+
+# Decode as strings
+grib_check_key_equals $tempGrib2 'param_value_min:s,param_value_max:s' '-3.5 3.5'
+
+set +e
+${tools_dir}/grib_set -s scaleValuesBy=1.1 $tempGrib2 $tempOut 2>$tempErr
+stat2=$?
+set -e
+[ $stat2 -ne 0 ]
+
+# Should succeed. Change paramId first and then scale all values down
+${tools_dir}/grib_set -s paramId=$pid,scaleValuesBy=0.01 $input2 $tempOut
+
+echo "Test close to the limit..."
+# ---------------------------------
+# The GRIB2 sample has max values of 273. We need to use 1 for this test
+${tools_dir}/grib_set -s paramId=$pid,values=1 $sample_g2 $tempGrib2
+${tools_dir}/grib_set -s scaleValuesBy=3 $tempGrib2 $tempOut # OK
+set +e
+${tools_dir}/grib_set -s scaleValuesBy=3.6 $tempGrib2 $tempOut
+status=$?
+set -e
+[ $status -ne 0 ]
+
+
+# echo "Test limits with steps..."
+# # -----------------------------
+input1=$ECCODES_SAMPLES_PATH/reduced_gg_pl_48_grib1.tmpl
+# # This sets the minimum to 1.1 but this should work for step=0
+# ${tools_dir}/grib_set -s step=0,paramId=121,scaleValuesBy=1.1 $input1 $tempOut
+
+# # But it must fail when step > 0
+# set +e
+# ${tools_dir}/grib_set -s step=6,paramId=121,scaleValuesBy=1.1 $input1 $tempOut
+# status=$?
+# set -e
+# [ $status -ne 0 ]
+
+
+echo "Override the defaults..."
+# ------------------------------
+tempDir=tempdir.$label
+rm -rf $tempDir
+mkdir -p $tempDir
+# Change limits for 2m temperature (grid-point) and Temperature (spectral)
+cat > $tempDir/param_limits.def <<EOF
+ constant default_min_val = -1e9 : double_type, hidden;
+ constant default_max_val = +1e9 : double_type, hidden;
+ concept param_value_min(default_min_val) {
+    0   = { paramId=167; }
+    273 = { paramId=130; }
+ } : double_type, hidden;
+ concept param_value_max(default_max_val) {
+    40000 = { paramId=167; }
+    273   = { paramId=130; }
+ } : double_type, hidden;
+EOF
+
+
+# Set limits based on a more complex condition
+# ---------------------------------------------
+export ECCODES_GRIB_DATA_QUALITY_CHECKS=1
+export ECCODES_EXTRA_DEFINITION_PATH=$test_dir/$tempDir
+cat > $tempDir/param_limits.def <<EOF
+ constant default_min_val = -1e9 : double_type, hidden;
+ constant default_max_val = +1e9 : double_type, hidden;
+ concept param_value_min(default_min_val) {
+    0 = { paramId=260509; }
+ } : double_type, hidden;
+ concept param_value_max(default_max_val) {
+    400  = { paramId=260509; }
+    1001 = { paramId=260509; one=(step % 2 == 0 && step > 4); }
+ } : double_type, hidden;
+EOF
+# Step of 12 satisfies the condition: it is even and > 4
+# The GRIB2 sample has max values of 273. We need to use 1 for this test
+${tools_dir}/grib_set -s paramId=260509,step=12,values=1,scaleValuesBy=1000 $sample_g2 $tempGrib2
+
+# Step of 0 doesn't satisfy the condition so will use 400
+# The GRIB2 sample has max values of 273. We need to use 1 for this test
+set +e
+${tools_dir}/grib_set -s paramId=260509,values=1,scaleValuesBy=1000 $sample_g2 $tempGrib2
+status=$?
+set -e
+[ $status -ne 0 ]
+unset ECCODES_EXTRA_DEFINITION_PATH
+
+
+# ECC-2141: Disable data quality checks when setting packingType
+# --------------------------------------------------------------
+if [ $HAVE_AEC -eq 1 ]; then
+   unset ECCODES_GRIB_DATA_QUALITY_CHECKS
+   input=${data_dir}/reduced_gaussian_surface.grib2
+   grib_check_key_equals $input packingType grid_simple
+   ${tools_dir}/grib_set -s scaleValuesBy=100 $input $tempOut
+   ECCODES_GRIB_DATA_QUALITY_CHECKS=1 ${tools_dir}/grib_set -s packingType=grid_ccsds $tempOut $tempGrib2 > $tempLog 2>&1
+   if [ -s $tempLog ]; then
+      # -s = True if file exists and has a size greater than zero
+      echo "Error: No output should have been generated!"
+      exit 1
+   fi
+   grib_check_key_equals $tempGrib2 packingType grid_ccsds
+fi
+
+
+# Check CCSDS encoding too
+# -------------------------
+if [ $HAVE_AEC -eq 1 ]; then
+   export ECCODES_GRIB_DATA_QUALITY_CHECKS=1
+   set +e
+   ${tools_dir}/grib_set -s scaleValuesBy=1000 $sample_ccsds $tempGrib2 2>$tempErr
+   status=$?
+   set -e
+   [ $status -ne 0 ]
+fi
+
+# Invalid shortName/name
+# -------------------------
+export ECCODES_GRIB_DATA_QUALITY_CHECKS=1
+input2=${data_dir}/reduced_gaussian_surface.grib2
+${tools_dir}/grib_set -s discipline=254 $input2 $tempOut
+grib_check_key_equals $tempOut 'shortName' 'unknown'
+set +e
+${tools_dir}/grib_set -s scaleValuesBy=2  $tempOut $tempGrib2 2>$tempErr
+status=$?
+set -e
+[ $status -ne 0 ]
+grep -q "Invalid metadata: shortName='unknown'" $tempErr
+
+# Invalid name (ECC-793)
+${tools_dir}/grib_set -s paramId=129080 $input2 $tempOut 2>$tempErr
+grib_check_key_equals $tempOut 'name' 'Experimental product'
+# Repacking causes the values to be set
+set +e
+${tools_dir}/grib_set -r -s paramId=129080 $input2 $tempOut 2>$tempErr
+status=$?
+set -e
+[ $status -ne 0 ]
+grep -q "Invalid metadata: name='Experimental product'" $tempErr
+
+
+# Clean up
+rm -rf $tempDir
+rm -f $tempOut $tempErr $tempGrib1 $tempGrib2 $tempLog

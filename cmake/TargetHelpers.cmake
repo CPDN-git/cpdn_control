@@ -15,7 +15,10 @@
 function(add_cpdn_executable target_name target_src output_name compile_opts link_opts)
     add_executable(${target_name} ${target_src})
     set_target_properties(${target_name} PROPERTIES OUTPUT_NAME ${output_name})
-    target_link_libraries(${target_name} PRIVATE cpdn_control)
+    target_link_libraries(${target_name} PRIVATE
+        cpdn_control
+        cpdn_openifs_deps
+    )
     
     if(compile_opts)
         set(_cpdn_compile_opts ${compile_opts})

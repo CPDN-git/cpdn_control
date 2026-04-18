@@ -123,6 +123,10 @@ configure_boinc(${BOINC_DIR})
 include(cmake/CPDNzipConfig.cmake)
 configure_cpdnzip()
 
+# --- CONFIGURATION FOR ecCodes (external package, OpenIFS only)
+include(cmake/EcCodesConfig.cmake)
+configure_eccodes()
+
 # Other packages required
 find_package(Threads REQUIRED)
 

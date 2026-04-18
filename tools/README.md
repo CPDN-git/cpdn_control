@@ -11,3 +11,9 @@ fmt : Modern formatting library for C++.
       Using MIT license.
       Vendored CMakeLists.txt includes a small local compatibility patch so
       it can be built by this project with CMake 3.16.
+
+eccodes : ECMWF GRIB file commands and libraries. Used by OpenIFS family of models
+      Cloned from Glenn Carver's fork of the ECMWF github eccodes repo.
+      Checkout eccodes version: 2.46.2
+      See CMake cache for list of options enabled.
+

@@ -5,7 +5,7 @@
 
 #include "cpdn_control.h"
 
-#include "../tools/CLI11/CLI/CLI.hpp"
+#include "../third_party/CLI11/CLI/CLI.hpp"
 
 ParseResult parse_args( int argc, char** argv )
 {

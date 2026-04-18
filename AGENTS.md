@@ -12,7 +12,7 @@ This repository builds the **CPDN controller** executable used to run/manage cli
 - `src/parse_args.h`, `src/parse_args.cpp`
   - CLI11-based command-line parsing for controller/task arguments.
   - The `--filename_startdate` and `--filename_fclen` options are CPDN filename-resolution metadata only; they are not authoritative model runtime controls.
-  - Uses vendored CLI11 headers under `tools/CLI11/`.
+  - Uses vendored CLI11 headers under `third_party/CLI11/`.
 - `src/cpdn_control.cpp`, `src/cpdn_control.h`
   - Core controller logic used by the release/debug executables and unit tests.
 - `api/model_input_manifest.h`

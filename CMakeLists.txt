@@ -132,7 +132,7 @@ find_package(Threads REQUIRED)
 set(FMT_DOC OFF CACHE BOOL "Disable fmt documentation targets." FORCE)
 set(FMT_TEST OFF CACHE BOOL "Disable fmt test targets." FORCE)
 set(FMT_INSTALL OFF CACHE BOOL "Disable fmt install targets." FORCE)
-add_subdirectory(tools/fmt)
+add_subdirectory(third_party/fmt)
 
 #--------------------------- Include paths -----------------------------------
 
@@ -142,7 +142,7 @@ set(LOCAL_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/lib
     ${CMAKE_CURRENT_SOURCE_DIR}/api
-    ${CMAKE_CURRENT_SOURCE_DIR}/tools/CLI11
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/CLI11
 )
 
 #--------------------------- Model control sources -----------------------------------

@@ -1,3 +1,0 @@
-meta ldas_configuration sprintf("%s-%s", modelVersion, targetFcstSystem ) : no_copy;
-
-alias mars.configuration = ldas_configuration ;

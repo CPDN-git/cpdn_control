@@ -1,8 +1,0 @@
-alias mars.anoffset=offsetToEndOf4DvarWindow;
-
-if ( grib2LocalSectionNumber == 45) {
- alias mars.number = perturbationNumber;
- alias mars.coeffindex = fourierCoefficientIndex;
-} else {
- alias mars.number=componentIndex;
-}

@@ -1,6 +1,0 @@
-build:
-  modules:
-    - ninja
-    - python3
-  parallel: 64
-

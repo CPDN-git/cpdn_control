@@ -15,16 +15,14 @@ The following decisions are treated as agreed for this planning stage:
 
 1. Do not wait for an upstream `vcpkg` port. ecCodes should be integrated as a
    repo-managed third-party dependency for now.
-2. Do not keep a nested git repository under `third_party/`.
+2. Do not keep a nested git repository under `tools/`.
 3. Keep any ecCodes fork and active development clone outside this repo.
-4. Vendor a clean source snapshot into `third_party/eccodes/`, following the
-   same general repo-owned pattern already used for third-party code under
-   `third_party/`.
+4. Vendor a clean source snapshot into `tools/eccodes/`, following the same
+   general repo-owned pattern already used for third-party code under `tools/`.
 5. Start with the C and C++ library use case only.
 6. Do not enable Fortran support.
 7. Do not enable NetCDF support.
-8. Enable AEC/CCSDS in the Linux integration path and require the host system
-   to provide the libaec development package.
+8. Do not enable AEC/CCSDS in the first integration pass.
 9. JPEG support is optional and should default to off unless the build proves
    materially simpler with it on.
 10. On Windows, attempt a static library build first. If that fails for clear
@@ -40,7 +38,7 @@ library configuration it actually wants on all three target platforms.
 
 For this repo, a vendored-source integration is the simpler first step because:
 
-- the repo already vendors third-party code under `third_party/`
+- the repo already vendors third-party code under `tools/`
 - ecCodes uses CMake upstream
 - the build options need deliberate platform-specific policy
 - Windows support includes caveats that should be validated directly before
@@ -67,6 +65,7 @@ Out of scope for the first integration pass:
 - redesigning the OpenIFS runtime layout for GRIB definition/sample files
 - enabling Fortran bindings
 - enabling NetCDF conversion features
+- enabling AEC/CCSDS support
 - adding a full `vcpkg` overlay port
 - solving every possible ecCodes optional-feature combination on Windows
 
@@ -80,7 +79,7 @@ That fork is useful if local fixes are needed for:
 - Windows static linking
 - CMake option cleanup
 - packaging fixes
-- AEC packaging and validation on non-Linux platforms
+- later AEC enablement work
 
 Keep the fork and working clone outside `cpdn_control`.
 
@@ -88,13 +87,13 @@ Keep the fork and working clone outside `cpdn_control`.
 
 Import a source snapshot into:
 
-- `third_party/eccodes/`
+- `tools/eccodes/`
 
 Do not import the `.git/` directory and do not use a git submodule.
 
 Add a small repo-local provenance file such as:
 
-- `third_party/eccodes/README.cpdn.md`
+- `tools/eccodes/README.cpdn.md`
 
 That file should record:
 
@@ -118,14 +117,9 @@ Initial configuration target:
 ```cmake
 -DENABLE_FORTRAN=OFF
 -DENABLE_NETCDF=OFF
--DENABLE_AEC=ON
+-DENABLE_AEC=OFF
 -DENABLE_JPG=OFF
 ```
-
-Linux host prerequisite:
-
-- install the libaec development package before configuring ecCodes
-- on Ubuntu this is `libaec-dev`
 
 Windows first attempt:
 
@@ -144,11 +138,11 @@ This stage is intended to answer one narrow question first:
 - can the core ecCodes C/C++ library be built reliably on Linux, Windows, and
   macOS with the feature set this project actually needs?
 
-### Stage 2: vendor ecCodes into `third_party/`
+### Stage 2: vendor ecCodes into `tools/`
 
 Once the constrained builds are understood:
 
-1. import the selected ecCodes snapshot into `third_party/eccodes/`
+1. import the selected ecCodes snapshot into `tools/eccodes/`
 2. add the provenance note
 3. keep any repo-local patches small and documented
 
@@ -162,7 +156,7 @@ Recommended initial shape:
 1. add a small CMake wrapper module under `cmake/`, for example
    `cmake/EcCodesConfig.cmake`, to centralise ecCodes-specific options
 2. set ecCodes cache variables explicitly before adding the subdirectory
-3. add `third_party/eccodes` with `EXCLUDE_FROM_ALL` if that works cleanly
+3. add `tools/eccodes` with `EXCLUDE_FROM_ALL` if that works cleanly
 4. expose a narrow imported or alias target for the rest of the repo to link
    against
 
@@ -170,7 +164,7 @@ The wrapper should own policy such as:
 
 - Fortran off
 - NetCDF off
-- AEC on for the current Linux path, with host libaec required
+- AEC off for phase 1
 - JPG off by default
 - Windows static-first policy
 - any install/test/docs options that should be disabled for repo builds
@@ -195,7 +189,7 @@ Suggested responsibilities:
 
 1. define an option such as `CPDN_ENABLE_ECCODES`
 2. define ecCodes build-policy defaults for this repo
-3. add `third_party/eccodes` to the build only when enabled
+3. add `tools/eccodes` to the build only when enabled
 4. expose:
    - include directories
    - the ecCodes library target to link
@@ -296,7 +290,7 @@ Important Windows assumptions for phase 1:
 
 - no Fortran
 - no NetCDF
-- AEC packaging remains to be validated explicitly
+- no AEC
 - no requirement to solve every optional codec up front
 
 ## Testing Plan
@@ -342,7 +336,7 @@ Exit criteria:
 
 ### Phase 1: source import
 
-1. import ecCodes snapshot into `third_party/eccodes/`
+1. import ecCodes snapshot into `tools/eccodes/`
 2. add provenance note
 3. add any minimal local patch set
 
@@ -375,6 +369,7 @@ Exit criteria:
 
 Potential follow-up work once baseline integration is stable:
 
+- AEC/CCSDS enablement
 - Windows static-build fixes if phase 1 had to use shared
 - improved runtime smoke tests
 - future reconsideration of `vcpkg` packaging
@@ -410,7 +405,7 @@ Mitigation:
 Mitigation:
 
 - keep fork outside the repo
-- record imported commit and patch summary in `third_party/eccodes/README.cpdn.md`
+- record imported commit and patch summary in `tools/eccodes/README.cpdn.md`
 - keep the local patch set minimal and reviewable
 
 ## Open Questions

@@ -234,16 +234,16 @@ more details.
 ## Prerequisite: fmt C++17 compatible library
 
 The fmt library is a modern formatting library that provides C++20 `std::format`-like functionality for C++17.
-It is in the repository under `third_party/fmt/` and does not require separate installation.
+It is in the repository under `tools/fmt/` and does not require separate installation.
 
 To obtain the fmt library, execute the following command in the top-level directory:
 
 ```bash
-cd third_party/fmt
+cd tools/fmt
 git clone https://github.com/fmtlib/fmt.git . --depth=1
 ```
 
-Alternatively, if you have already cloned this repository and the `third_party/fmt/` directory exists but is empty,
+Alternatively, if you have already cloned this repository and the `tools/fmt/` directory exists but is empty,
 run the same git clone command from within that directory. The CMake build system will automatically detect
 and configure fmt for use in the build.
 

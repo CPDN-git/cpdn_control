@@ -1,3 +1,0 @@
-include "mars/xwda.def";
-alias mars.number=perturbationNumber;
-alias mars.iteration = iterationNumber;

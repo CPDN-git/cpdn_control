@@ -12,7 +12,7 @@ This repository builds the **CPDN controller** executable used to run/manage cli
 - `src/parse_args.h`, `src/parse_args.cpp`
   - CLI11-based command-line parsing for controller/task arguments.
   - The `--filename_startdate` and `--filename_fclen` options are CPDN filename-resolution metadata only; they are not authoritative model runtime controls.
-  - Uses vendored CLI11 headers under `third_party/CLI11/`.
+  - Uses vendored CLI11 headers under `tools/CLI11/`.
 - `src/cpdn_control.cpp`, `src/cpdn_control.h`
   - Core controller logic used by the release/debug executables and unit tests.
 - `api/model_input_manifest.h`
@@ -26,8 +26,6 @@ This repository builds the **CPDN controller** executable used to run/manage cli
   - Model-specific helpers/implementations.
   - `models/test/` contains the `test_model` and controller glue used by functional tests.
   - `models/openifs/` contains OpenIFS helper utilities.
-  - OpenIFS can add an external ecCodes package dependency on Linux through
-    `cmake/EcCodesConfig.cmake`.
   - Built as an **object library** (`cpdn_models`) and folded into the main `cpdn_control` library (see `models/CMakeLists.txt`).
 - `lib/`
   - Shared utilities (filesystem helpers, CPU-time helpers, etc).
@@ -102,32 +100,6 @@ Build/install it first:
 - `cmake --build zip/build -j`
 - `cmake --build zip/build --target install`
 
-### 3) ecCodes (OpenIFS builds only, Linux for now)
-
-OpenIFS work now expects ecCodes to be built and installed outside this repo,
-then consumed through `find_package(eccodes CONFIG REQUIRED)`.
-
-This repo provides a helper script:
-
-- `scripts/build_eccodes.sh`
-
-That helper builds ecCodes from an external checkout such as
-`/home/glenn/github/eccodes`, uses the repo-local `cmake/Findlibaec.cmake`,
-and installs ecCodes into its configured prefix.
-
-Linux host prerequisite:
-
-- install `libaec-dev` before building ecCodes with `-DENABLE_AEC=ON`
-
-Controller configure examples:
-
-- `cmake -S . -B build -DCMAKE_PREFIX_PATH=/home/glenn/github/eccodes-install/2.46.2 -DCPDN_ENABLE_ECCODES=ON`
-- `cmake -S . -B build -Deccodes_DIR=/home/glenn/github/eccodes-install/2.46.2/lib/cmake/eccodes -DCPDN_ENABLE_ECCODES=ON`
-
-If ecCodes is not required for the build under test:
-
-- `cmake -S . -B build -DCPDN_ENABLE_ECCODES=OFF`
-
 ## Build the controller
 
 From repo root:
@@ -140,10 +112,6 @@ Equivalent manual CMake flow:
 
 - `cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=/PATH/TO/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-linux-cpdn-static`
 - `cmake --build build -j`
-
-OpenIFS builds that need ecCodes must also provide either `CMAKE_PREFIX_PATH`
-or `eccodes_DIR` for the installed ecCodes package and set
-`-DCPDN_ENABLE_ECCODES=ON`.
 
 Fallback manual BOINC flow:
 

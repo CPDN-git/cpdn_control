@@ -25,9 +25,3 @@ add_library(cpdn_models OBJECT
 target_include_directories(cpdn_models PUBLIC
     ${PROJECT_SOURCE_DIR}
 )
-
-# OpenIFS-specific third-party dependencies stay on this model-side path rather
-# than widening the public controller interface.
-target_link_libraries(cpdn_models PUBLIC
-    cpdn_openifs_deps
-)

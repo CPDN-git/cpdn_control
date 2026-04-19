@@ -28,11 +28,6 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install Ubuntu ecCodes packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libeccodes-dev libaec-dev
-
       - name: Restore vcpkg cache
         uses: actions/cache@v4
         with:
@@ -64,8 +59,6 @@ jobs:
               -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
               -DVCPKG_TARGET_TRIPLET="$VCPKG_TRIPLET" \
               -DVCPKG_INSTALLED_DIR="$CPDN_VCPKG_INSTALLED_DIR" \
-              -DCPDN_ENABLE_ECCODES=ON \
-              -DCPDN_LINK_RELEASE_STATIC=OFF \
               -DCPDN_BUILD_UNIT_TESTS=ON \
               -DCPDN_BUILD_FUNCTIONAL_TESTS=OFF
 
@@ -109,11 +102,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Ubuntu ecCodes packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libeccodes-dev libaec-dev
-
       - name: Restore vcpkg cache
         uses: actions/cache@v4
         with:
@@ -145,8 +133,6 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_TARGET_TRIPLET="$VCPKG_TRIPLET" \
             -DVCPKG_INSTALLED_DIR="$CPDN_VCPKG_INSTALLED_DIR" \
-            -DCPDN_ENABLE_ECCODES=ON \
-            -DCPDN_LINK_RELEASE_STATIC=OFF \
             -DCPDN_BUILD_UNIT_TESTS=ON \
             -DCPDN_BUILD_FUNCTIONAL_TESTS=ON
           cmake --build build --config "$BUILD_TYPE"

@@ -38,12 +38,8 @@ add_executable(unit_tests unit_tests.cpp
 add_executable(launch_process_helper launch_process_helper.cpp)
 add_executable(timed_process_helper timed_process_helper.cpp)
 
-# Link the test executable to the control code and the OpenIFS-only external
-# dependency path needed by the model object files.
-target_link_libraries(unit_tests PRIVATE
-    cpdn_control
-    cpdn_openifs_deps
-)
+# Link the test executable to the control code
+target_link_libraries(unit_tests PRIVATE cpdn_control)
 target_compile_definitions(unit_tests PRIVATE LAUNCH_PROCESS_HELPER="$<TARGET_FILE:launch_process_helper>")
 target_compile_definitions(unit_tests PRIVATE TIMED_PROCESS_HELPER="$<TARGET_FILE:timed_process_helper>")
 add_dependencies(unit_tests launch_process_helper timed_process_helper)

@@ -19,11 +19,7 @@ The code is under active development.
 The `vcpkg` application from Microsoft is used to manage cross-platform dependencies. 
 It must be installed before building the controller.
 
-A number of prerequisite libraries are required detailed below.
-
-For the generic controller build, the main external prerequisites are BOINC and
-`cpdn_zip`. The OpenIFS model path adds an extra dependency on an externally
-installed ecCodes package on Linux.
+A number of prerequisite libraries are required detailed below. 
 
 ## Prerequisite: BOINC library
 
@@ -158,59 +154,6 @@ scripts/test_with_vcpkg.sh --build-dir build
 Use `--functional` with the build scripts to configure and run functional tests as part of the build.
 Use `--functional` with `test_with_vcpkg.sh` to rerun only functional tests from an existing `vcpkg` build.
 
-## Optional OpenIFS dependency: ecCodes
-
-OpenIFS development now expects ecCodes to be built outside this repo and then
-consumed as a normal CMake package. This repo does not vendor the ecCodes
-source tree.
-
-Linux-only helper script:
-
-- [scripts/build_eccodes.sh](${HOME}/github/cpdn_control/scripts/build_eccodes.sh)
-
-The helper script:
-
-- builds ecCodes from an external checkout such as `${HOME}/github/eccodes`
-- uses the repo-local `cmake/Findlibaec.cmake`
-- builds a static Linux ecCodes library
-- installs ecCodes to the configured prefix
-
-Important Linux host prerequisite:
-
-- install `libaec-dev` before building ecCodes with AEC enabled
-
-Typical helper usage:
-
-```bash
-scripts/build_eccodes.sh
-```
-
-After ecCodes is installed, point the controller configure step at the ecCodes
-package prefix or config directory:
-
-```bash
-cmake -S . -B build \
-  -DCMAKE_TOOLCHAIN_FILE=/PATH/TO/vcpkg/scripts/buildsystems/vcpkg.cmake \
-  -DVCPKG_TARGET_TRIPLET=x64-linux-cpdn-static \
-  -DCPDN_ENABLE_ECCODES=ON \
-  -DCMAKE_PREFIX_PATH=/home/glenn/github/eccodes-install/2.46.2
-```
-
-or:
-
-```bash
-cmake -S . -B build \
-  -DBOINC_DIR=/PATH/TO/boinc-install \
-  -DCPDN_ENABLE_ECCODES=ON \
-  -Deccodes_DIR=/home/glenn/github/eccodes-install/2.46.2/lib/cmake/eccodes
-```
-
-If ecCodes is not needed for the current build:
-
-```bash
-cmake -S . -B build -DCPDN_ENABLE_ECCODES=OFF
-```
-
 ### Fallback: manual BOINC build
 
 If you need to bypass `vcpkg`, build BOINC outside this repo and point CMake at it with `BOINC_DIR`.
@@ -291,7 +234,7 @@ more details.
 ## Prerequisite: fmt C++17 compatible library
 
 The fmt library is a modern formatting library that provides C++20 `std::format`-like functionality for C++17.
-It is in the repository under `third_party/fmt/` and does not require separate installation.
+It is in the repository under `tools/fmt/` and does not require separate installation.
 
 To obtain the fmt library, execute the following command in the top-level directory:
 

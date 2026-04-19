@@ -234,7 +234,7 @@ more details.
 ## Prerequisite: fmt C++17 compatible library
 
 The fmt library is a modern formatting library that provides C++20 `std::format`-like functionality for C++17.
-It is in the repository under `tools/fmt/` and does not require separate installation.
+It is in the repository under `third_party/fmt/` and does not require separate installation.
 
 To obtain the fmt library, execute the following command in the top-level directory:
 

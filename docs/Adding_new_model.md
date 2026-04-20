@@ -92,12 +92,6 @@ This manifest uses:
 
 If `NewModel` uses BOINC logical input archives in the same general way as OpenIFS, implement the model-specific logical filenames and unzip destinations there.
 
-At present, the controller still passes a temporary `ModelInputManifestContext` bridge containing:
-
-- `workunit_id`
-- `horiz_resolution`
-- `grid_type`
-
 If `NewModel` depends on those values, use them in the same way as OpenIFS for now.
 
 ## 6. Implement model control-input parsing in the model class
@@ -165,7 +159,6 @@ For a model very similar to OpenIFS, the existing controller seams may be enough
 
 Even so, when adding `NewModel`, review these areas:
 
-- `ModelInputManifestContext` in `[api/model_input_manifest.h](/home/glenn/github/cpdn_control/api/model_input_manifest.h)`
 - startup/restart seam in `[src/control_start.h](/home/glenn/github/cpdn_control/src/control_start.h)`
 - any assumptions in `[src/cpdn_main.cpp](/home/glenn/github/cpdn_control/src/cpdn_main.cpp)` about output naming, restart cadence, or upload cadence
 

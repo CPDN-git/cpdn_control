@@ -623,11 +623,8 @@ int main( int argc, char** argv )
         return finish_task( tstate, 1 );
     }
 
-    // TODO. This is still OpenIFS specific. Needs to be refactored.
     tconfig.exptid = control_input.experiment_id;
 
-    const std::string& horiz_resolution = control_input.horiz_resolution;
-    const std::string& grid_type = control_input.grid_type;
     const int timestep_seconds = control_input.timestep_seconds;
     const int output_interval = control_input.output_interval;
     int restart_interval_steps = control_input.restart_interval;
@@ -641,8 +638,6 @@ int main( int argc, char** argv )
     const double total_length_of_simulation_time = control_input.forecast_length_time;
 
     std::cerr << "Values read from model control input are: \n"
-              << " Horizontal_resolution: " << horiz_resolution << '\n'
-              << " Horizontal grid type: " << grid_type << '\n'
               << " Experiment ID: " << tconfig.exptid << '\n'
               << " Timestep interval (secs): " << timestep_seconds << '\n'
               << " Frequency of model output (steps): " << output_interval << '\n'
@@ -656,9 +651,8 @@ int main( int argc, char** argv )
     //---------------- Unpack the remaining model input files -----------------------
     // Unpack through model instance manifest context so main() stays generic.
 
-    ModelInputManifestContext input_manifest_context{ tconfig.workunit, horiz_resolution, grid_type };
-
-    auto input_manifest = model_ctrl->get_input_manifest( input_manifest_context );
+    model_ctrl->setup_directories( bconfig.slot_path );
+    auto input_manifest = model_ctrl->get_input_manifest( tconfig.workunit );
     auto manifest_stage = stage_model_input_manifest( input_manifest, bconfig.slot_path );
     if ( !manifest_stage.ok ) {
         report_input_stage_failure( "model input archive", manifest_stage );

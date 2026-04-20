@@ -9,8 +9,8 @@
 #include <cerrno>
 #include <charconv>    // for std::from_chars
 #include <chrono>
-#include <cstdio>
 #include <cstddef>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -80,9 +80,8 @@ bool file_was_updated( const fs::path& path, const std::optional<fs::file_time_t
 struct WideCaseInsensitiveLess {
     bool operator()( const std::wstring& lhs, const std::wstring& rhs ) const
     {
-        return std::lexicographical_compare( lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), []( wchar_t left, wchar_t right ) {
-            return std::towlower( left ) < std::towlower( right );
-        } );
+        return std::lexicographical_compare( lhs.begin(), lhs.end(), rhs.begin(), rhs.end(),
+                                             []( wchar_t left, wchar_t right ) { return std::towlower( left ) < std::towlower( right ); } );
     }
 };
 
@@ -108,10 +107,7 @@ std::optional<std::wstring> utf8_to_wide( const std::string& text )
     return wide_text;
 }
 
-bool is_valid_env_name( const std::string& name )
-{
-    return !name.empty() && name.find( '=' ) == std::string::npos && !contains_embedded_nul( name );
-}
+bool is_valid_env_name( const std::string& name ) { return !name.empty() && name.find( '=' ) == std::string::npos && !contains_embedded_nul( name ); }
 
 bool build_windows_environment_block( const std::vector<std::pair<std::string, std::string>>& env_vars, std::vector<wchar_t>& env_block )
 {
@@ -254,13 +250,8 @@ HANDLE open_combined_output_handle( const fs::path& combined_output_file )
         return INVALID_HANDLE_VALUE;
     }
 
-    return CreateFileW( combined_output_w->c_str(),
-                        FILE_APPEND_DATA,
-                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                        &security_attributes,
-                        OPEN_ALWAYS,
-                        FILE_ATTRIBUTE_NORMAL,
-                        nullptr );
+    return CreateFileW( combined_output_w->c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, &security_attributes,
+                        OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr );
 }
 #else
 bool terminate_child_process( pid_t pid )
@@ -739,9 +730,8 @@ bool parse_int( std::string& value )
  *        The child is started in the requested working directory with the supplied arguments and is terminated if it exceeds the timeout.
  *        Child stdout/stderr are inherited from the parent process unless a combined output file is supplied.
  */
-TimedProcessResult run_process_with_timeout( const std::string& executable, const std::vector<std::string>& args,
-                                             const std::string& working_dir, int timeout_seconds,
-                                             const std::filesystem::path& expected_output_file,
+TimedProcessResult run_process_with_timeout( const std::string& executable, const std::vector<std::string>& args, const std::string& working_dir,
+                                             int timeout_seconds, const std::filesystem::path& expected_output_file,
                                              const std::vector<std::pair<std::string, std::string>>& child_env_vars,
                                              const std::filesystem::path& combined_output_file )
 {
@@ -797,16 +787,9 @@ TimedProcessResult run_process_with_timeout( const std::string& executable, cons
     }
 
     PROCESS_INFORMATION process_info{};
-    if ( !CreateProcessW( executable_w->c_str(),
-                          command_line_buffer.data(),
-                          nullptr,
-                          nullptr,
-                          inherit_handles,
-                          CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED,
-                          env_block.data(),
-                          working_dir_w->empty() ? nullptr : working_dir_w->c_str(),
-                          &startup_info,
-                          &process_info ) ) {
+    if ( !CreateProcessW( executable_w->c_str(), command_line_buffer.data(), nullptr, nullptr, inherit_handles,
+                          CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED, env_block.data(), working_dir_w->empty() ? nullptr : working_dir_w->c_str(),
+                          &startup_info, &process_info ) ) {
         if ( combined_output_handle != INVALID_HANDLE_VALUE ) {
             CloseHandle( combined_output_handle );
         }
@@ -972,4 +955,39 @@ const char* timed_process_status_to_string( TimedProcessStatus status )
     }
 
     return "unknown";
+}
+
+
+/**
+ * @brief Ensures that a directory exists, creating it if necessary.
+ * 
+ * @param dir The path to the directory.
+ * @return true if the directory exists or was successfully created, false otherwise.
+ */
+bool ensure_directory( const fs::path& dir, std::string* error_msg )
+{
+    std::error_code ec;
+    if ( fs::exists( dir, ec ) ) {
+        if ( ec ) {
+            if ( error_msg ) {
+                *error_msg = "failed to inspect directory " + dir.string() + ": " + ec.message();
+            }
+            return false;
+        }
+        if ( !fs::is_directory( dir, ec ) ) {
+            if ( error_msg ) {
+                *error_msg = "path exists but is not a directory: " + dir.string();
+            }
+            return false;
+        }
+        return true;
+    }
+
+    if ( !fs::create_directories( dir, ec ) && ec ) {
+        if ( error_msg ) {
+            *error_msg = "failed to create directory " + dir.string() + ": " + ec.message();
+        }
+        return false;
+    }
+    return true;
 }

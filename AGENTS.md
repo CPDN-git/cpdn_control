@@ -161,7 +161,6 @@ Typical steps:
 - Add targeted unit tests in `tests/unit/` and/or a functional fixture in `tests/functional/fixtures/`.
 
 Notes:
-- `ModelInputManifestContext` is currently a temporary bridge from `fort.4`-derived metadata into model-specific manifest generation.
 - Do not assume future models will use a Fortran namelist. A new model may populate the same manifest from a different source.
 - If a model has a control file such as `fort.4`, keep the filename and parsing logic private to the model implementation rather than exposing a controller-side getter for it.
 
@@ -178,7 +177,6 @@ Notes:
 - The controller should resolve those logical files through `boinc_resolve_filename_s(...)`, validate the resolved `jf_*` project archive, copy that `jf_*` archive into the slot, and unzip from the copied archive.
 - Preserve the BOINC logical file on both first run and restart so BOINC resolution still works after a restart.
 - `src/cpdn_main.cpp` should stay generic here. Model-specific filename construction and unzip destinations belong in the model manifest, not in `main()`.
-- OpenIFS currently still depends on `fort.4` metadata for part of its manifest context. Keep that dependency clearly commented as a temporary bridge rather than baking OpenIFS-specific directory logic back into controller code.
 
 ## Failure Reporting Requirements
 

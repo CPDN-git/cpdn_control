@@ -4,8 +4,8 @@
 #pragma once
 
 #include <filesystem>
-#include <utility>
 #include <string>
+#include <utility>
 #include <vector>
 
 /**
@@ -45,6 +45,7 @@ std::vector<std::string> get_out_files( const std::string& );
 void sleep_seconds( double seconds );
 bool parse_int( std::string& value, int& out, std::string& err_msg );
 bool parse_int( std::string& value );
+bool ensure_directory( const std::filesystem::path&, std::string* error_msg = nullptr );
 
 /**
  * @brief Run an executable in a given working directory and wait up to a timeout.
@@ -52,14 +53,10 @@ bool parse_int( std::string& value );
  *        can check whether an expected output file was created or updated,
  *        and can optionally redirect child stdout/stderr to a combined log file.
  */
-TimedProcessResult run_process_with_timeout(
-    const std::string& executable,
-    const std::vector<std::string>& args,
-    const std::string& working_dir,
-    int timeout_seconds,
-    const std::filesystem::path& expected_output_file = {},
-    const std::vector<std::pair<std::string, std::string>>& child_env_vars = {},
-    const std::filesystem::path& combined_output_file = {} );
+TimedProcessResult run_process_with_timeout( const std::string& executable, const std::vector<std::string>& args, const std::string& working_dir,
+                                             int timeout_seconds, const std::filesystem::path& expected_output_file = {},
+                                             const std::vector<std::pair<std::string, std::string>>& child_env_vars = {},
+                                             const std::filesystem::path& combined_output_file = {} );
 
 /**
  * @brief Convert a TimedProcessStatus value to a short log-friendly string.

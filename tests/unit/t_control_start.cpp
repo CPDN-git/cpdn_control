@@ -30,12 +30,13 @@ class FakeModelControl : public ModelControl {
         time = restart_time;
         return restart_read_ok;
     }
-    ModelInputManifest get_input_manifest( const ModelInputManifestContext& ) const override { return {}; }
+    ModelInputManifest get_input_manifest( const std::string& ) const override { return {}; }
     ModelControlInputData parse_control_input() const override { return {}; }
     bool get_current_step( int&, const int ) const override { return false; }
     std::vector<std::string> get_output_filenames( int, std::string_view ) const override { return {}; }
     std::regex get_output_filename_regex() const override { return std::regex( ".*" ); }
     std::vector<std::string> get_log_filenames() const override { return {}; }
+    bool setup_directories( const fs::path& ) const override { return true; }
 
     bool restart_exists = false;
     bool restart_read_ok = true;
@@ -118,8 +119,8 @@ int t_control_start()
         }
 
         auto result = initialize_task_state_from_restart( model_ctrl, progress_file, restart_interval_steps, tstate, err_msg );
-        if ( !result.ok || result.startup_mode != TaskStartupMode::restart_run || result.log_message.find( "Model is restarting" ) == std::string::npos ||
-             tstate.last_completed_step != 13 ) {
+        if ( !result.ok || result.startup_mode != TaskStartupMode::restart_run ||
+             result.log_message.find( "Model is restarting" ) == std::string::npos || tstate.last_completed_step != 13 ) {
             TEST_FAIL;
             std::cout << "Unexpected restart result or adjusted step: " << tstate.last_completed_step << "\n";
             return EXIT_FAILURE;
@@ -144,7 +145,8 @@ int t_control_start()
         }
 
         auto result = initialize_task_state_from_restart( model_ctrl, progress_file, restart_interval_steps, tstate, err_msg );
-        if ( result.ok || result.startup_mode != TaskStartupMode::invalid || err_msg.find( "restart greater than last_completed_step" ) == std::string::npos ) {
+        if ( result.ok || result.startup_mode != TaskStartupMode::invalid ||
+             err_msg.find( "restart greater than last_completed_step" ) == std::string::npos ) {
             TEST_FAIL;
             std::cout << "Unexpected invalid-restart result: " << err_msg << "\n";
             return EXIT_FAILURE;

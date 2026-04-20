@@ -166,10 +166,6 @@ if __name__ == "__main__":
     # Explanation of variable values in fort.4:
     # Values below are populated from the test config JSON:
     # EXPTID = Dummy experiment ID
-    # UNIQUE_MEMBER_ID = 1353 : Dummy workunit id
-    # HORIZ_RESOLUTION = 159 : Horizontal resolution l159
-    # VERT_RESOLUTION = 91 : Vertical resolution 91 levels
-    # GRID_TYPE = l_2 : Reduced Gaussian grid type l_2
     # UTSTEP = Model time step in seconds
     # CUSTOP = Total number of model time steps to run
     # CNMEXP = Dummy experiment ID
@@ -180,11 +176,6 @@ if __name__ == "__main__":
                          " CFPFMT=\"MODEL\",\n" +\
                          "/\n\n" +\
                          "!WU_TEMPLATE_VERSION=43r3-seasonal-20250801\n"+\
-                         f"!EXPTID={experiment_id}\n"+\
-                         f"!UNIQUE_MEMBER_ID={member_id}\n"+\
-                         "!HORIZ_RESOLUTION=159\n" +\
-                         "!VERT_RESOLUTION=91\n" +\
-                         "!GRID_TYPE=l_2\n" +\
                          "\n"+\
                          "&NAMARG\n"+\
                          f" UTSTEP={timestep:.1f},\n" +\

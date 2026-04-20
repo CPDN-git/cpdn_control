@@ -62,18 +62,22 @@ bool OpenIFSControl::check_model_success() const
 /**
  * @brief Get list of model input files to unpack from the project directory.
  * 
- * @param ctx Model configuration context containing metadata for determining the required input files.
+ * @param workunit_id The BOINC workunit ID, used to construct the logical filenames.
  * @return ModelInputManifest List of model input archives with logical names and unzip directories.
  */
-ModelInputManifest OpenIFSControl::get_input_manifest( const ModelInputManifestContext& ctx ) const
+ModelInputManifest OpenIFSControl::get_input_manifest( const std::string& workunit_id ) const
 {
     // The controller keeps BOINC resolution, checksum verification, copying, and unzip generic.
     // OpenIFS only declares the logical BOINC files it needs and where each archive unpacks.
     return {
-        { "ic_ancil_" + ctx.workunit_id + ".zip", fs::path( "." ) },
-        { "ifsdata_" + ctx.workunit_id + ".zip", fs::path( "ifsdata" ) },
-        // OpenIFS still derives the climate-data directory from fort.4 metadata threaded through context.
-        { "clim_data_" + ctx.workunit_id + ".zip", fs::path( ctx.horiz_resolution + ctx.grid_type ) },
+        { "ic_ancil_" + workunit_id + ".zip", fs::path( "." ) },
+        { "ifsdata_" + workunit_id + ".zip", ifsdata_dir },
+        // OpenIFS still uses the climate-data directory named as <res><grid_type>.
+        // Rather than use eccodes to read these from the initial GRIB files, unpack to
+        // a generic name, then create symlinks to all supported resolutions/grid types.
+        // A bit clunky but keeps the model control simpler and avoids adding more args to command line.
+        // Note! Relies on call to create directory symlinks in the setup of the model run (see cpdn_control.cpp).
+        { "clim_data_" + workunit_id + ".zip", climdata_dir },
     };
 }
 
@@ -92,7 +96,6 @@ ModelControlInputData OpenIFSControl::parse_control_input() const
         return make_parse_error( control_input_file, "open", "", "failed to open model control input file" );
     }
 
-    const std::unordered_set<std::string> header_keys = { "HORIZ_RESOLUTION", "VERT_RESOLUTION", "GRID_TYPE" };
     std::string input_line;
     std::string parsed_key;
     std::string parsed_value;
@@ -109,13 +112,10 @@ ModelControlInputData OpenIFSControl::parse_control_input() const
         parsed_value.clear();
 
         bool have_kv = false;
-        std::string header_line = input_line;
 
-        if ( header_line.front() == '!' ) {
-            header_line.erase( 0, 1 );
-            if ( parse_key_value( header_line, parsed_key, parsed_value ) && header_keys.find( parsed_key ) != header_keys.end() ) {
-                have_kv = true;
-            }
+        // Ignore comments.
+        if ( input_line.front() == '!' ) {
+            have_kv = false;
         } else if ( parse_namelist_key_value( input_line, parsed_key, parsed_value ) ) {
             have_kv = true;
         }
@@ -124,13 +124,7 @@ ModelControlInputData OpenIFSControl::parse_control_input() const
             continue;
         }
 
-        if ( parsed_key == "HORIZ_RESOLUTION" ) {
-            parsed.horiz_resolution = parsed_value;
-        } else if ( parsed_key == "VERT_RESOLUTION" ) {
-            parsed.vert_resolution = parsed_value;
-        } else if ( parsed_key == "GRID_TYPE" ) {
-            parsed.grid_type = parsed_value;
-        } else if ( parsed_key == "UTSTEP" ) {
+        if ( parsed_key == "UTSTEP" ) {
             tmpstr = parsed_value;
             if ( auto decimal_point = tmpstr.find( '.' ); decimal_point != std::string::npos ) {
                 tmpstr = tmpstr.substr( 0, decimal_point );
@@ -162,15 +156,6 @@ ModelControlInputData OpenIFSControl::parse_control_input() const
     }
 
     std::vector<std::string> missing_fields;
-    if ( parsed.horiz_resolution.empty() ) {
-        missing_fields.push_back( "HORIZ_RESOLUTION" );
-    }
-    if ( parsed.vert_resolution.empty() ) {
-        missing_fields.push_back( "VERT_RESOLUTION" );
-    }
-    if ( parsed.grid_type.empty() ) {
-        missing_fields.push_back( "GRID_TYPE" );
-    }
     if ( parsed.experiment_id.empty() ) {
         missing_fields.push_back( "CNMEXP" );
     }
@@ -307,4 +292,44 @@ bool OpenIFSControl::restart_ctl_read( std::string& step, std::string& time ) co
     rcf_stream.close();
 
     return ok;
+}
+
+
+/**
+ * @brief Sets up any model input directories and/or symlinks as needed before staging the input files.
+ * For OpenIFS, we need to create symlinks to the climdata directory for all supported resolutions/grid types.
+ * This is because the model expects a specific directory structure for the climate data input which includes the
+ * resolution and grid type in the path. To avoid having to add more args to the command line or read these from 
+ * the control input, we unpack to a generic name, then create symlinks to all supported resolutions/grid types.
+ * 
+ * @param slot_path The path to the model run slot directory where the input files are staged and the model runs.
+ * @returns True if the directories and symlinks were set up successfully, false otherwise.
+ */
+bool OpenIFSControl::setup_directories( const fs::path& slot_path ) const
+{
+    std::string err_msg;
+
+    // List of supported resolutions and grid types for the model. horiz res + grid type.
+    std::vector<std::string> supported_resolutions = { "95_4", "159l_2", "159_4", "199_4", "255l_2", "319l_2", "319_4", "399l_2", "511l_2" };
+
+    if ( !ensure_directory( climdata_dir, &err_msg ) ) {
+        std::cerr << "Climate data directory not found at expected path: " << climdata_dir << '\n';
+        std::cerr << "Error message: " << err_msg << '\n';
+        return false;
+    }
+
+    for ( const auto& res : supported_resolutions ) {
+        fs::path link_name = slot_path / res;
+        if ( fs::exists( link_name ) ) {
+            continue;    // if the link already exists, skip creating it
+        }
+        try {
+            fs::create_symlink( climdata_dir, link_name );
+            std::cerr << "Created symlink: " << link_name << " -> " << climdata_dir << '\n';
+        } catch ( const fs::filesystem_error& e ) {
+            std::cerr << "Error creating symlink: " << e.what() << '\n';
+            return false;
+        }
+    }
+    return true;
 }

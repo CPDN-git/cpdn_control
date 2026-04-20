@@ -75,14 +75,6 @@ Use a dedicated header:
 Suggested types:
 
 ```cpp
-struct ModelInputManifestContext {
-    std::string workunit_id;
-    std::string horiz_resolution;
-    std::string grid_type;
-};
-```
-
-```cpp
 struct ModelInputArchive {
     std::string logical_name;
     std::filesystem::path unzip_relative_dir;
@@ -96,10 +88,6 @@ using ModelInputManifest = std::vector<ModelInputArchive>;
 Notes:
 
 - `workunit_id` is needed now for OpenIFS logical filename construction
-- `horiz_resolution` and `grid_type` are included only because the current OpenIFS climate-data directory naming depends on them
-- this keeps the climate-data dependency out of `main()` while avoiding extra OpenIFS-only methods on `ModelControl`
-- this struct also creates a clean seam for future model-config inputs such as `model.xml`
-- add a short code comment where the context is built and where it is consumed explaining that this is a temporary bridge from `fort.4`-derived model metadata into the model manifest
 - add a short code comment in the model implementation noting that a new model may populate the same manifest from a different source and should not assume a Fortran namelist exists
 
 ## Proposed `ModelControl` Interface
@@ -107,7 +95,7 @@ Notes:
 Add a new pure virtual method:
 
 ```cpp
-virtual ModelInputManifest get_input_manifest(const ModelInputManifestContext& ctx) const = 0;
+virtual ModelInputManifest get_input_manifest(const std::string& workunit_id) const = 0;
 ```
 
 Notes:
@@ -119,7 +107,7 @@ Notes:
 OpenIFS implementation:
 
 ```cpp
-ModelInputManifest OpenIFSControl::get_input_manifest(const ModelInputManifestContext& ctx) const;
+ModelInputManifest OpenIFSControl::get_input_manifest(const std::string& workunit_id) const;
 ```
 
 Initial OpenIFS entries:
@@ -129,42 +117,11 @@ Initial OpenIFS entries:
 - logical name: `ifsdata_<workunit>.zip`
   - unzip dir: `ifsdata`
 - logical name: `clim_data_<workunit>.zip`
-  - unzip dir: `<horiz_resolution><grid_type>`
+  - unzip dir: `climdata`
 
-For the climate-data case, the manifest should carry the subdirectory name explicitly. `main()` should only act on manifest data; it should not construct OpenIFS climate paths itself.
-
-## Climate-Data Directory Dependency
-
-There is a real short-term dependency here:
-
-- OpenIFS climate data currently unzips into a directory named from `horiz_resolution + grid_type`
-- those values are currently sourced from `fort.4`
-
-Near-term recommendation:
-
-- keep reading `horiz_resolution` and `grid_type` from `fort.4`
-- pass them into the manifest builder via `ModelInputManifestContext`
-- keep the controller generic and directory-creation logic driven by manifest data
-
-Alternative considered:
-
-- construct the climate-data directory in `main()` as a one-off special case
-
-Assessment:
-
-- this would slightly simplify the immediate interface
-- but it would also reintroduce OpenIFS-specific directory logic into generic controller code
-- it weakens the main benefit of the refactor
-
-Recommendation:
-
-- do not special-case climate-data directory construction in `main()`
-- carry the dependency in the manifest context for now
+For the climate-data case, unpack into a generic name directory and create links to the supported horizontal resolution + grid_type named directories.
 
 Comment guidance for the refactor:
-
-- in `main()`, add a succinct comment above `ModelInputManifestContext` construction explaining that the controller stays generic by passing model-derived context into the model manifest builder
-- in the OpenIFS manifest implementation, add a succinct comment explaining that `horiz_resolution` and `grid_type` are only being threaded through context because current OpenIFS unpack layout depends on them
 - note in comments that future models may source manifest inputs from something other than `fort.4`, for example `model.xml` or another model-owned config source
 
 ## Proposed Controller Helpers
@@ -268,15 +225,13 @@ Planned changes:
   - `climate_data_path`
   - `climate_data_zip`
   - `climate_data_destination`
-- build a `ModelInputManifestContext`
 - call:
-  - `auto input_manifest = model_ctrl->get_input_manifest(manifest_ctx);`
+  - `auto input_manifest = model_ctrl->get_input_manifest(workunit_id);`
   - `stage_model_input_manifest(...)`
 
 Keep in `main()` for now:
 
 - `fort.4` parsing for `UTSTEP`, `NFRPOS`, `NFRRES`, `CNMEXP`
-- `fort.4` parsing for `horiz_resolution` and `grid_type`
 - any still-needed metadata not yet moved behind model control
 
 ### `src/cpdn_control.cpp`
@@ -302,7 +257,6 @@ Planned changes:
 
 New file:
 
-- define `ModelInputManifestContext`
 - define `ModelInputArchive`
 - define `ModelInputManifest`
 
@@ -325,7 +279,6 @@ Planned changes:
 
 - implement OpenIFS manifest construction
 - hardcode the current logical filename patterns here
-- use `ctx.horiz_resolution + ctx.grid_type` for climate-data unzip destination
 
 ## New and Deleted Functions
 
@@ -467,8 +420,6 @@ Do not introduce `model.xml` in this refactor.
 Reason:
 
 - it is likely over-engineering for the current problem
-- the immediate cleanup can be achieved with a model-owned manifest method plus a small manifest context
-- the manifest API creates a clean seam that a future `model.xml` could populate later
 
 Longer-term target:
 
@@ -491,7 +442,7 @@ Longer-term target:
    - destination directories
    - control/input file names
    - restart-control conventions
-   - model-specific setup dependencies now being passed via manifest context
+   - model-specific setup dependencies now being passed via manifest.
 9. If `model.xml` is adopted later, keep `main()` unchanged where possible and move the change into model/config loading so the generic controller path remains stable.
 
 The important thing in the current refactor is to create the seam, not to fully generalise the model configuration system in one step.

@@ -112,7 +112,6 @@ int move_result_file( const std::string&, const std::string&, const std::string&
 int zip_and_delete( const std::string&, const std::vector<std::filesystem::path>& );
 bool resolve_boinc_input_file( const std::filesystem::path&, std::filesystem::path&, std::string* error_msg = nullptr );
 bool verify_project_zip_md5( const std::filesystem::path&, std::string* error_msg = nullptr );
-bool ensure_directory( const std::filesystem::path&, std::string* error_msg = nullptr );
 InputStageResult stage_model_input_archive( const std::filesystem::path&, const std::filesystem::path&, const std::filesystem::path&,
                                             std::string_view );
 InputStageResult stage_boinc_input_file( const std::filesystem::path&, const std::filesystem::path&, const std::filesystem::path&, std::string_view );

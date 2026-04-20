@@ -37,7 +37,6 @@ Out of scope for this refactor:
 - redesign of the CPDN-injected comment lines at the top of `fort.4`
 - a full `model.xml` or equivalent external model metadata system
 - redesign of upload interval semantics
-- removal of the temporary manifest bridge from `fort.4`-derived values into `ModelInputManifestContext`
 
 ## Code Complexity
 
@@ -61,11 +60,9 @@ Short version:
 5. Keep `TaskConfig` as the task/controller identity struct for now, including the CPDN filename tokens used to resolve downloads.
 6. Parse forecast-length information from the model namelist as model-owned runtime data, but do not compare it with the CPDN filename token from the CLI.
 7. Treat the model namelist as definitive for model runtime; the CLI filename tokens exist only to resolve CPDN download filenames before the model input is parsed.
-8. Keep `horiz_resolution`, `vert_resolution` and `grid_type` in the parsed result for now.
-9. Keep the temporary bridge from parsed resolution metadata into `ModelInputManifestContext` for now.
-10. Keep `CNMEXP` handling as it is for now, but record the current split in usage between controller/task naming and model output naming.
-11. Treat upload interval redesign as a follow-up item rather than folding it into this refactor without a clear unit contract.
-12. Include a modest tidy of step/time tracking in `main()` so units and names are explicit.
+8. Keep `CNMEXP` handling as it is for now, but record the current split in usage between controller/task naming and model output naming.
+9. Treat upload interval redesign as a follow-up item rather than folding it into this refactor without a clear unit contract.
+10. Include a modest tidy of step/time tracking in `main()` so units and names are explicit.
 
 ### Parsed-input result for this stage
 
@@ -73,9 +70,6 @@ The new parsed result should be narrowly scoped to values needed by the controll
 
 Suggested contents:
 
-- `horiz_resolution`
-- `vert_resolution`
-- `grid_type`
 - model forecast-length information derived from the namelist
 - `timestep`
 - `output_interval`
@@ -233,8 +227,6 @@ Planned changes:
 - rename local variables so step counts and elapsed-time values are visually distinct
 - remove avoidable string-to-int churn for current step tracking inside the main loop
 - fix the current off-by-one mismatch in upload and trickle scheduling
-- keep building `ModelInputManifestContext` from parsed `horiz_resolution` and `grid_type`
-- keep `vert_resolution` as a required parsed field even though it is not yet consumed outside logging
 
 ### `api/model_control.h`
 
@@ -278,7 +270,6 @@ Planned changes:
 
 - upload interval unit semantics remain unresolved and need a focused review
 - `TaskConfig::exptid` versus `CNMEXP` remains muddled and should be revisited in a later tidy-up
-- the temporary manifest bridge from parsed resolution values into `ModelInputManifestContext` should remain until production-level tests are complete
 - if future models diverge materially from OpenIFS-style timing/grid assumptions, revisit whether a broader config object or enum-backed fields are justified
 - the current code does not yet expose the controller-side `exptid` / model-side `CNMEXP` split as two separate values
 - after the modest tidy in this refactor, any remaining restart/progress redesign should be handled as a separate follow-up

@@ -84,18 +84,18 @@ static InputStageResult make_stage_error( std::string_view step, std::string mes
 static int child_status_from_process_state( ChildProcessState process_state, int current_status )
 {
     switch ( process_state ) {
-        case ChildProcessState::running:
-            return 0;
-        case ChildProcessState::exited:
-            return 1;
-        case ChildProcessState::terminated:
-            return 3;
-        case ChildProcessState::suspended:
-            return 4;
-        case ChildProcessState::unavailable:
-            return 5;
-        default:
-            return current_status;
+    case ChildProcessState::running:
+        return 0;
+    case ChildProcessState::exited:
+        return 1;
+    case ChildProcessState::terminated:
+        return 3;
+    case ChildProcessState::suspended:
+        return 4;
+    case ChildProcessState::unavailable:
+        return 5;
+    default:
+        return current_status;
     }
 }
 
@@ -448,41 +448,6 @@ bool verify_project_zip_md5( const fs::path& project_file, std::string* error_ms
         return false;
     }
 
-    return true;
-}
-
-
-/**
- * @brief Ensures that a directory exists, creating it if necessary.
- * 
- * @param dir The path to the directory.
- * @return true if the directory exists or was successfully created, false otherwise.
- */
-bool ensure_directory( const fs::path& dir, std::string* error_msg )
-{
-    std::error_code ec;
-    if ( fs::exists( dir, ec ) ) {
-        if ( ec ) {
-            if ( error_msg ) {
-                *error_msg = "failed to inspect directory " + dir.string() + ": " + ec.message();
-            }
-            return false;
-        }
-        if ( !fs::is_directory( dir, ec ) ) {
-            if ( error_msg ) {
-                *error_msg = "path exists but is not a directory: " + dir.string();
-            }
-            return false;
-        }
-        return true;
-    }
-
-    if ( !fs::create_directories( dir, ec ) && ec ) {
-        if ( error_msg ) {
-            *error_msg = "failed to create directory " + dir.string() + ": " + ec.message();
-        }
-        return false;
-    }
     return true;
 }
 

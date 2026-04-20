@@ -75,18 +75,6 @@ This is one sign that controller setup data is currently split between an intend
 
 ## `fort.4` Values Read In `main()`
 
-### CPDN-injected header metadata (`!KEY=VALUE`)
-
-| Local variable in `main()` | `fort.4` key | Used for | Classification |
-| --- | --- | --- | --- |
-| `ifsdata_file` | `IFSDATA_FILE` | Locate and unzip `ifsdata` archive | Model input metadata |
-| `ic_ancil_file` | `IC_ANCIL_FILE` | Locate and unzip IC ancillary archive | Model input metadata |
-| `climate_data_file` | `CLIMATE_DATA_FILE` | Locate and unzip climate archive | Model input metadata |
-| `horiz_resolution` | `HORIZ_RESOLUTION` | Build climate-data folder path | Model input metadata |
-| `vert_resolution` | `VERT_RESOLUTION` | Validated/logged only at present | Model input metadata |
-| `grid_type` | `GRID_TYPE` | Build climate-data folder path | Model input metadata |
-| `upload_interval` | `UPLOAD_INTERVAL` | Controls intermediate upload cadence | Controller scheduling |
-
 ### Normal Fortran namelist values
 
 | Local variable in `main()` | `fort.4` key | Used for | Classification |

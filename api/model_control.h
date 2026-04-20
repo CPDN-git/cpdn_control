@@ -23,10 +23,6 @@ struct ModelControlInputData {
     std::string error_step;
     std::string error_field;
     std::string error_message;
-
-    std::string horiz_resolution;
-    std::string vert_resolution;
-    std::string grid_type;
     std::string experiment_id;
 
     int timestep_seconds = 0;    // UTSTEP
@@ -87,7 +83,11 @@ class ModelControl {
     virtual std::string get_model_name() const { return model_name; }
     virtual std::string get_model_version() const { return model_version; }
     virtual std::string get_executable_name() const { return executable; }
-    virtual ModelInputManifest get_input_manifest( const ModelInputManifestContext& ctx ) const = 0;
+
+    // Get list of model input files to unpack from the project directory.
+    virtual ModelInputManifest get_input_manifest( const std::string& wu_id ) const = 0;
+
+    // Read the main model input control file (e.g. namelist) and extract key params.
     virtual ModelControlInputData parse_control_input() const = 0;
 
     // Determine the current model step count; return true if successful, false otherwise.
@@ -98,6 +98,9 @@ class ModelControl {
 
     // Provide a regular expression matching the model output filenames to be zipped for upload
     virtual std::regex get_output_filename_regex() const = 0;
+
+    // Responsible for setting up any model input directories and/or symlinks as needed before staging the input files.
+    virtual bool setup_directories( const fs::path& slot_path ) const = 0;
 
     virtual std::vector<std::string> get_log_filenames() const = 0;
 

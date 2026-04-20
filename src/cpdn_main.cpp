@@ -901,15 +901,15 @@ int main( int argc, char** argv )
         // Calculate the fraction done
         tstate.fraction_done = model_frac_done( static_cast<double>( tstate.current_step ), static_cast<double>( total_steps ), bconfig.ncpus );
 
-        if ( !bconfig.standalone ) {
-            // If the current model step is at a restart interval, update restart cpu time for boinc.
-            double restart_cpu_time = 0;
-            if ( !( tstate.current_step % restart_interval_steps ) ) {
-                restart_cpu_time = tstate.current_cpu_time;
-            }
+        // If the current model step is a restart interval, update restart cpu time for boinc reporting.
+        if ( !( tstate.current_step % restart_interval_steps ) ) {
+            tstate.restart_cpu_time = tstate.current_cpu_time;
+        }
 
-            // Provide the current cpu_time to the BOINC server (note: this is deprecated in BOINC)
-            boinc_report_app_status( tstate.current_cpu_time, restart_cpu_time, tstate.fraction_done );
+        if ( !bconfig.standalone ) {
+            // According to the boinc wrapper code example, the cpu time reported is for the current
+            // process since restart (or first run), whereas the restart cpu time & fraction done are for the whole run.
+            boinc_report_app_status( tstate.current_cpu_time, tstate.restart_cpu_time + tstate.prior_acc_cpu_time, tstate.fraction_done );
 
             // Provide the fraction done to the BOINC client, necessary for the percentage bar on the client
             boinc_fraction_done( tstate.fraction_done );

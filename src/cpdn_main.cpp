@@ -906,9 +906,10 @@ int main( int argc, char** argv )
             tstate.restart_cpu_time = tstate.current_cpu_time;
         }
 
+        // Note boinc fns themselves will check standalone but for safety we do it here too.
         if ( !bconfig.standalone ) {
             // According to the boinc wrapper code example, the cpu time reported is for the current
-            // process since restart (or first run), whereas the restart cpu time & fraction done are for the whole run.
+            // process since restart (or first run), whereas the restart/checkpoint cpu time & fraction done are for the whole run.
             boinc_report_app_status( tstate.current_cpu_time, tstate.restart_cpu_time + tstate.prior_acc_cpu_time, tstate.fraction_done );
 
             // Provide the fraction done to the BOINC client, necessary for the percentage bar on the client

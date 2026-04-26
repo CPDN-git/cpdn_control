@@ -108,7 +108,7 @@ int check_child_status( ChildProcessHandle&, int, int& );
 bool handle_boinc_client_status( ChildProcessHandle&, BoincRuntime& );
 ChildProcessHandle launch_process( const std::string&, const std::string&, const std::string&, const std::string& );
 double model_frac_done( double, double, int );
-int move_result_file( const std::string&, const std::string&, const std::string& );
+int move_result_file( const std::filesystem::path&, const std::filesystem::path&, const std::string& );
 int zip_and_delete( const std::string&, const std::vector<std::filesystem::path>& );
 bool resolve_boinc_input_file( const std::filesystem::path&, std::filesystem::path&, std::string* error_msg = nullptr );
 bool verify_project_zip_md5( const std::filesystem::path&, std::string* error_msg = nullptr );

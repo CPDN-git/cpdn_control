@@ -2,6 +2,7 @@
 build
 zip/build
 zip/install
+vcpkg/vcpkg_installed
 tools/fmt/build
 tools/fmt/install
 

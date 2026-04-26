@@ -621,17 +621,17 @@ double model_frac_done( double step, double total_steps, int nthreads )
 /**
  * @brief Moves the result file from the slot directory to the temporary project directory.
  */
-int move_result_file( const std::string& slot_path, const std::string& temp_path, const std::string& result )
+int move_result_file( const fs::path& slot_path, const fs::path& temp_path, const std::string& result )
 {
     int retval = 0;
 
     // Move result file to the temporary folder in the project directory
-    std::string result_file = slot_path + "/" + result;
-    std::string temp_file = temp_path + "/" + result;
+    fs::path result_file = slot_path / result;
+    fs::path temp_file = temp_path / result;
 
-    if ( path_exists( result_file ) ) {
-        std::cerr << "Moving result file: " << fs::path( result_file ).filename() << " to projects directory.\n";
-        retval = boinc_copy( result_file.c_str(), temp_file.c_str() );
+    if ( fs::exists( result_file ) ) {
+        std::cerr << "Moving result file: " << result_file.filename() << " to projects directory.\n";
+        retval = boinc_copy( result_file.string().c_str(), temp_file.string().c_str() );
 
         // If result file has been successfully copied over, remove it from slots directory
         if ( !retval ) {

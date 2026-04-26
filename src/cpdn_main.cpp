@@ -583,7 +583,7 @@ int main( int argc, char** argv )
 
     // Create temp upload folder for moving the results to and uploading the results from.
     // BOINC measures the disk usage on the slots directory so we must move all results out of this folder
-    std::string upload_dir = bconfig.project_dir + bconfig.app_name + "_" + tconfig.workunit;
+    fs::path upload_dir = fs::path( bconfig.project_dir ) / ( bconfig.app_name + "_" + tconfig.workunit );
     std::cerr << "Location of temp upload folder: " << upload_dir << '\n';
     if ( !ensure_directory( upload_dir, &err_msg ) ) {
         std::cerr << "..Failed to create temp upload folder for results: " << err_msg << std::endl;

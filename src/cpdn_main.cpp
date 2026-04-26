@@ -452,11 +452,14 @@ static int add_upload_files( const fs::path& dir, std::vector<fs::path>& out, co
 /**
  * @brief Prints a banner to stderr at start of controller with model name and version.
  */
-static void banner( const std::string& model_name, const std::string& model_version, const std::string& code_version )
+static void banner( const BoincConfig& bc, const std::string& code_version )
 {
     std::cerr << "\n\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
     std::cerr << "|  CPDN task controller starting: version " << code_version << " \n";
-    std::cerr << "|  Model name: " << model_name << ". App version: " << model_version << " \n";
+    std::cerr << "|  App name: " << bc.app_name << ". App version: " << bc.app_version << " \n";
+    std::cerr << "|  Workunit name: " << bc.wu_name << " \n";
+    std::cerr << "|  Slot path:     " << bc.slot_path << " \n";
+    std::cerr << "|  Project directory: " << bc.project_dir << " \n";
     std::cerr << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n";
 }
 
@@ -508,15 +511,12 @@ int main( int argc, char** argv )
         std::cerr << "..Error. Can't determine slot path: current_path() returned empty" << std::endl;
         return finish_task( tstate, 1 );
     }
-    std::cerr << "Working slot directory is: " << bconfig.slot_path << '\n';
-    std::cerr << "Project directory is: " << bconfig.project_dir << '\n';
+
+    // Say who we are.
+    banner( bconfig, CODE_VERSION );
     if ( bconfig.standalone ) {
         std::cerr << "Running in standalone mode" << '\n';
     }
-
-    // Say who we are.
-    banner( bconfig.app_name, bconfig.app_version, CODE_VERSION );
-    std::cerr << "Workunit name: " << bconfig.wu_name << '\n' << "CPDN project directory: " << bconfig.project_dir << '\n';
 
     // ---------------- Task configuration -----------------
 

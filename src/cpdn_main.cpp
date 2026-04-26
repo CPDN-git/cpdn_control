@@ -847,9 +847,7 @@ int main( int argc, char** argv )
 
                     if ( !zfl.empty() ) {
                         std::string upload_file_name = "upload_file_" + std::to_string( tstate.upload_file_number ) + ".zip";
-                        if ( !bconfig.standalone ) {
-                            std::cerr << "Uploading the intermediate file: " << upload_file_name << '\n';
-                        }
+                        std::cerr << "Uploading the intermediate file: " << upload_file_name << '\n';
 
                         auto upload_result = zip_and_send_upload( bconfig, bruntime, tstate, result_base_name, tstate.upload_file_number, zfl );
                         if ( !upload_result.ok ) {
@@ -865,17 +863,16 @@ int main( int argc, char** argv )
 
                     // *****  Normal end of critical section  *****
                     boinc_end_critical_section();
+
                     tstate.upload_file_number++;
 
                 }    // end of upload new output file block.
 
                 // Trickle every required fraction of the model run
-                if ( trickle_freq > 0 ) {
-                    if ( ( observed_step % trickle_freq ) == 0 ) {
-                        std::cerr << "Sending progress trickle message to CPDN at step: " << observed_step << '\n';
-                        trickler.process_trickle( tstate.current_cpu_time, observed_step );
-                        tstate.last_trickle_step = observed_step;
-                    }
+                if ( trickle_freq > 0 && ( observed_step % trickle_freq ) == 0 ) {
+                    std::cerr << "Sending progress trickle message to CPDN at step: " << observed_step << '\n';
+                    trickler.process_trickle( tstate.current_cpu_time, observed_step );
+                    tstate.last_trickle_step = observed_step;
                 }
 
                 tstate.last_completed_step = observed_step;

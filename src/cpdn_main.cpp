@@ -553,7 +553,8 @@ int main( int argc, char** argv )
         return finish_task( tstate, 1 );
     }
 
-    // Check for optional '--nthreads <value>' at end of arg list optionally set by app_config.xml on user's machine.
+    // -------------- <app_config.xml> options processing ----
+    // Check for optional '--nthreads <value>' optionally set by app_config.xml on user's machine.
 
     bool using_app_config_nthreads = false;
     int app_config_nthreads = 0;
@@ -590,7 +591,7 @@ int main( int argc, char** argv )
         return finish_task( tstate, 1 );
     }
 
-    //  Unpack application into slot
+    //  -------------- Unpack application into slot ------------------
     retval = move_and_unzip_app_file( bconfig.app_name, bconfig.app_version, bconfig.project_dir, bconfig.slot_path );
     if ( retval ) {
         std::cerr << "..move_and_unzip_app_file failed" << "\n";
@@ -630,7 +631,7 @@ int main( int argc, char** argv )
     int restart_interval_steps = control_input.restart_interval;
     if ( restart_interval_steps < 0 ) {
         restart_interval_steps = abs( restart_interval_steps ) * 3600 / timestep_seconds;
-        std::cerr << " NFRRES: restart dump frequency (in steps) " << restart_interval_steps << '\n';
+        std::cerr << " Restart dump frequency (in steps) " << restart_interval_steps << '\n';
     }
 
     const int total_steps = control_input.total_steps;
@@ -770,7 +771,7 @@ int main( int argc, char** argv )
     // child_status = 5 child process not found / status unavailable
 
 
-    //---------------- Main loop------------------------------
+    //---------------- Main loop ------------------------------
 
     // Periodically check the process status and the BOINC client status
 
@@ -927,10 +928,8 @@ int main( int argc, char** argv )
 
     // Time delay to ensure model files are all flushed to disk
     std::cerr << "Waiting for file operations to complete...(60 secs)" << std::endl;
-    if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 60 ) ) {
-        if ( !handle_boinc_client_status( tstate.child_process, bruntime ) ) {
-            return finish_task( tstate, get_task_finish_code( tstate, bruntime ) );
-        }
+    if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 60 ) && !handle_boinc_client_status( tstate.child_process, bruntime ) ) {
+        return finish_task( tstate, get_task_finish_code( tstate, bruntime ) );
     }
 
     tstate.model_success = model_ctrl->check_model_success();

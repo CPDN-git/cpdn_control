@@ -505,7 +505,7 @@ int main( int argc, char** argv )
     // Install a temporary streambuf wrapper on std::cerr so each new log line gets
     // a date/time prefix automatically. This keeps the existing stream-style logging
     // code intact while making remote stderr logs easier to correlate and debug.
-    TimestampedCerrGuard timestamped_cerr( std::cerr );
+    Timestamped timestamped_cerr( std::cerr );
 
     if ( bconfig.slot_path.empty() ) {
         std::cerr << "..Error. Can't determine slot path: current_path() returned empty" << std::endl;

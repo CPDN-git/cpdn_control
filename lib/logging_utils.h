@@ -3,16 +3,16 @@
 #include <iosfwd>
 #include <memory>
 
-class TimestampedCerrGuard {
+class Timestamped {
 
   public:
-    explicit TimestampedCerrGuard( std::ostream& stream );
-    ~TimestampedCerrGuard();
+    explicit Timestamped( std::ostream& stream );
+    ~Timestamped();
 
-    TimestampedCerrGuard( const TimestampedCerrGuard& ) = delete;
-    TimestampedCerrGuard& operator=( const TimestampedCerrGuard& ) = delete;
-    TimestampedCerrGuard( TimestampedCerrGuard&& ) = delete;
-    TimestampedCerrGuard& operator=( TimestampedCerrGuard&& ) = delete;
+    Timestamped( const Timestamped& ) = delete;
+    Timestamped& operator=( const Timestamped& ) = delete;
+    Timestamped( Timestamped&& ) = delete;
+    Timestamped& operator=( Timestamped&& ) = delete;
 
   private:
     std::ostream& stream;

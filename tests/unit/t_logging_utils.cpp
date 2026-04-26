@@ -41,7 +41,7 @@ int t_logging_utils()
     {
         std::ostringstream out;
         {
-            TimestampedCerrGuard guard( out );
+            Timestamped guard( out );
             out << "alpha\nbeta\n";
         }
 
@@ -58,7 +58,7 @@ int t_logging_utils()
     {
         std::ostringstream out;
         {
-            TimestampedCerrGuard guard( out );
+            Timestamped guard( out );
             out << "gamma";
             out << " delta\n";
         }

@@ -16,7 +16,7 @@ std::string get_current_datetime_prefix()
     const auto now_time = std::chrono::system_clock::to_time_t( now );
 
     std::tm tm_buf{};
-#if defined(_WIN32) || defined(_WIN64)
+#if defined( _WIN32 ) || defined( _WIN64 )
     localtime_s( &tm_buf, &now_time );
 #else
     localtime_r( &now_time, &tm_buf );
@@ -30,7 +30,7 @@ std::string get_current_datetime_prefix()
 }    // namespace
 
 
-class TimestampedCerrGuard::TimestampedStreambuf : public std::streambuf {
+class Timestamped::TimestampedStreambuf : public std::streambuf {
 
   public:
     explicit TimestampedStreambuf( std::streambuf* destination ) : destination( destination ) {}
@@ -79,14 +79,14 @@ class TimestampedCerrGuard::TimestampedStreambuf : public std::streambuf {
 };
 
 
-TimestampedCerrGuard::TimestampedCerrGuard( std::ostream& stream ) : stream( stream ), original_buf( stream.rdbuf() )
+Timestamped::Timestamped( std::ostream& stream ) : stream( stream ), original_buf( stream.rdbuf() )
 {
     wrapped_buf = std::make_unique<TimestampedStreambuf>( original_buf );
     stream.rdbuf( wrapped_buf.get() );
 }
 
 
-TimestampedCerrGuard::~TimestampedCerrGuard()
+Timestamped::~Timestamped()
 {
     stream.flush();
     stream.rdbuf( original_buf );

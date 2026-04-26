@@ -525,10 +525,10 @@ int main( int argc, char** argv )
     // GlennC. May not need this in the future. to be determined.
 
     // Check for existence of model_config.xml in current directory (task) and fail if not found.
-    if ( !path_exists( MODEL_CONFIG_FILE ) ) {
-        std::cerr << ".. DEV NOTE: The model config does not yet exist in the current directory: " << MODEL_CONFIG_FILE << std::endl;
-        //GC. Testing only; return finish_task( tstate, 1 );        // should terminate, the model won't run.
-    }
+    //if ( !path_exists( MODEL_CONFIG_FILE ) ) {
+    //    std::cerr << ".. DEV NOTE: The model config does not yet exist in the current directory: " << MODEL_CONFIG_FILE << std::endl;
+    //    //GC. Testing only; return finish_task( tstate, 1 );        // should terminate, the model won't run.
+    //}
 
     // Create model control instance.
     // In future, rather than pass app_name, we might pass the model name read from model_config.xml.

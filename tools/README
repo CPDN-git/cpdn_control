@@ -1,0 +1,14 @@
+
+Tools: Useful code for external models
+======================================
+
+Glenn Carver,  CPDN, May 2026
+
+process_check:
+--------------
+
+This fortran module can be used to check the process id of the
+controller to find out if the process is running or not. The
+fortran code is a wrapper around a small C function that 
+supports Linux, macOS and Windows.
+

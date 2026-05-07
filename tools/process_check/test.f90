@@ -4,14 +4,13 @@ use cpdn_checkpid_mod
 
 implicit none
 
-integer :: pid
 integer :: is_running
 
-write(6,*) 'Enter PID to check: '
-read(5,*)  pid
-
-call cpdn_checkpid( pid, is_running )
-
+call cpdn_checkpid( is_running )
 write(6,*) 'is_running = ',is_running
+
+if ( is_running == 0 ) then
+    write(6,*) 'Control process not running: Abort!'
+endif
 
 end program

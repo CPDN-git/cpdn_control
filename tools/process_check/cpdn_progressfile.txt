@@ -1,0 +1,9 @@
+! CPDN controller progress file & fortran namelist
+&CPDN
+control_pid=95103
+prior_acc_cpu_time=216077.260000
+upload_file_number=9
+last_step=3307
+last_upload=3888000
+model_completed=0
+/

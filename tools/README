@@ -12,3 +12,5 @@ controller to find out if the process is running or not. The
 fortran code is a wrapper around a small C function that 
 supports Linux, macOS and Windows.
 
+See the process_check/README.md for more details.
+

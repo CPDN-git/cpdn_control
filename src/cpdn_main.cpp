@@ -4,6 +4,8 @@
 // This version written by Glenn Carver, CPDN, 2025->
 // Complete rewrite of original version by Andy Bowery (OERC) December 2023.
 //
+// AI assistance from : GPT-5.3, GPT-5.4 and GPT-5.5.
+//
 
 #include <cerrno>
 #include <chrono>
@@ -360,6 +362,8 @@ static bool get_app_config_nthreads( int argc, char** argv, int& nthreads, bool&
     }
 
     // GC. The best max as parallel efficiency markedly drops after this many threads, even at T319.
+    // TODO. retrieve the max threads from the model control interface instead of hardcoding here.
+    // pass as a arg and retrieve in main().
     int max_threads = 8;
     int min_threads = 1;    // minimum number of threads.
     int requested_nthreads = -1;
@@ -418,6 +422,7 @@ static std::string get_result_base_name( const BoincConfig& bconfig, const TaskC
     return base_name;
 }
 
+
 /**
  * @brief Append upload files that match the expected output filename pattern.
  *
@@ -448,6 +453,7 @@ static int add_upload_files( const fs::path& dir, std::vector<fs::path>& out, co
     }
     return 0;
 }
+
 
 /**
  * @brief Prints a banner to stderr at start of controller with model name and version.
@@ -501,18 +507,17 @@ int main( int argc, char** argv )
         std::cerr << "..BOINC initialisation failed" << "\n";
         return finish_task( tstate, retval );
     }
-
-    // Install a temporary streambuf wrapper on std::cerr so each new log line gets
-    // a date/time prefix automatically. This keeps the existing stream-style logging
-    // code intact while making remote stderr logs easier to correlate and debug.
-    Timestamped timestamped_cerr( std::cerr );
-
     if ( bconfig.slot_path.empty() ) {
         std::cerr << "..Error. Can't determine slot path: current_path() returned empty" << std::endl;
         return finish_task( tstate, 1 );
     }
 
-    // Say who we are.
+    // Install temporary streambuf wrapper on std::cerr so each new log line gets
+    // a date/time prefix automatically. This keeps the existing stream-style logging
+    // code intact while making remote stderr logs easier to correlate and debug.
+    Timestamped timestamped_cerr( std::cerr );
+
+    // Print banner with key config & model information.
     banner( bconfig, CODE_VERSION );
     if ( bconfig.standalone ) {
         std::cerr << "Running in standalone mode" << '\n';
@@ -563,9 +568,7 @@ int main( int argc, char** argv )
         return finish_task( tstate, 1 );
     }
     if ( using_app_config_nthreads ) {
-        // GC. Enabling this causes the model to deadlock. Not clear why as this just
-        //     sets the env variable. I suspect there's some boinc interaction that
-        //     prohibits the number of threads to go up. TODO.
+        // GC. Enabling this causes the model to deadlock. Seems to be a problem with the specific OIFS binary.
         //std::cerr << "Using --nthreads from app_config.xml: " << bconfig.ncpus << '\n';
         //bconfig.ncpus = app_config_nthreads;
         std::cerr << "Note: Ignoring app_config.xml avg_ncpus override. Not currently working.\n";
@@ -582,16 +585,18 @@ int main( int argc, char** argv )
 
     boinc_begin_critical_section();
 
-    // Create temp upload folder for moving the results to and uploading the results from.
+    // Create temp upload folder to move the results into and upload from.
     // BOINC measures the disk usage on the slots directory so we must move all results out of this folder
     fs::path upload_dir = fs::path( bconfig.project_dir ) / ( bconfig.app_name + "_" + tconfig.workunit );
-    std::cerr << "Location of temp upload folder: " << upload_dir << '\n';
+
+    std::cerr << "Location of upload folder in project direoctory: " << upload_dir << '\n';
     if ( !ensure_directory( upload_dir, &err_msg ) ) {
         std::cerr << "..Failed to create temp upload folder for results: " << err_msg << std::endl;
         return finish_task( tstate, 1 );
     }
 
     //  -------------- Unpack application into slot ------------------
+
     retval = move_and_unzip_app_file( bconfig.app_name, bconfig.app_version, bconfig.project_dir, bconfig.slot_path );
     if ( retval ) {
         std::cerr << "..move_and_unzip_app_file failed" << "\n";
@@ -599,6 +604,7 @@ int main( int argc, char** argv )
     }
 
     //---------------- Stage & unpack the app bundle ---------------------------
+
     // This bundle is a BOINC logical input file in the slot. Resolve its jf_* source, copy that source
     // into the slot, and unzip it without overwriting the BOINC logical file itself. If we overwrite
     // the logical file we have no way to recover the original source filename.
@@ -614,8 +620,9 @@ int main( int argc, char** argv )
         return finish_task( tstate, 1 );    // should terminate, the model won't run.
     }
 
-    //----------------  Parse the model control file -------------------------------
-    // Parse the model control input through the model layer so controller code stays generic.
+    //----------------  Ask model for key control variables we need to manage the task  -------------------------------
+
+    // Parse the model control file (e.g. namelist) through the model layer so controller code stays generic.
     // The model control file is expected to get unpacked from the app bundle.
 
     auto control_input = model_ctrl->parse_control_input();

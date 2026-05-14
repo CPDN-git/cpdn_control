@@ -91,7 +91,7 @@ bool run_step_diagnostics( const fs::path& diag_exe, const fs::path& slot_path, 
 
     fs::path trickle_data_path = slot_path / TrickleHandler::TRICKLE_DATA_FILE;
     fs::path diagnostics_log_path = slot_path / "diagnostics_output.log";
-    auto diag_env_vars = oifs_get_grib_env_vars( slot_path.string() );
+    auto diag_env_vars = oifs_get_model_env_vars( slot_path.string() );
     std::vector<std::string> diag_args = { "-s", diagnostics_input, "-G", diagnostics_input + ".diag", "-t", "f", "-l", "-f", "131", "-n",
                                            "-p", "./rtables/" };
     std::error_code ec;

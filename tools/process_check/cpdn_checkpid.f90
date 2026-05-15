@@ -2,8 +2,34 @@
 !  Fortran module & subroutine for use in CPDN models
 !  to check periodically if the controller process is running.
 !
+!    Glenn Carver, CPDN, May/2026
+!
 !  Wrapper around C function to check process id.
 !  Process id can be obtained from the progress file namelist.
+!
+!   Usage
+!   -----
+!   Insert call to cpdn_checkpid inside the model's timestep loop
+!   before the first executable statement.
+!   The abort condition is if 'standalone' and 'is_running' are
+!   both false.
+!   e.g. 
+!        subroutine do_timestep
+!        ....
+!        logical :: is_running, is_standalone
+!        ...
+!        do istep = 1, total_steps
+!        call cpdn_checkpid(is_running,is_standalone)
+!        if ( .not. is_standalone .and. .not. is_running ) then
+!           STOP 'CPDN control process failed. Aborting...'
+!        endif
+!        end do
+!        end subroutine
+!
+!   See test.f90 for an example test code and README.md file.
+!
+!   Note! Do not run this in a multi-threaded region of the code.
+!        Not (yet) threadsafe.
 !
 !    Glenn Carver, CPDN, May/2026
 
@@ -55,30 +81,61 @@ contains
     end subroutine
 
 
-    subroutine cpdn_checkpid( is_running )
+    subroutine cpdn_checkpid( is_running, alone )
 
-    integer, intent(out) :: is_running   ! 1 if yes, 0 if no, error reading progfile, or control_pid changed
-    integer, save        :: last_pid = -1     ! control_pid read previously
-    
+    logical, intent(out) :: is_running          ! .T. if yes, .F. if no, or error reading progfile, or control_pid changed
+    logical, intent(out) :: alone               ! .T. if running standalone, .F. if under control by cpdn_controller.
+    integer, save        :: last_pid = -1       ! control_pid read previously
+    logical, save        :: lexist = .false.
+    logical, save        :: lfirst = .true.
+    logical, save        :: lstandalone = .true.    ! if no progfile found on first try, assume no cpdn_control process
+    integer              :: iret
+
+    !  Initially assume running alone.
+    is_running = .false.
+    alone = .true.
+
+    !  Check progress file exists.
+    !  If first time in and no progfile, assume we are running standalone.
+    inquire( file=cpdn_progfile, exist=lexist )
+
+    if (lfirst) then
+        lfirst = .false.
+        lstandalone = .not. lexist
+    endif
+    alone = lstandalone
+
+    if ( lstandalone ) then
+        return
+    endif
+
+    !  If there was initially a progfile but now there isn't, return error
+    if ( .not.lstandalone .and. .not.lexist ) then
+        is_running = .false.
+        alone = .false.         ! .false. because we were not initially running standalone
+        return
+    endif
+
     !  Read progfile each time to check if process id has changed on us
     !  If it has, that's an error; our controller has been replaced.
     call cpdn_read_progfile
+
     if ( control_pid == ierr ) then
-        ! cpdn_progressfile.txt can't be read
-        is_running = 0
+        is_running = .false.                    ! cpdn_progressfile.txt can't be read
         return
     else if ( last_pid == -1 ) then
         last_pid = control_pid
     else if ( last_pid /= control_pid ) then
-        ! controller pid has changed! Prob because our controller died and a new task started.
+        ! controller pid has changed! Probably our controller died and a new task started.
         ! this is an error and model needs to finish immediately.
-        is_running = 0
+        is_running = .false.
         return
     endif
 
     !   We have a valid control_pid to check
     !   Call C wrapper to check process is running
-    is_running = cpdn_is_process_running( int(control_pid, c_int) )
+    iret = cpdn_is_process_running( int(control_pid, c_int) )
+    is_running = iret .eq. 1
 
     return
     end subroutine

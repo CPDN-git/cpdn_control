@@ -2,12 +2,14 @@
 How to check the CPDN control process from within a fortran model
 ===================================================================
 
+Glenn Carver, CPDN, May/2026
+
 This small code is designed to help fortran based models detect
 when the CPDN control process is not running. This can happen if 
-there is a bug in the code, like a memory fault. If this happens
-it often leaves the model running alone with no control, causing
-corruption in the slot directory when the client tries to restart
-the task (or another task).
+there is a bug in the CPDN controller code, like a memory fault. 
+If this happens it often leaves the model running alone with no 
+control, causing corruption in the slot directory when the client 
+tries to restart the task (or another task).
 
 Implementation
 --------------
@@ -32,18 +34,19 @@ of the controller id.
 Something like:
 
 ```
-    subroutine time_step
+    subroutine do_time_step
     ....
-    integer :: cpdn_is_running = 0
-
-    .....
-    call cpdn_checkpid( cpdn_is_running )
-    if ( cpdn_is_running == 0 ) then
-       print*,' ERROR: CPDN control process is NOT running. Aborting..'
-       STOP 'ABORT'    ! or perhaps "call abort"
-    endif
+    logical :: cpdn_is_running
+    logical :: model_standalone
 
     do timestep = 1, nsteps
+    .....
+    call cpdn_checkpid( cpdn_is_running, model_standalone )
+
+    if ( .not. cpdn_is_running .and. .not. model_standalone ) then
+       print*,' ERROR: CPDN control process is NOT running. Aborting..'
+       STOP 'ABORT'
+    endif
     ... 
     end do
     ....
@@ -54,11 +57,14 @@ Error conditions
 ----------------
 
 The call to cpdn_checkpid() will read the cpdn_progressfile.txt on each call.
-This is to detect if the control_pid has changed.
+If on the first call on the first timestep, no cpdn_progressfile.txt file is 
+found, the code assumes the model is running standalone so it can be run
+outside of the cpdn controller without taking this code out.
 
-is_running is set to zero and indicates an error if:
+On each subsequent call, if there is a progress file `cpdn_is_running` is set
+FALSE and indicates an error if:
 
-- cpdn_progressfile.txt is not found or not readable.
-- an error occurred attempting to read an existing cpdn_progressfile.txt.
+- cpdn_progressfile.txt is no longer found.
+- an error occurred attempting to read cpdn_progressfile.txt.
 - the CPDN control process id changed from the last time the file was read.
 - the process identified by the PID in the cpdn_progressfile.txt is not running.

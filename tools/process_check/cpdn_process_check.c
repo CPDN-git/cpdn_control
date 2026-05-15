@@ -5,27 +5,32 @@
 
 #include <errno.h>
 
-#if defined(_WIN32) || defined(_WIN64)
+#if defined( _WIN32 ) || defined( _WIN64 )
 #include <windows.h>
-int cpdn_is_process_running(int pid) {
-    HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, (DWORD)pid);
-    if (hProcess) {
+int cpdn_is_process_running( int pid )
+{
+    HANDLE hProcess = OpenProcess( PROCESS_QUERY_LIMITED_INFORMATION, FALSE, (DWORD)pid );
+    if ( hProcess ) {
         DWORD exitCode;
-        if (GetExitCodeProcess(hProcess, &exitCode)) {
-            CloseHandle(hProcess);
-            return (exitCode == STILL_ACTIVE);
+        if ( GetExitCodeProcess( hProcess, &exitCode ) ) {
+            CloseHandle( hProcess );
+            return ( exitCode == STILL_ACTIVE );
         }
-        CloseHandle(hProcess);
+        CloseHandle( hProcess );
     }
     return 0;
 }
 #else
 #include <signal.h>
-int cpdn_is_process_running(int pid) {
+int cpdn_is_process_running( int pid )
+{
     // kill with signal 0 checks for existence without sending a signal
-    if (kill(pid, 0) == 0) return 1;
+    // kill() takes a pid_t which maps to 'int'.
+    if ( kill( pid, 0 ) == 0 )
+        return 1;
     // EPERM means it exists but you don't have permission to signal it
-    if (errno == EPERM) return 1;
+    if ( errno == EPERM )
+        return 1;
     return 0;
 }
 #endif

@@ -12,12 +12,13 @@ ParseResult parse_args( int argc, char** argv )
     ParseResult result;
 
     CLI::App app{ "CPDN control" };
-    app.allow_extras();    // allow unknown options (e.g., --nthreads) coming from boinc users.
+    app.allow_extras();    // allow unknown options (e.g., --nthreads coming a user's app_config.xml file).
 
     auto* cpdn = app.add_option_group( "cpdn" );
 
-    // Filename-resolution options are CPDN task metadata used to locate the downloaded files.
-    // They are not passed into the model and are not authoritative model runtime configuration.
+    // Filename-<name> options are CPDN task metadata used to locate the downloaded task files.
+    // They are not passed into the model and are not necessarily model runtime configuration but often are.
+    // TODO: Maybe better named as 'task_file_' or 'cpdn_filename_<name> to distinguish from model configuration options?
     cpdn->add_option( "--batch", result.batch, "CPDN batch ID" )->capture_default_str();
     cpdn->add_option( "--workunit", result.workunit, "CPDN workunit ID" )->capture_default_str();
     cpdn->add_option( "--memberid", result.memberid, "CPDN unique member ID" )->capture_default_str();

@@ -25,10 +25,10 @@ struct ModelControlInputData {
     std::string error_message;
     std::string experiment_id;
 
-    int timestep_seconds = 0;    // UTSTEP
-    int output_interval = 0;     // NFRPOS raw value: +ve model steps, -ve hours
-    int restart_interval = 0;    // NFRRES raw value: +ve model steps, -ve hours
-    int total_steps = 0;         // CUSTOP
+    int timestep_seconds = 0;    // e.g. OpenIFS : UTSTEP
+    int output_interval = 0;     // e.g. OpenIFS : NFRPOS raw value: +ve model steps, -ve hours
+    int restart_interval = 0;    // e.g. OpenIFS : NFRRES raw value: +ve model steps, -ve hours
+    int total_steps = 0;         // e.g. OpenIFS : CUSTOP
     double forecast_length_time = 0.0;
 };
 
@@ -79,6 +79,14 @@ class ModelControl {
 
     // Getters & setters for model information (placeholders)
     // C++ note: this provides "default implementation unless overridden" so must still be virtual.
+
+    // Gives the minimum and maximum number of threads the model can use based on the model configuration and/or system resources.
+    virtual void get_nthreads_range( int& min_threads, int& max_threads ) const
+    {
+        min_threads = 1;
+        max_threads = 1;
+    }
+
     virtual std::string get_vendor_name() const { return vendor_name; }
     virtual std::string get_model_name() const { return model_name; }
     virtual std::string get_model_version() const { return model_version; }

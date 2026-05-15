@@ -40,6 +40,13 @@ class OpenIFSControl : public ModelControl {
     std::vector<std::string> get_log_filenames() const override;
     std::regex get_output_filename_regex() const override;
 
+    // Gives the minimum and maximum number of threads the model can use based on the model configuration and/or system resources.
+    void get_nthreads_range( int& min_threads, int& max_threads ) const override
+    {
+        min_threads = 1;
+        max_threads = 8;    // More than 8 threads is deemed too inefficient, even at T319.
+    }
+
     // Model specific methods
     bool setup_directories( const fs::path& slot_path ) const override;
 

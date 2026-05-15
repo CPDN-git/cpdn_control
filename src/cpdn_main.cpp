@@ -361,11 +361,6 @@ static bool get_app_config_nthreads( int argc, char** argv, int& nthreads, bool&
         return true;
     }
 
-    // GC. The best max as parallel efficiency markedly drops after this many threads, even at T319.
-    // TODO. retrieve the max threads from the model control interface instead of hardcoding here.
-    // pass as a arg and retrieve in main().
-    int max_threads = 8;
-    int min_threads = 1;    // minimum number of threads.
     int requested_nthreads = -1;
 
     std::string nthreads_value = argv[argc - 1];
@@ -377,15 +372,33 @@ static bool get_app_config_nthreads( int argc, char** argv, int& nthreads, bool&
     used_app_config_nthreads = true;
     nthreads = requested_nthreads;
 
-    if ( requested_nthreads > max_threads ) {
-        std::cerr << "Warning. --nthreads value too high. Setting to max number of threads : " << max_threads << '\n';
-        nthreads = max_threads;
-    } else if ( requested_nthreads < min_threads ) {
-        std::cerr << "Warning. --nthreads is too low for this configuration. Minimum #threads is 1. Resetting.\n";
-        nthreads = min_threads;
-    }
-
     return true;
+}
+
+
+/**
+ * @brief Checks nthreads value against what the model allows
+ * @param nthreads Requested number of threads, may be changed on exist
+ * @returns True if nthreads was changed, otherwise false.
+ */
+static bool check_model_nthreads( int& nthreads, const ModelControl& model_ctrl )
+{
+    bool changed = false;
+
+    int model_min_threads = 1;
+    int model_max_threads = 1;
+    model_ctrl.get_nthreads_range( model_min_threads, model_max_threads );
+
+    if ( nthreads > model_max_threads ) {
+        std::cerr << "Warning. Number of threads too high. Setting to max allowed threads : " << model_max_threads << '\n';
+        nthreads = model_max_threads;
+        changed = true;
+    } else if ( nthreads < model_min_threads ) {
+        std::cerr << "Warning. Number of threads too low. Setting to min allowed threads : " << model_min_threads << '\n';
+        nthreads = model_min_threads;
+        changed = true;
+    }
+    return changed;
 }
 
 
@@ -559,21 +572,22 @@ int main( int argc, char** argv )
     }
 
     // -------------- <app_config.xml> options processing ----
-    // Check for optional '--nthreads <value>' optionally set by app_config.xml on user's machine.
+    // Check for optional '--nthreads <value>' args on the command line; optionally set by users's app_config.xml.
 
     bool using_app_config_nthreads = false;
     int app_config_nthreads = 0;
+
     if ( !get_app_config_nthreads( argc, argv, app_config_nthreads, using_app_config_nthreads, err_msg ) ) {
         std::cerr << "..Failed to parse --nthreads argument: " << err_msg << '\n';
         return finish_task( tstate, 1 );
     }
+
     if ( using_app_config_nthreads ) {
-        // GC. Enabling this causes the model to deadlock. Seems to be a problem with the specific OIFS binary.
-        //std::cerr << "Using --nthreads from app_config.xml: " << bconfig.ncpus << '\n';
-        //bconfig.ncpus = app_config_nthreads;
-        std::cerr << "Note: Ignoring app_config.xml avg_ncpus override. Not currently working.\n";
+        std::cerr << "Using --nthreads from app_config.xml: " << bconfig.ncpus << '\n';
+        check_model_nthreads( app_config_nthreads, *model_ctrl );
+        bconfig.ncpus = app_config_nthreads;
     }
-    std::string nthreads = std::to_string( bconfig.ncpus );    // default or resolved thread count for model launch
+    std::string nthreads = std::to_string( bconfig.ncpus );
 
     double num_days = 0.0;
     if ( !parse_double_arg( tconfig.filename_fclen, num_days, err_msg ) ) {

@@ -30,11 +30,24 @@ of the controller id.
 
 2. Add the new source directory 'cpdn' to the build system.
 
+2.1 OpenIFS:
+
+The FCM build does not detect the dependency of the fortran
+module on the C object file despite the explicit interface in the 
+fortran module. To fix, modify the make/oifs-depend.fcm file and add
+this line:
+
+```
+oifs.prop{dep.o}[cpdn/cpdn_checkpid.f90]     = cpdn_process_check.o
+```
+Then build OpenIFS in the normal way.
+
 3. Implement the call at the start of the model's main timestep loop.
 Something like:
 
 ```
     subroutine do_time_step
+    use cpdn_checkpid_mod
     ....
     logical :: cpdn_is_running
     logical :: model_standalone

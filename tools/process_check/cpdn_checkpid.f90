@@ -15,6 +15,7 @@
 !   both false.
 !   e.g. 
 !        subroutine do_timestep
+!        use cpdn_checkpid_mod
 !        ....
 !        logical :: is_running, is_standalone
 !        ...

@@ -589,6 +589,7 @@ int main( int argc, char** argv )
     }
     std::string nthreads = std::to_string( bconfig.ncpus );
 
+    // TODO. This should be in process_args??
     double num_days = 0.0;
     if ( !parse_double_arg( tconfig.filename_fclen, num_days, err_msg ) ) {
         std::cerr << "..Failed to parse --filename_fclen value: " << err_msg << '\n';
@@ -609,7 +610,7 @@ int main( int argc, char** argv )
         return finish_task( tstate, 1 );
     }
 
-    //  -------------- Unpack application into slot ------------------
+    //  -------------- Unpack application executable into slot ------------------
 
     retval = move_and_unzip_app_file( bconfig.app_name, bconfig.app_version, bconfig.project_dir, bconfig.slot_path );
     if ( retval ) {
@@ -617,7 +618,7 @@ int main( int argc, char** argv )
         return finish_task( tstate, retval );
     }
 
-    //---------------- Stage & unpack the app bundle ---------------------------
+    //---------------- Stage & unpack the app (model) file bundle ---------------------------
 
     // This bundle is a BOINC logical input file in the slot. Resolve its jf_* source, copy that source
     // into the slot, and unzip it without overwriting the BOINC logical file itself. If we overwrite
@@ -634,7 +635,7 @@ int main( int argc, char** argv )
         return finish_task( tstate, 1 );    // should terminate, the model won't run.
     }
 
-    //----------------  Ask model for key control variables we need to manage the task  -------------------------------
+    //----------------  Ask model for key control variables needed to manage the task  -------------------------------
 
     // Parse the model control file (e.g. namelist) through the model layer so controller code stays generic.
     // The model control file is expected to get unpacked from the app bundle.

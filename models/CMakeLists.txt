@@ -1,6 +1,6 @@
 # CMakeLists.txt for model-specific sources
 #
-# Builds object libraries for model utilities so they can be folded into
+# Builds object libraries for model instances & utilities so they can be added to
 # the main controller library. Add new model components here as they are
 # introduced. Just add any new source files to the 'add_library(cpdn_models...)
 # line. If the code gets too big we could consider making separate object
@@ -13,10 +13,11 @@
 #
 #    Glenn Carver, CPDN, 2025.
 
-# Object library for OpenIFS model helpers
+# Object library for all the different model instances
 add_library(cpdn_models OBJECT
     ${CMAKE_CURRENT_SOURCE_DIR}/openifs/oifs_utils.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/openifs/oifs_control.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/wrf/wrf_control.cpp
 )
 
 

@@ -36,6 +36,7 @@
 #include "api/trickle_handler.h"
 
 #include "models/openifs/oifs_control.h"
+#include "models/wrf/wrf_control.h"
 
 namespace chrono = std::chrono;
 namespace fs = std::filesystem;
@@ -48,7 +49,7 @@ namespace fs = std::filesystem;
 
 
 // Constants
-constexpr std::string_view MODEL_CONFIG_FILE = "model_config.xml";
+constexpr std::string_view MODEL_CONFIG_FILE = "model_config.xml";    // not in use (yet?)
 constexpr int LOOP_DELAY_DEFAULT = 7;
 constexpr int LOOP_DELAY_FAST = 1;
 
@@ -90,6 +91,12 @@ static std::unique_ptr<ModelControl> create_model_control( std::string_view mode
 
     } else if ( model_name == "oifs_43r3_omp_l159" || model_name == "oifs_43r3_omp_l319" || model_name == "oifs_43r3_parest_omp_l319" ) {
         model = std::make_unique<OpenIFSControl>( "ECMWF", model_name, model_version, "oifs_43r3_omp_model.exe" );
+
+    } else if ( model_name == "wrf_4.6.1_urban" && model_version == "4.6.1" ) {
+        model = std::make_unique<WRFControl>( "NCAR", model_name, model_version, "wrf_4.6.1_urban.exe" );
+
+    } else {
+        std::cerr << "Unsupported model '" << model_name << "'\n";
     }
 
     return model;

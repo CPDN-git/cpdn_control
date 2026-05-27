@@ -93,7 +93,7 @@ static std::unique_ptr<ModelControl> create_model_control( std::string_view mode
         model = std::make_unique<OpenIFSControl>( "ECMWF", model_name, model_version, "oifs_43r3_omp_model.exe" );
 
     } else if ( model_name == "wrf_4.6.1_urban" && model_version == "4.6.1" ) {
-        model = std::make_unique<WRFControl>( "NCAR", model_name, model_version, "wrf_4.6.1_urban.exe" );
+        model = std::make_unique<WRFControl>( "UCAR", model_name, model_version, "wrf_4.6.1_urban.exe" );
 
     } else {
         std::cerr << "Unsupported model '" << model_name << "'\n";

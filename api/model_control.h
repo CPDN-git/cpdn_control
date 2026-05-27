@@ -131,19 +131,12 @@ class ModelControl {
     ModelControl( std::string_view vendor, std::string_view model, std::string_view version, std::string_view exe )
         : vendor_name( vendor ), model_name( model ), model_version( version ), executable( exe ) {};
 
-    // Setters for model information (protected so only accessible to derived classes)
+    // Protected member variables (accessible to derived classes, immutable after construction)
+    // C++ note. Members are initialized in declaration order, not initializer-list order.
+    // Best practice: keep the initializer list in the same order as member declarations to avoid confusion.
 
-    void set_vendor_name( std::string_view vendor ) { vendor_name = vendor; }
-    void set_model_name( std::string_view model ) { model_name = model; }
-    void set_model_version( std::string_view version ) { model_version = version; }
-
-
-  private:
-    // Private member variables (not visible to derived classes; derived classes should use getters/setters)
-    // C++ note. Order here must match the order in ModelControl().
-
-    std::string vendor_name;      // e.g. "ECMWF"
-    std::string model_name;       // e.g. "OpenIFS"
-    std::string model_version;    // e.g. "43r3"
-    std::string executable;       // e.g. "oifs_43r3_model.exe", "oifs_43r3_omp_model.exe", "test_model"
+    const std::string vendor_name;      // e.g. "ECMWF"
+    const std::string model_name;       // e.g. "OpenIFS"
+    const std::string model_version;    // e.g. "43r3"
+    const std::string executable;       // e.g. "oifs_43r3_model.exe", "oifs_43r3_omp_model.exe", "test_model"
 };

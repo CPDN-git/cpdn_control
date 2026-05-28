@@ -5,6 +5,7 @@
 
 #include <cerrno>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>    // testing only; to include std::cerr/cout
@@ -13,9 +14,14 @@
 #include <system_error>
 
 #if defined( _WIN32 )
+#include <Windows.h>
+#include <io.h>
 #include <process.h>
 #define getpid _getpid
 #else
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>    // for getpid()
 #endif
 
@@ -45,6 +51,95 @@ bool parse_double_value( const std::string& value, double& out, std::string& err
         return false;
     }
     return true;
+}
+
+bool sync_file_to_disk( const fs::path& path, std::string& err_msg )
+{
+#if defined( _WIN32 )
+    const std::wstring native_path = path.native();
+    HANDLE file_handle = CreateFileW( native_path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                      OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr );
+    if ( file_handle == INVALID_HANDLE_VALUE ) {
+        err_msg = "Failed to open file for sync: " + path.string();
+        return false;
+    }
+
+    if ( !FlushFileBuffers( file_handle ) ) {
+        const DWORD win_error = GetLastError();
+        err_msg = "Failed to sync file buffers: " + path.string() + " (error " + std::to_string( win_error ) + ")";
+        CloseHandle( file_handle );
+        return false;
+    }
+
+    CloseHandle( file_handle );
+    return true;
+#else
+    const int fd = open( path.c_str(), O_RDONLY );
+    if ( fd < 0 ) {
+        err_msg = "Failed to open file for sync: " + path.string() + " (" + std::strerror( errno ) + ")";
+        return false;
+    }
+
+    if ( fsync( fd ) != 0 ) {
+        err_msg = "Failed to sync file buffers: " + path.string() + " (" + std::strerror( errno ) + ")";
+        close( fd );
+        return false;
+    }
+
+    close( fd );
+    return true;
+#endif
+}
+
+bool replace_file_atomically( const fs::path& from, const fs::path& to, std::string& err_msg )
+{
+#if defined( _WIN32 )
+    const std::wstring from_native = from.native();
+    const std::wstring to_native = to.native();
+    if ( !MoveFileExW( from_native.c_str(), to_native.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH ) ) {
+        const DWORD win_error = GetLastError();
+        err_msg = "Failed to replace progress file with updated file: " + to.string() + " (error " + std::to_string( win_error ) + ")";
+        return false;
+    }
+    return true;
+#else
+    std::error_code ec;
+    fs::rename( from, to, ec );
+    if ( ec ) {
+        err_msg = "Failed to replace progress file with updated file: " + to.string() + " (" + ec.message() + ")";
+        return false;
+    }
+    return true;
+#endif
+}
+
+bool sync_parent_directory( const fs::path& path, std::string& err_msg )
+{
+#if defined( _WIN32 )
+    (void)path;
+    (void)err_msg;
+    return true;
+#else
+    fs::path dir_path = path.parent_path();
+    if ( dir_path.empty() ) {
+        dir_path = ".";
+    }
+
+    const int dir_fd = open( dir_path.c_str(), O_RDONLY | O_DIRECTORY );
+    if ( dir_fd < 0 ) {
+        err_msg = "Failed to open progress file directory for sync: " + dir_path.string() + " (" + std::strerror( errno ) + ")";
+        return false;
+    }
+
+    if ( fsync( dir_fd ) != 0 ) {
+        err_msg = "Failed to sync progress file directory: " + dir_path.string() + " (" + std::strerror( errno ) + ")";
+        close( dir_fd );
+        return false;
+    }
+
+    close( dir_fd );
+    return true;
+#endif
 }
 
 }    // namespace
@@ -103,12 +198,24 @@ bool ProgressFileHandler::write( const TaskState& task, std::string& err_msg ) c
         return false;
     }
 
-    std::error_code ec;
-    fs::rename( tmp_path, progressfile_path, ec );
-    if ( ec ) {
-        err_msg = "Failed to replace progress file with updated file: " + progressfile_path.string() + " (" + ec.message() + ")";
+    // Crash-safe update requires two durability points:
+    // 1) fsync/FlushFileBuffers on the temp file forces its content+inode to stable storage.
+    // 2) fsync on the parent directory (POSIX) forces the rename metadata update to stable storage.
+    // Without (2), a sudden host crash can lose the directory entry update even though the new file data
+    // itself was flushed, and startup may still see a stale/missing progress file.
+    if ( !sync_file_to_disk( tmp_path, err_msg ) ) {
         std::error_code rm_ec;
         fs::remove( tmp_path, rm_ec );
+        return false;
+    }
+
+    if ( !replace_file_atomically( tmp_path, progressfile_path, err_msg ) ) {
+        std::error_code rm_ec;
+        fs::remove( tmp_path, rm_ec );
+        return false;
+    }
+
+    if ( !sync_parent_directory( progressfile_path, err_msg ) ) {
         return false;
     }
 

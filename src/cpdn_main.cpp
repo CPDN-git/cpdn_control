@@ -585,8 +585,10 @@ int main( int argc, char** argv )
     int app_config_nthreads = 0;
 
     if ( !get_app_config_nthreads( argc, argv, app_config_nthreads, using_app_config_nthreads, err_msg ) ) {
-        std::cerr << "..Failed to parse --nthreads argument: " << err_msg << '\n';
-        return finish_task( tstate, 1 );
+        std::cerr << "..Failed to parse --nthreads argument: " << err_msg << '\n'
+                  << "..Expected usage: --nthreads <integer value>\n"
+                  << "..Ignoring app_config.xml and using default nthreads value.\n";
+        using_app_config_nthreads = false;
     }
 
     if ( using_app_config_nthreads ) {

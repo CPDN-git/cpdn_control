@@ -24,7 +24,7 @@ repo_root="$(cd "${script_dir}/.." && pwd)"
 boinc_dir="${BOINC_DIR:-}"
 build_dir="${repo_root}/build"
 build_type="Release"
-enable_functional="OFF"
+enable_functional="ON"
 skip_tests="0"
 clean_build="0"
 

@@ -27,7 +27,7 @@ vcpkg_root="${VCPKG_ROOT:-}"
 build_dir="${repo_root}/build"
 vcpkg_triplet="x64-linux-cpdn-static"
 build_type="Release"
-enable_functional="OFF"
+enable_functional="ON"
 skip_tests="0"
 clean_build="0"
 

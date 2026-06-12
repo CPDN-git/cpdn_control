@@ -94,12 +94,6 @@ fi
 echo "[build_with_vcpkg] Installing manifest dependencies via vcpkg"
 "${vcpkg_root}/vcpkg" install --x-manifest-root="${manifest_root}" --triplet="${vcpkg_triplet}"
 
-echo "[build_with_vcpkg] Building cpdn_zip"
-cmake -S "${repo_root}/zip" -B "${repo_root}/zip/build" \
-    -DCMAKE_BUILD_TYPE="${build_type}" \
-    -DCMAKE_INSTALL_PREFIX="${repo_root}/zip/install"
-cmake --build "${repo_root}/zip/build" --target install
-
 echo "[build_with_vcpkg] Configuring controller build in ${build_dir}"
 cmake -S "${repo_root}" -B "${build_dir}" \
     -DCMAKE_BUILD_TYPE="${build_type}" \

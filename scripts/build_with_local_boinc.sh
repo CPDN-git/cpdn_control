@@ -79,12 +79,6 @@ if [[ "${clean_build}" == "1" ]]; then
     mkdir -p "${build_dir}"
 fi
 
-echo "[build_with_local_boinc] Building cpdn_zip"
-cmake -S "${repo_root}/zip" -B "${repo_root}/zip/build" \
-    -DCMAKE_BUILD_TYPE="${build_type}" \
-    -DCMAKE_INSTALL_PREFIX="${repo_root}/zip/install"
-cmake --build "${repo_root}/zip/build" --target install
-
 echo "[build_with_local_boinc] Configuring controller build in ${build_dir}"
 cmake -S "${repo_root}" -B "${build_dir}" \
     -DCMAKE_BUILD_TYPE="${build_type}" \

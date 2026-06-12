@@ -40,6 +40,7 @@ int main( int argc, char* argv[] )
         { "Control Start", t_control_start },
         { "Logging Utils", t_logging_utils },
         { "Get Env Vars", t_get_env_vars },
+        { "Model Filename Match", t_model_filename_match },
         // Add new test functions here! Remember previous trailing comma!
     };
 

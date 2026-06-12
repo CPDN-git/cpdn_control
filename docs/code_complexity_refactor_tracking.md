@@ -223,6 +223,26 @@ Comparison against the previous refactor point:
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `src/cpdn_main.cpp::main()` | 67 | 67 | `0` | 342 | 323 | -19 (`-5.6%`) |
 
+## After replacing the regex filename seam with model-owned string matching
+
+Measured on 2026-06-12 after removing `get_output_filename_regex()` from `ModelControl`, switching upload-file discovery to `is_output_filename(...)`, and moving OpenIFS/WRF filename shape checks into model-owned string helpers.
+
+| File | Function | `pmccabe` | `lizard` CCN | `lizard` NLOC | Notes |
+| --- | --- | ---: | ---: | ---: | --- |
+| `src/cpdn_main.cpp` | `main()` | 67 | 67 | 323 | Top-level orchestration complexity unchanged; upload scan no longer depends on `std::regex` |
+| `src/cpdn_main.cpp` | `add_upload_files()` | 6 | 6 | 23 | Small helper still generic, but now delegates matching to the model instance |
+| `models/openifs/oifs_control.cpp` | `parse_oifs_output_filename()` | 7 | 7 | 17 | Simple OpenIFS filename validator replaces the old regex seam |
+| `models/openifs/oifs_control.cpp` | `OpenIFSControl::is_output_filename()` | 1 | 1 | 1 | Thin model-owned predicate built on the private parser |
+| `models/wrf/wrf_control.cpp` | `is_wrf_datetime_suffix()` | 8 | 8 | 13 | Simple fixed-layout datetime validator for WRF filename shapes |
+| `models/wrf/wrf_control.cpp` | `WRFControl::is_output_filename()` | 1 | 1 | 4 | WRF output matching is now contained in the model layer |
+| `models/wrf/wrf_control.cpp` | `WRFControl::is_restart_filename()` | 1 | 1 | 4 | WRF restart matching follows the same contained seam |
+
+Comparison against the previous refactor point:
+
+| Function | Prior `pmccabe` | Current `pmccabe` | Change | Prior `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src/cpdn_main.cpp::main()` | 67 | 67 | `0` | 323 | 323 | `0` |
+
 ## Current observations
 
 - `main()` is still the dominant complexity hotspot, but it is materially smaller than the original baseline.
@@ -238,6 +258,10 @@ Comparison against the previous refactor point:
   - model-specific launch environment assembly now lives behind `ModelControl::get_env_vars()`
   - both launch and diagnostics now use the same model-owned env seam
   - the new WRF override establishes the same seam without adding much complexity
+- The filename-seam refactor follows the same containment pattern:
+  - upload-file discovery now asks the model whether a filename matches
+  - OpenIFS and WRF filename layouts are checked with simple string helpers rather than `std::regex`
+  - model-specific parsing remains private to each model implementation instead of being lifted into `ModelControl`
 - `process_args(...)` was a good cohesion move as well as a useful reduction in `main()` complexity; the parsing/validation split now lives together in `src/parse_args.cpp`.
 - The timestamped logging refactor improved operability but, as expected, did not materially change control-flow complexity.
 - The `control_start` extraction is valuable mainly because it creates a direct unit-test seam for a high-risk state machine, even though it does not reduce the `main()` metric further.

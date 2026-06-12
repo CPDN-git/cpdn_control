@@ -5,12 +5,40 @@
 #include "wrf_control.h"
 
 #include "../../lib/utils.h"
+#include <cctype>
 
 namespace {
+
+constexpr std::string_view WRF_OUTPUT_PREFIX = "wrfout_d03_";
+constexpr std::string_view WRF_RESTART_PREFIX = "wrfrst_d03_";
 
 std::vector<std::string> wrf_get_omp_env_vars( const std::string& nthreads )
 {
     return { "OMP_NUM_THREADS=" + nthreads };
+}
+
+bool is_ascii_digit( char ch ) { return std::isdigit( static_cast<unsigned char>( ch ) ) != 0; }
+
+bool is_wrf_datetime_suffix( std::string_view suffix )
+{
+    if ( suffix.size() != 19 ) {
+        return false;
+    }
+
+    constexpr int digit_positions[] = { 0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18 };
+    for ( int pos : digit_positions ) {
+        if ( !is_ascii_digit( suffix[static_cast<std::size_t>( pos )] ) ) {
+            return false;
+        }
+    }
+
+    return suffix[4] == '-' && suffix[7] == '-' && suffix[10] == '_' && suffix[13] == ':' && suffix[16] == ':';
+}
+
+bool is_wrf_prefixed_datetime_filename( std::string_view filename, std::string_view prefix )
+{
+    return filename.size() == prefix.size() + 19 && filename.rfind( prefix, 0 ) == 0 &&
+           is_wrf_datetime_suffix( filename.substr( prefix.size() ) );
 }
 
 }    // namespace
@@ -58,14 +86,19 @@ std::vector<std::string> WRFControl::get_output_filenames( int step, std::string
     return {};
 }
 
+bool WRFControl::is_output_filename( std::string_view filename ) const
+{
+    return is_wrf_prefixed_datetime_filename( filename, WRF_OUTPUT_PREFIX );
+}
+
+bool WRFControl::is_restart_filename( std::string_view filename ) const
+{
+    return is_wrf_prefixed_datetime_filename( filename, WRF_RESTART_PREFIX );
+}
+
 std::vector<std::string> WRFControl::get_log_filenames() const
 {
     return {};
-}
-
-std::regex WRFControl::get_output_filename_regex() const
-{
-    return std::regex( "$^" );
 }
 
 bool WRFControl::setup_directories( const fs::path& slot_path ) const

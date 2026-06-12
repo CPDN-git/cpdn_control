@@ -5,6 +5,8 @@
 #include "oifs_control.h"
 #include "../../lib/utils.h"
 #include "oifs_utils.h"    // for oifs_parse_stat()
+#include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -12,6 +14,8 @@
 #include <unordered_set>
 
 namespace {
+
+constexpr std::string_view OIFS_RCF_FILENAME = "rcf";
 
 ModelControlInputData make_parse_error( const fs::path& source_file, std::string_view error_step, std::string_view error_field,
                                         std::string_view message )
@@ -33,6 +37,38 @@ std::vector<std::string> oifs_get_grib_env_vars( const std::string& slot_path )
 std::vector<std::string> oifs_get_omp_env_vars( const std::string& nthreads )
 {
     return { "OMP_NUM_THREADS=" + nthreads, "OMP_SCHEDULE=STATIC", "OMP_STACKSIZE=128M" };
+}
+
+bool is_ascii_alpha( std::string_view text )
+{
+    return std::all_of( text.begin(), text.end(), []( unsigned char ch ) { return std::isalpha( ch ) != 0; } );
+}
+
+bool is_ascii_digit( std::string_view text )
+{
+    return std::all_of( text.begin(), text.end(), []( unsigned char ch ) { return std::isdigit( ch ) != 0; } );
+}
+
+bool parse_oifs_output_filename( std::string_view filename )
+{
+    if ( filename.size() != 16 ) {
+        return false;
+    }
+
+    const std::string_view prefix = filename.substr( 0, 5 );
+    if ( prefix != "ICMGG" && prefix != "ICMSH" && prefix != "ICMUA" ) {
+        return false;
+    }
+
+    if ( !is_ascii_alpha( filename.substr( 5, 4 ) ) ) {
+        return false;
+    }
+
+    if ( filename[9] != '+' ) {
+        return false;
+    }
+
+    return is_ascii_digit( filename.substr( 10, 6 ) );
 }
 
 }    // namespace
@@ -288,12 +324,9 @@ std::vector<std::string> OpenIFSControl::get_output_filenames( int step, std::st
     return { "ICMGG" + suffix, "ICMSH" + suffix, "ICMUA" + suffix };
 }
 
+bool OpenIFSControl::is_output_filename( std::string_view filename ) const { return parse_oifs_output_filename( filename ); }
 
-/**
- * @brief Returns regex of the OpenIFS GRIB model output filename pattern
- */
-std::regex OpenIFSControl::get_output_filename_regex() const { return output_file_pattern; }
-
+bool OpenIFSControl::is_restart_filename( std::string_view filename ) const { return filename == OIFS_RCF_FILENAME; }
 
 /**
  * @brief Returns vector of list of log files.

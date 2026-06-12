@@ -45,7 +45,8 @@ At a minimum this means implementing:
 - `parse_control_input()`
 - `get_current_step(...)`
 - `get_output_filenames(...)`
-- `get_output_filename_regex()`
+- `is_output_filename(...)`
+- `is_restart_filename(...)`
 - `get_log_filenames()`
 - `restart_ctl_exists()`
 - `restart_ctl_read(...)`

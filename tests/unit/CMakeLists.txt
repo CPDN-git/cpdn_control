@@ -33,6 +33,7 @@ add_executable(unit_tests unit_tests.cpp
                         t_control_start.cpp
                         t_logging_utils.cpp
                         t_get_env_vars.cpp
+                        t_model_filename_match.cpp
 )
 
 # Helper executable used by launch_process tests
@@ -70,3 +71,4 @@ add_test( NAME ParseControlInputTest COMMAND unit_tests "Parse Control Input" )
 add_test( NAME ControlStartTest COMMAND unit_tests "Control Start" )
 add_test( NAME LoggingUtilsTest COMMAND unit_tests "Logging Utils" )
 add_test( NAME GetEnvVarsTest COMMAND unit_tests "Get Env Vars" )
+add_test( NAME ModelFilenameMatchTest COMMAND unit_tests "Model Filename Match" )

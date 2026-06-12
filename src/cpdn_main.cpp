@@ -14,7 +14,6 @@
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
-#include <regex>
 #include <sstream>
 #include <thread>
 #include <vector>
@@ -448,7 +447,7 @@ static std::string get_result_base_name( const BoincConfig& bconfig, const TaskC
  *
  * @returns zero on success, otherwise error code value.
  */
-static int add_upload_files( const fs::path& dir, std::vector<fs::path>& out, const std::regex& pattern )
+static int add_upload_files( const fs::path& dir, std::vector<fs::path>& out, const ModelControl& model_ctrl )
 {
     std::error_code ec;
 
@@ -466,7 +465,7 @@ static int add_upload_files( const fs::path& dir, std::vector<fs::path>& out, co
         }
 
         const auto filename = entry.path().filename().string();
-        if ( std::regex_match( filename, pattern ) ) {
+        if ( model_ctrl.is_output_filename( filename ) ) {
             out.push_back( entry.path() );
             std::cerr << "Adding to the zip: " << entry.path().string() << '\n';
         }
@@ -1008,7 +1007,7 @@ int main( int argc, char** argv )
 
         // Read the remaining list of files from the temp upload directory and
         // add the matching files to the upload zip
-        retval = add_upload_files( upload_dir, zfl, model_ctrl->get_output_filename_regex() );
+        retval = add_upload_files( upload_dir, zfl, *model_ctrl );
         if ( retval ) {
             std::cerr << "Adding model output files to the upload zip failed!\n";
         }

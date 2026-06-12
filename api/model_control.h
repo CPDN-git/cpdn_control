@@ -8,7 +8,6 @@
 #pragma once
 
 #include <filesystem>
-#include <regex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -112,8 +111,11 @@ class ModelControl {
     // Provide a list of model output filenames for uploading to server at a particular step count.
     virtual std::vector<std::string> get_output_filenames( int step, std::string_view id ) const = 0;
 
-    // Provide a regular expression matching the model output filenames to be zipped for upload
-    virtual std::regex get_output_filename_regex() const = 0;
+    // Check whether a filename is a model output file that should be considered for upload packaging.
+    virtual bool is_output_filename( std::string_view filename ) const = 0;
+
+    // Check whether a filename is a model restart artifact for this model.
+    virtual bool is_restart_filename( std::string_view filename ) const = 0;
 
     // Responsible for setting up any model input directories and/or symlinks as needed before staging the input files.
     virtual bool setup_directories( const fs::path& slot_path ) const = 0;

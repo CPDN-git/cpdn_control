@@ -2,7 +2,6 @@
 //
 //  Glenn Carver, CPDN, 2026
 
-#include <regex>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -26,8 +25,19 @@ std::vector<std::string> split_lines( const std::string& text )
 
 bool has_timestamp_prefix( const std::string& line )
 {
-    static const std::regex pattern( R"(^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] )" );
-    return std::regex_search( line, pattern );
+    if ( line.size() < 22 ) {
+        return false;
+    }
+
+    constexpr int digit_positions[] = { 1, 2, 3, 4, 6, 7, 9, 10, 12, 13, 15, 16, 18, 19 };
+    for ( int pos : digit_positions ) {
+        if ( !std::isdigit( static_cast<unsigned char>( line[static_cast<std::size_t>( pos )] ) ) ) {
+            return false;
+        }
+    }
+
+    return line[0] == '[' && line[5] == '-' && line[8] == '-' && line[11] == ' ' && line[14] == ':' && line[17] == ':' &&
+           line[20] == ']' && line[21] == ' ';
 }
 
 }    // namespace

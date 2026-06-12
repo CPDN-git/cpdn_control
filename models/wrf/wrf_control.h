@@ -5,7 +5,6 @@
 #pragma once
 
 #include <filesystem>
-#include <regex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -35,8 +34,9 @@ class WRFControl : public ModelControl {
     std::vector<std::string> get_env_vars( const std::string& slot_path, const std::string& nthreads, std::string& err_msg ) const override;
     bool get_current_step( int& step, const int total_steps ) const override;
     std::vector<std::string> get_output_filenames( int step, std::string_view id ) const override;
+    bool is_output_filename( std::string_view filename ) const override;
+    bool is_restart_filename( std::string_view filename ) const override;
     std::vector<std::string> get_log_filenames() const override;
-    std::regex get_output_filename_regex() const override;
 
     // Gives the minimum and maximum number of threads the model can use based on the model configuration and/or system resources.
     void get_nthreads_range( int& min_threads, int& max_threads ) const override

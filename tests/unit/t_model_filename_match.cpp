@@ -36,8 +36,11 @@ int t_model_filename_match()
     }
 
     test_count++;
-    if ( wrf_model.is_output_filename( "wrfout_d03_2022-07-01_00:00:00" ) &&
+    if ( wrf_model.is_output_filename( "wrfout_d01_2022-07-01_00:00:00" ) &&
+         wrf_model.is_output_filename( "wrfout_d02_2022-07-01_00:00:00" ) &&
+         wrf_model.is_output_filename( "wrfout_d03_2022-07-01_00:00:00" ) &&
          !wrf_model.is_output_filename( "wrfout_d03_2022/07/01_00:00:00" ) &&
+         !wrf_model.is_output_filename( "wrfout_d04_2022-07-01_00:00:00" ) &&
          !wrf_model.is_output_filename( "wrfout_d03_2022-07-01-00:00:00" ) ) {
         test_passed++;
     } else {
@@ -45,7 +48,10 @@ int t_model_filename_match()
     }
 
     test_count++;
-    if ( wrf_model.is_restart_filename( "wrfrst_d03_2022-07-01_00:00:00" ) &&
+    if ( wrf_model.is_restart_filename( "wrfrst_d01_2022-07-01_00:00:00" ) &&
+         wrf_model.is_restart_filename( "wrfrst_d02_2022-07-01_00:00:00" ) &&
+         wrf_model.is_restart_filename( "wrfrst_d03_2022-07-01_00:00:00" ) &&
+         !wrf_model.is_restart_filename( "wrfrst_d04_2022-07-01_00:00:00" ) &&
          !wrf_model.is_restart_filename( "wrfrst_d03_2022-07-01_00-00-00" ) ) {
         test_passed++;
     } else {

@@ -2,6 +2,8 @@
 //
 //  Glenn Carver, CPDN, 2026
 
+#include <array>
+#include <cctype>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -29,7 +31,7 @@ bool has_timestamp_prefix( const std::string& line )
         return false;
     }
 
-    constexpr int digit_positions[] = { 1, 2, 3, 4, 6, 7, 9, 10, 12, 13, 15, 16, 18, 19 };
+    constexpr std::array<int, 14> digit_positions = { 1, 2, 3, 4, 6, 7, 9, 10, 12, 13, 15, 16, 18, 19 };
     for ( int pos : digit_positions ) {
         if ( !std::isdigit( static_cast<unsigned char>( line[static_cast<std::size_t>( pos )] ) ) ) {
             return false;

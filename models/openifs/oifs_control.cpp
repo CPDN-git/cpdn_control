@@ -30,8 +30,7 @@ ModelControlInputData make_parse_error( const fs::path& source_file, std::string
 
 std::vector<std::string> oifs_get_grib_env_vars( const std::string& slot_path )
 {
-    return { "GRIB_SAMPLES_PATH=" + slot_path + "/eccodes/ifs_samples/grib1_mlgrib2",
-             "GRIB_DEFINITION_PATH=" + slot_path + "/eccodes/definitions" };
+    return { "GRIB_SAMPLES_PATH=" + slot_path + "/eccodes/ifs_samples/grib1_mlgrib2", "GRIB_DEFINITION_PATH=" + slot_path + "/eccodes/definitions" };
 }
 
 std::vector<std::string> oifs_get_omp_env_vars( const std::string& nthreads )
@@ -138,13 +137,8 @@ std::vector<std::string> OpenIFSControl::get_env_vars( const std::string& slot_p
     }
 
     std::vector<std::string> env_vars = {
-        "OIFS_DUMMY_ACTION=abort",
-        "DR_HOOK=1",
-        "DR_HOOK_HEAPCHECK=no",
-        "DR_HOOK_STACKCHECK=no",
-        "EC_MEMINFO=0",
-        "EC_PROFILE_HEAP=0",
-        "EC_PROFILE_MEM=0",
+        "OIFS_DUMMY_ACTION=abort", "DR_HOOK=1",        "DR_HOOK_HEAPCHECK=no", "DR_HOOK_STACKCHECK=no", "EC_MEMINFO=0",
+        "EC_PROFILE_HEAP=0",       "EC_PROFILE_MEM=0",
     };
 
     auto grib_env_vars = oifs_get_grib_env_vars( slot_path );
@@ -314,10 +308,9 @@ bool OpenIFSControl::get_current_step( int& current_step, const int total_steps 
  *        Used to determine which files to upload at each step.
  * 
  * @param step The model step (string) of files to return.
- * @param id The experiment ID or general experiment identifier (string).
  * @returns A vector of output filenames to be uploaded.
  */
-std::vector<std::string> OpenIFSControl::get_output_filenames( int step, std::string_view exptid ) const
+std::vector<std::string> OpenIFSControl::get_output_filenames( int step ) const
 {
     // TODO: exptid should come from the model instance, not via the args
     std::string suffix = oifs_get_filename_part( std::to_string( step ), std::string( exptid ) );

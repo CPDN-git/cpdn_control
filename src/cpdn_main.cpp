@@ -657,14 +657,15 @@ int main( int argc, char** argv )
 
     // Parse the model control file (e.g. namelist) through the model layer so controller code stays generic.
     // The model control file is expected to get unpacked from the app bundle.
+    // TODO : this should be part of the 'setup()' call and the instance stores the variables itself.
+    // The controller just queries for the variables when it needs them.
+    // This would be a cleaner separation of concerns and allow for more flexible control file handling in the future.
 
     auto control_input = model_ctrl->parse_control_input();
     if ( !control_input.ok ) {
         report_model_control_input_failure( control_input );
         return finish_task( tstate, 1 );
     }
-
-    tconfig.exptid = control_input.experiment_id;
 
     const int timestep_seconds = control_input.timestep_seconds;
     const int output_interval = control_input.output_interval;
@@ -679,7 +680,6 @@ int main( int argc, char** argv )
     const double total_length_of_simulation_time = control_input.forecast_length_time;
 
     std::cerr << "Values read from model control input are: \n"
-              << " Experiment ID: " << tconfig.exptid << '\n'
               << " Timestep interval (secs): " << timestep_seconds << '\n'
               << " Frequency of model output (steps): " << output_interval << '\n'
               << " Frequency of restarts/checkpoints (steps): " << restart_interval_steps << '\n'
@@ -847,7 +847,7 @@ int main( int argc, char** argv )
                 model_ctrl->do_step_tasks( observed_step );
 
                 // Start work on managing the model output files.
-                auto output_files = model_ctrl->get_output_filenames( observed_step, tconfig.exptid );
+                auto output_files = model_ctrl->get_output_filenames( observed_step );
                 bool diagnostics_ran = run_step_diagnostics( *model_ctrl, diag_exe, bconfig.slot_path, output_files );
 
                 for ( const auto& result : output_files ) {
@@ -880,7 +880,7 @@ int main( int argc, char** argv )
                     for ( int step_to_zip = last_upload_step; step_to_zip < observed_step; ++step_to_zip ) {
 
                         // Add model result files to zip to be uploaded
-                        for ( const auto& result : model_ctrl->get_output_filenames( step_to_zip, tconfig.exptid ) ) {
+                        for ( const auto& result : model_ctrl->get_output_filenames( step_to_zip ) ) {
                             fs::path fpath = upload_dir;
                             fpath /= result;
                             if ( fs::exists( fpath ) ) {
@@ -1005,7 +1005,7 @@ int main( int argc, char** argv )
     boinc_begin_critical_section();
 
     // Move the final model result files ready for upload
-    auto output_files = model_ctrl->get_output_filenames( tstate.last_completed_step, tconfig.exptid );
+    auto output_files = model_ctrl->get_output_filenames( tstate.last_completed_step );
     run_step_diagnostics( *model_ctrl, diag_exe, bconfig.slot_path, output_files );
     for ( const auto& result : output_files ) {
         retval = move_result_file( bconfig.slot_path, upload_dir, result );

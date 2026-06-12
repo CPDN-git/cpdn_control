@@ -22,13 +22,13 @@ struct ModelControlInputData {
     std::string error_step;
     std::string error_field;
     std::string error_message;
-    std::string experiment_id;
 
     int timestep_seconds = 0;    // e.g. OpenIFS : UTSTEP
     int output_interval = 0;     // e.g. OpenIFS : NFRPOS raw value: +ve model steps, -ve hours
     int restart_interval = 0;    // e.g. OpenIFS : NFRRES raw value: +ve model steps, -ve hours
     int total_steps = 0;         // e.g. OpenIFS : CUSTOP
     double forecast_length_time = 0.0;
+    // exptid only needed for OpenIFS, so make this identifier part of the OIFS control class instance rather than base class.
 };
 
 

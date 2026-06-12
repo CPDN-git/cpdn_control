@@ -124,36 +124,6 @@ BOINC version policy:
 - if a BOINC release needs to be rolled back, prefer a `vcpkg` manifest override for `boinc`
 - keep the manual `BOINC_DIR` path as fallback only if the `vcpkg` route is unavailable or broken
 
-## Convenience Scripts
-
-For Linux development, the repo now includes bash helper scripts under `scripts/`:
-
-- [scripts/build_with_vcpkg.sh](${HOME}/github/cpdn_control/scripts/build_with_vcpkg.sh)
-- [scripts/build_with_local_boinc.sh](${HOME}/github/cpdn_control/scripts/build_with_local_boinc.sh)
-- [scripts/test_with_vcpkg.sh](${HOME}/github/cpdn_control/scripts/test_with_vcpkg.sh)
-
-These scripts are convenience entry points only. CMake and `vcpkg/vcpkg.json` 
-remain the canonical build configuration.
-
-Typical usage:
-
-```bash
-scripts/build_with_vcpkg.sh --vcpkg-root /PATH/TO/vcpkg
-scripts/build_with_local_boinc.sh --boinc-dir /PATH/TO/boinc-install
-scripts/test_with_vcpkg.sh --build-dir build
-```
-
-Typical Linux `vcpkg` workflow:
-
-```bash
-scripts/setup_vcpkg.sh --triplet x64-linux-cpdn-static
-scripts/build_with_vcpkg.sh --vcpkg-root ${HOME}/github/vcpkg
-scripts/test_with_vcpkg.sh --build-dir build
-```
-
-Use `--functional` with the build scripts to configure and run functional tests as part of the build.
-Use `--functional` with `test_with_vcpkg.sh` to rerun only functional tests from an existing `vcpkg` build.
-
 ### Fallback: manual BOINC build
 
 If you need to bypass `vcpkg`, build BOINC outside this repo and point CMake at it with `BOINC_DIR`.
@@ -219,12 +189,18 @@ more details.
 
  To build the cpdn_zip library and optionally run a small test:
 
+ ```bash
+ cd scripts
+ ./build_ziplib.sh
+ ```
+
+ Or manually:
+
  1. cd cpdn_control/zip
  2. mkdir build
  3. cd build
  4. cmake -DCMAKE_INSTALL_PREFIX=../install ..
- 5. cmake --build .
- 6. make install
+ 5. cmake --build . --target install
 
  To run a simple test of the code:
  ```
@@ -247,6 +223,41 @@ Alternatively, if you have already cloned this repository and the `tools/fmt/` d
 run the same git clone command from within that directory. The CMake build system will automatically detect
 and configure fmt for use in the build.
 
+
+## Convenience Scripts
+
+For Linux development, the repo now includes bash helper scripts under `scripts/`:
+
+- [scripts/build_ziplib.sh](${HOME}/github/cpdn_control/scripts/build_ziplib.sh)
+- [scripts/build_with_vcpkg.sh](${HOME}/github/cpdn_control/scripts/build_with_vcpkg.sh)
+- [scripts/build_with_local_boinc.sh](${HOME}/github/cpdn_control/scripts/build_with_local_boinc.sh)
+- [scripts/test_with_vcpkg.sh](${HOME}/github/cpdn_control/scripts/test_with_vcpkg.sh)
+
+These scripts are convenience entry points only. CMake and `vcpkg/vcpkg.json` 
+remain the canonical build configuration.
+
+build_ziplib.sh : this script only needs to be run once on an architecture. It does not 
+need to be run each time the code is changed or rebuilt.
+
+```bash
+scripts/build_ziplib.sh     # run once
+scripts/build_with_vcpkg.sh --vcpkg-root /PATH/TO/vcpkg
+scripts/build_with_local_boinc.sh --boinc-dir /PATH/TO/boinc-install
+scripts/test_with_vcpkg.sh --build-dir build
+```
+
+Typical Linux `vcpkg` workflow:
+
+```bash
+scripts/build_ziplib.sh    # run once
+scripts/setup_vcpkg.sh --triplet x64-linux-cpdn-static
+scripts/build_with_vcpkg.sh --vcpkg-root ${HOME}/github/vcpkg
+scripts/test_with_vcpkg.sh --build-dir build
+```
+
+Use `--functional` with the build scripts to configure and run functional tests as part of the build.
+Use `--functional` with `test_with_vcpkg.sh` to rerun only functional tests from an existing `vcpkg` build.
+
 ## Models
 
 The `models` folder contains the model specific code for this application.
@@ -257,6 +268,11 @@ are built separately.
 Each model interface code should use the class structure described by the code in the `api`
 directory. See that code for more details and the test model appication for an 
 implementation example.
+
+### Models currently supported:
+
+- ECMWF OpenIFS 43r3v2
+- WRF 4.6.1.
 
 ### Test model
 

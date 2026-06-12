@@ -203,6 +203,26 @@ Comparison against the original baseline:
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `src/cpdn_main.cpp::main()` | 120 | 67 | -53 (`-44.2%`) | 516 | 342 | -174 (`-33.7%`) |
 
+## After moving model environment setup behind `ModelControl::get_env_vars()`
+
+Measured on 2026-06-12 after replacing the OpenIFS-specific `oifs_get_model_env_vars(...)` path with model-owned `get_env_vars(...)` overrides and switching child env storage to `KEY=VALUE` strings.
+
+| File | Function | `pmccabe` | `lizard` CCN | `lizard` NLOC | Notes |
+| --- | --- | ---: | ---: | ---: | --- |
+| `src/cpdn_main.cpp` | `main()` | 67 | 67 | 323 | Main orchestration complexity unchanged; line count dropped modestly |
+| `src/cpdn_control.cpp` | `launch_process()` | 4 | 4 | 22 | Launch path is simpler now that env construction is delegated to the model |
+| `src/external_diagnostics.cpp` | `run_step_diagnostics()` | 9 | 9 | 49 | Diagnostics now reuses the model env getter rather than calling OpenIFS helpers directly |
+| `models/openifs/oifs_control.cpp` | `OpenIFSControl::get_env_vars()` | 2 | 2 | 22 | Small model-owned env builder extracted from the old utility layer |
+| `models/wrf/wrf_control.cpp` | `WRFControl::get_env_vars()` | 2 | 2 | 10 | New WRF env seam currently only supplies `OMP_NUM_THREADS` |
+| `lib/process_control_posix.cpp` | `start_child_process()` | 11 | 11 | 51 | Slightly higher due to validation of `KEY=VALUE` env entries |
+| `lib/utils.cpp` | `run_process_with_timeout()` | 27 | 48 | 170 | Timed-process env handling changed representation but remains the dominant utility hotspot |
+
+Comparison against the previous refactor point:
+
+| Function | Prior `pmccabe` | Current `pmccabe` | Change | Prior `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src/cpdn_main.cpp::main()` | 67 | 67 | `0` | 342 | 323 | -19 (`-5.6%`) |
+
 ## Current observations
 
 - `main()` is still the dominant complexity hotspot, but it is materially smaller than the original baseline.
@@ -214,6 +234,10 @@ Comparison against the original baseline:
   - low-level POSIX child-process mechanics now live in `lib/process_control_posix.cpp`
   - a matching Windows implementation path exists in `lib/process_control_windows.cpp`
   - `handle_boinc_client_status()` became more complex because it still owns the BOINC-driven suspend/abort/quit policy while delegating the platform actions underneath
+- The model-env refactor improved ownership more than top-level control-flow complexity:
+  - model-specific launch environment assembly now lives behind `ModelControl::get_env_vars()`
+  - both launch and diagnostics now use the same model-owned env seam
+  - the new WRF override establishes the same seam without adding much complexity
 - `process_args(...)` was a good cohesion move as well as a useful reduction in `main()` complexity; the parsing/validation split now lives together in `src/parse_args.cpp`.
 - The timestamped logging refactor improved operability but, as expected, did not materially change control-flow complexity.
 - The `control_start` extraction is valuable mainly because it creates a direct unit-test seam for a high-risk state machine, even though it does not reduce the `main()` metric further.

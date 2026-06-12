@@ -6,7 +6,7 @@
 #include <vector>
 
 using ProcessId = std::uint64_t;
-using ChildEnvironment = std::vector<std::pair<std::string, std::string>>;
+using ChildEnvironment = std::vector<std::string>;
 
 enum class ChildProcessState {
     running,

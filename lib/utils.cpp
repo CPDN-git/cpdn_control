@@ -76,6 +76,20 @@ bool file_was_updated( const fs::path& path, const std::optional<fs::file_time_t
     return current_mtime.value() != previous_mtime.value();
 }
 
+bool contains_embedded_nul( const std::string& text ) { return text.find( '\0' ) != std::string::npos; }
+
+bool parse_env_entry( const std::string& env_entry, std::string& name, std::string& value )
+{
+    auto sep = env_entry.find( '=' );
+    if ( sep == std::string::npos || sep == 0 || contains_embedded_nul( env_entry ) ) {
+        return false;
+    }
+
+    name = env_entry.substr( 0, sep );
+    value = env_entry.substr( sep + 1 );
+    return !contains_embedded_nul( value );
+}
+
 #if defined( _WIN32 ) || defined( _WIN64 )
 struct WideCaseInsensitiveLess {
     bool operator()( const std::wstring& lhs, const std::wstring& rhs ) const
@@ -84,8 +98,6 @@ struct WideCaseInsensitiveLess {
                                              []( wchar_t left, wchar_t right ) { return std::towlower( left ) < std::towlower( right ); } );
     }
 };
-
-bool contains_embedded_nul( const std::string& text ) { return text.find( '\0' ) != std::string::npos; }
 
 std::optional<std::wstring> utf8_to_wide( const std::string& text )
 {
@@ -109,7 +121,7 @@ std::optional<std::wstring> utf8_to_wide( const std::string& text )
 
 bool is_valid_env_name( const std::string& name ) { return !name.empty() && name.find( '=' ) == std::string::npos && !contains_embedded_nul( name ); }
 
-bool build_windows_environment_block( const std::vector<std::pair<std::string, std::string>>& env_vars, std::vector<wchar_t>& env_block )
+bool build_windows_environment_block( const std::vector<std::string>& env_vars, std::vector<wchar_t>& env_block )
 {
     std::vector<std::wstring> special_entries;
     std::map<std::wstring, std::wstring, WideCaseInsensitiveLess> merged_env;
@@ -136,7 +148,12 @@ bool build_windows_environment_block( const std::vector<std::pair<std::string, s
         FreeEnvironmentStringsW( current_env );
     }
 
-    for ( const auto& [name, value] : env_vars ) {
+    for ( const auto& env_entry : env_vars ) {
+        std::string name;
+        std::string value;
+        if ( !parse_env_entry( env_entry, name, value ) ) {
+            return false;
+        }
         if ( !is_valid_env_name( name ) || contains_embedded_nul( value ) ) {
             return false;
         }
@@ -732,7 +749,7 @@ bool parse_int( std::string& value )
  */
 TimedProcessResult run_process_with_timeout( const std::string& executable, const std::vector<std::string>& args, const std::string& working_dir,
                                              int timeout_seconds, const std::filesystem::path& expected_output_file,
-                                             const std::vector<std::pair<std::string, std::string>>& child_env_vars,
+                                             const std::vector<std::string>& child_env_vars,
                                              const std::filesystem::path& combined_output_file )
 {
     TimedProcessResult result;
@@ -883,8 +900,10 @@ TimedProcessResult run_process_with_timeout( const std::string& executable, cons
             }
         }
 
-        for ( const auto& [name, value] : child_env_vars ) {
-            if ( !set_env_var( name, value ) ) {
+        for ( const auto& env_entry : child_env_vars ) {
+            std::string name;
+            std::string value;
+            if ( !parse_env_entry( env_entry, name, value ) || !set_env_var( name, value ) ) {
                 _exit( 125 );
             }
         }

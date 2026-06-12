@@ -91,6 +91,14 @@ class ModelControl {
     virtual std::string get_model_name() const { return model_name; }
     virtual std::string get_model_version() const { return model_version; }
     virtual std::string get_executable_name() const { return executable; }
+    virtual std::vector<std::string> get_env_vars( const std::string& slot_path, const std::string& nthreads,
+                                                   std::string& err_msg ) const
+    {
+        (void)slot_path;
+        (void)nthreads;
+        err_msg.clear();
+        return {};
+    }
 
     // Get list of model input files to unpack from the project directory.
     virtual ModelInputManifest get_input_manifest( const std::string& wu_id ) const = 0;

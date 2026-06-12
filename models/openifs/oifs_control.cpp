@@ -24,6 +24,17 @@ ModelControlInputData make_parse_error( const fs::path& source_file, std::string
     return result;
 }
 
+std::vector<std::string> oifs_get_grib_env_vars( const std::string& slot_path )
+{
+    return { "GRIB_SAMPLES_PATH=" + slot_path + "/eccodes/ifs_samples/grib1_mlgrib2",
+             "GRIB_DEFINITION_PATH=" + slot_path + "/eccodes/definitions" };
+}
+
+std::vector<std::string> oifs_get_omp_env_vars( const std::string& nthreads )
+{
+    return { "OMP_NUM_THREADS=" + nthreads, "OMP_SCHEDULE=STATIC", "OMP_STACKSIZE=128M" };
+}
+
 }    // namespace
 
 
@@ -79,6 +90,34 @@ ModelInputManifest OpenIFSControl::get_input_manifest( const std::string& workun
         // Note! Relies on call to create directory symlinks in the setup of the model run (see cpdn_control.cpp).
         { "clim_data_" + workunit_id + ".zip", climdata_dir },
     };
+}
+
+std::vector<std::string> OpenIFSControl::get_env_vars( const std::string& slot_path, const std::string& nthreads, std::string& err_msg ) const
+{
+    err_msg.clear();
+
+    if ( std::string nthreads_copy = nthreads; !parse_int( nthreads_copy ) ) {
+        err_msg = "invalid value of 'nthreads': " + nthreads;
+        return {};
+    }
+
+    std::vector<std::string> env_vars = {
+        "OIFS_DUMMY_ACTION=abort",
+        "DR_HOOK=1",
+        "DR_HOOK_HEAPCHECK=no",
+        "DR_HOOK_STACKCHECK=no",
+        "EC_MEMINFO=0",
+        "EC_PROFILE_HEAP=0",
+        "EC_PROFILE_MEM=0",
+    };
+
+    auto grib_env_vars = oifs_get_grib_env_vars( slot_path );
+    env_vars.insert( env_vars.end(), grib_env_vars.begin(), grib_env_vars.end() );
+
+    auto omp_env_vars = oifs_get_omp_env_vars( nthreads );
+    env_vars.insert( env_vars.end(), omp_env_vars.begin(), omp_env_vars.end() );
+
+    return env_vars;
 }
 
 

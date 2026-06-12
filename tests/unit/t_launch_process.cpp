@@ -10,6 +10,7 @@
 #include <string>
 #include <thread>
 
+#include "../api/model_control.h"
 #include "../src/cpdn_control.h"
 #include "process_control.h"
 #include "unit_tests.h"
@@ -22,6 +23,29 @@ namespace fs = std::filesystem;
 
 namespace {
 constexpr const char* kSleepEnv = "CPDN_LAUNCH_PROCESS_SLEEP_MS";
+
+class LaunchProcessModelControl : public ModelControl {
+
+  public:
+    LaunchProcessModelControl() : ModelControl( "CPDN", "launch_process_test", "1.0", "helper" ) {}
+
+    void print_logs( const int ) const override {}
+    bool check_model_success() const override { return true; }
+    bool restart_ctl_exists() const override { return false; }
+    bool restart_ctl_read( std::string& step, std::string& time ) const override
+    {
+        step.clear();
+        time.clear();
+        return false;
+    }
+    ModelInputManifest get_input_manifest( const std::string& ) const override { return {}; }
+    ModelControlInputData parse_control_input() const override { return {}; }
+    bool get_current_step( int&, const int ) const override { return false; }
+    std::vector<std::string> get_output_filenames( int, std::string_view ) const override { return {}; }
+    std::regex get_output_filename_regex() const override { return std::regex( ".*" ); }
+    bool setup_directories( const fs::path& ) const override { return true; }
+    std::vector<std::string> get_log_filenames() const override { return {}; }
+};
 
 void set_test_env( const char* name, const std::string& value )
 {
@@ -80,11 +104,12 @@ int t_launch_process()
     const std::string slot_path = tmp_dir.string();
     const std::string cmd = LAUNCH_PROCESS_HELPER;
     const std::string nthreads = "1";
+    LaunchProcessModelControl model_ctrl;
 
     // Normal exit case.
     set_test_env( kSleepEnv, "200" );
     test_count++;
-    ChildProcessHandle child_process = launch_process( project_path, slot_path, cmd, nthreads );
+    ChildProcessHandle child_process = launch_process( model_ctrl, project_path, slot_path, cmd, nthreads );
     if ( child_process_is_valid( child_process ) ) {
         test_passed++;
     } else {
@@ -107,7 +132,7 @@ int t_launch_process()
     // Controller-driven termination case.
     set_test_env( kSleepEnv, "5000" );
     test_count++;
-    child_process = launch_process( project_path, slot_path, cmd, nthreads );
+    child_process = launch_process( model_ctrl, project_path, slot_path, cmd, nthreads );
     if ( !child_process_is_valid( child_process ) ) {
         std::cerr << "  launch_process failed to start helper process (termination case)\n";
     } else {
@@ -129,7 +154,7 @@ int t_launch_process()
     // Suspend and resume case through the platform process-control seam.
     set_test_env( kSleepEnv, "5000" );
     test_count++;
-    child_process = launch_process( project_path, slot_path, cmd, nthreads );
+    child_process = launch_process( model_ctrl, project_path, slot_path, cmd, nthreads );
     if ( !child_process_is_valid( child_process ) ) {
         std::cerr << "  launch_process failed to start helper process (suspend/resume case)\n";
     } else {

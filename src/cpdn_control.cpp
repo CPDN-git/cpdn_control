@@ -32,8 +32,7 @@
 #include "cpdn_control.h"
 #include "cpdn_zip.h"
 #include "lib/utils.h"
-
-#include "models/openifs/oifs_utils.h"    // for oifs_*() functions. Will be replaced by Model derived class later.
+#include "api/model_control.h"
 
 namespace chrono = std::chrono;
 namespace fs = std::filesystem;
@@ -339,14 +338,14 @@ bool handle_boinc_client_status( ChildProcessHandle& child_process, BoincRuntime
  * @param nthreads The number of threads to use.
  * @return ChildProcessHandle The launched child process handle, or an invalid handle on failure.
  */
-ChildProcessHandle launch_process( const std::string& project_path, const std::string& slot_path, const std::string& strCmd,
-                                   const std::string& nthreads )
+ChildProcessHandle launch_process( const ModelControl& model_ctrl, const std::string& project_path, const std::string& slot_path,
+                                   const std::string& strCmd, const std::string& nthreads )
 {
     (void)project_path;
 
-    ChildEnvironment env_vars;
     std::string err_msg;
-    if ( !oifs_get_model_env_vars( slot_path, nthreads, env_vars, err_msg ) ) {
+    ChildEnvironment env_vars = model_ctrl.get_env_vars( slot_path, nthreads, err_msg );
+    if ( !err_msg.empty() ) {
         std::cerr << "..Failed to prepare child environment: " << err_msg << '\n';
         return {};
     }

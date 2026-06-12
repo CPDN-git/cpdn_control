@@ -39,6 +39,7 @@ int main( int argc, char* argv[] )
         { "Parse Control Input", t_parse_control_input },
         { "Control Start", t_control_start },
         { "Logging Utils", t_logging_utils },
+        { "Get Env Vars", t_get_env_vars },
         // Add new test functions here! Remember previous trailing comma!
     };
 

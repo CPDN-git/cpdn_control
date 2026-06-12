@@ -4,6 +4,17 @@
 
 #include "wrf_control.h"
 
+#include "../../lib/utils.h"
+
+namespace {
+
+std::vector<std::string> wrf_get_omp_env_vars( const std::string& nthreads )
+{
+    return { "OMP_NUM_THREADS=" + nthreads };
+}
+
+}    // namespace
+
 void WRFControl::print_logs( const int nlines ) const
 {
     (void)nlines;
@@ -18,6 +29,19 @@ ModelInputManifest WRFControl::get_input_manifest( const std::string& wu ) const
 {
     (void)wu;
     return {};
+}
+
+std::vector<std::string> WRFControl::get_env_vars( const std::string& slot_path, const std::string& nthreads, std::string& err_msg ) const
+{
+    (void)slot_path;
+    err_msg.clear();
+
+    if ( std::string nthreads_copy = nthreads; !parse_int( nthreads_copy ) ) {
+        err_msg = "invalid value of 'nthreads': " + nthreads;
+        return {};
+    }
+
+    return wrf_get_omp_env_vars( nthreads );
 }
 
 bool WRFControl::get_current_step( int& step, const int total_steps ) const

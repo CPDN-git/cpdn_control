@@ -109,7 +109,7 @@ int t_run_process_with_timeout()
                                                                     tmp_dir.string(),
                                                                     2,
                                                                     output_path,
-                                                                    { { "CPDN_TEST_CHILD_ENV", "expected_value" } } );
+                                                                    { "CPDN_TEST_CHILD_ENV=expected_value" } );
     if ( child_env_result.status == TimedProcessStatus::success && child_env_result.exit_code == 0 ) {
         test_passed++;
     } else {

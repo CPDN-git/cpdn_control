@@ -7,9 +7,9 @@
 #include <system_error>
 #include <vector>
 
+#include "api/model_control.h"
 #include "api/trickle_handler.h"
 #include "lib/utils.h"
-#include "models/openifs/oifs_utils.h"
 
 namespace fs = std::filesystem;
 
@@ -68,7 +68,8 @@ void replay_diagnostics_output_to_stderr( const fs::path& combined_output_path )
 
 }    // namespace
 
-bool run_step_diagnostics( const fs::path& diag_exe, const fs::path& slot_path, const std::vector<std::string>& output_files )
+bool run_step_diagnostics( const ModelControl& model_ctrl, const fs::path& diag_exe, const fs::path& slot_path,
+                           const std::vector<std::string>& output_files )
 {
     std::string diagnostics_input = get_diagnostics_input_file( slot_path, output_files );
     if ( diag_exe.empty() || diagnostics_input.empty() ) {
@@ -91,10 +92,12 @@ bool run_step_diagnostics( const fs::path& diag_exe, const fs::path& slot_path, 
 
     fs::path trickle_data_path = slot_path / TrickleHandler::TRICKLE_DATA_FILE;
     fs::path diagnostics_log_path = slot_path / "diagnostics_output.log";
-    std::vector<std::pair<std::string, std::string>> diag_env_vars;
     std::string err_msg;
-
-    (void)oifs_get_model_env_vars( slot_path.string(), "1", diag_env_vars, err_msg );
+    std::vector<std::string> diag_env_vars = model_ctrl.get_env_vars( slot_path.string(), "1", err_msg );
+    if ( !err_msg.empty() ) {
+        std::cerr << "Warning: failed to prepare diagnostics environment: " << err_msg << '\n';
+        return false;
+    }
     std::vector<std::string> diag_args = { "-s", diagnostics_input, "-G", diagnostics_input + ".diag", "-t", "f", "-l", "-f", "131", "-n",
                                            "-p", "./rtables/" };
     std::error_code ec;

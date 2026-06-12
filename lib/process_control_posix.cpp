@@ -17,6 +17,18 @@ extern char** environ;
 
 namespace {
 
+bool parse_env_entry( const std::string& env_entry, std::string& name, std::string& value )
+{
+    auto sep = env_entry.find( '=' );
+    if ( sep == std::string::npos || sep == 0 || env_entry.find( '\0' ) != std::string::npos ) {
+        return false;
+    }
+
+    name = env_entry.substr( 0, sep );
+    value = env_entry.substr( sep + 1 );
+    return value.find( '\0' ) == std::string::npos;
+}
+
 std::vector<std::string> build_child_environment( const ChildEnvironment& env_vars )
 {
     std::map<std::string, std::string> merged_env;
@@ -30,7 +42,12 @@ std::vector<std::string> build_child_environment( const ChildEnvironment& env_va
         merged_env[env_entry.substr( 0, sep )] = env_entry.substr( sep + 1 );
     }
 
-    for ( const auto& [name, value] : env_vars ) {
+    for ( const auto& env_entry : env_vars ) {
+        std::string name;
+        std::string value;
+        if ( !parse_env_entry( env_entry, name, value ) ) {
+            return {};
+        }
         merged_env[name] = value;
     }
 
@@ -80,6 +97,10 @@ ChildProcessHandle start_child_process( const std::string& executable, const std
     }
 
     std::vector<std::string> env_storage = build_child_environment( env_vars );
+    if ( !env_vars.empty() && env_storage.empty() ) {
+        err_msg = "invalid child environment entry";
+        return child_process;
+    }
     std::vector<char*> argv;
     argv.reserve( 2 );
     argv.push_back( const_cast<char*>( executable.c_str() ) );

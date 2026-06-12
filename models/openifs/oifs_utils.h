@@ -4,12 +4,7 @@
 
 #include <fstream>
 #include <string>
-#include <utility>
 #include <vector>
-
-bool oifs_get_model_env_vars( const std::string&, const std::string&, std::vector<std::pair<std::string, std::string>>&, std::string& err_msg );
-std::vector<std::pair<std::string, std::string>> oifs_get_grib_env_vars( const std::string& );
-std::vector<std::pair<std::string, std::string>> oifs_get_omp_env_vars( const std::string& );
 
 std::string oifs_get_filename_part( const std::string&, const std::string& );
 bool oifs_parse_stat( const std::string&, std::string&, const int );

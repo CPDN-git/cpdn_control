@@ -32,6 +32,7 @@ class WRFControl : public ModelControl {
     // Getters and setters
 
     ModelInputManifest get_input_manifest( const std::string& wu ) const override;
+    std::vector<std::string> get_env_vars( const std::string& slot_path, const std::string& nthreads, std::string& err_msg ) const override;
     bool get_current_step( int& step, const int total_steps ) const override;
     std::vector<std::string> get_output_filenames( int step, std::string_view id ) const override;
     std::vector<std::string> get_log_filenames() const override;

@@ -31,3 +31,4 @@ int t_stage_model_input_archive();
 int t_parse_control_input();
 int t_control_start();
 int t_logging_utils();
+int t_get_env_vars();

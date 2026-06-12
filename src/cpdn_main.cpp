@@ -783,7 +783,7 @@ int main( int argc, char** argv )
     // --------------- Start the model process -----------------
 
     std::cerr << "Launching model executable: " << model_exe << std::endl;
-    tstate.child_process = launch_process( bconfig.project_dir, bconfig.slot_path, model_exe.string(), nthreads );
+    tstate.child_process = launch_process( *model_ctrl, bconfig.project_dir, bconfig.slot_path, model_exe.string(), nthreads );
 
     if ( child_process_is_valid( tstate.child_process ) ) {
         tstate.child_status = 0;
@@ -834,7 +834,7 @@ int main( int argc, char** argv )
             // GC. Added run of external diagnostics code if present. EXPERIMENTAL STILL.
             if ( observed_step != tstate.last_completed_step ) {
                 auto output_files = model_ctrl->get_output_filenames( observed_step, tconfig.exptid );
-                bool diagnostics_ran = run_step_diagnostics( diag_exe, bconfig.slot_path, output_files );
+                bool diagnostics_ran = run_step_diagnostics( *model_ctrl, diag_exe, bconfig.slot_path, output_files );
 
                 for ( const auto& result : output_files ) {
                     retval = move_result_file( bconfig.slot_path, upload_dir, result );
@@ -985,7 +985,7 @@ int main( int argc, char** argv )
 
     // Move the final model result files ready for upload
     auto output_files = model_ctrl->get_output_filenames( tstate.last_completed_step, tconfig.exptid );
-    run_step_diagnostics( diag_exe, bconfig.slot_path, output_files );
+    run_step_diagnostics( *model_ctrl, diag_exe, bconfig.slot_path, output_files );
     for ( const auto& result : output_files ) {
         retval = move_result_file( bconfig.slot_path, upload_dir, result );
         if ( retval ) {

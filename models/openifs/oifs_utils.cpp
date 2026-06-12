@@ -18,67 +18,6 @@
 
 
 /**
- * @brief Return the OpenIFS GRIB environment variables derived from the slot directory.
- */
-std::vector<std::pair<std::string, std::string>> oifs_get_grib_env_vars( const std::string& slot_path )
-{
-    std::vector<std::pair<std::string, std::string>> env_vars;
-    env_vars.emplace_back( "GRIB_SAMPLES_PATH", slot_path + "/eccodes/ifs_samples/grib1_mlgrib2" );
-    env_vars.emplace_back( "GRIB_DEFINITION_PATH", slot_path + "/eccodes/definitions" );
-    return env_vars;
-}
-
-
-/**
- * @brief Return the OpenMP environment variables to use for model and associated processes.
- */
-std::vector<std::pair<std::string, std::string>> oifs_get_omp_env_vars( const std::string& nthreads )
-{
-    std::vector<std::pair<std::string, std::string>> env_vars;
-    env_vars.emplace_back( "OMP_NUM_THREADS", nthreads );
-    env_vars.emplace_back( "OMP_SCHEDULE", "STATIC" );    // Enforce static scheduling for OpenMP threads.
-    env_vars.emplace_back( "OMP_STACKSIZE", "128M" );     // OpenIFS needs more stack per thread
-    return env_vars;
-}
-
-/**
- * @brief Build the required OpenIFS child-process environment variables.
- *        OMP_NUM_THREADS uses the incoming nthreads value; other values are fixed.
- */
-bool oifs_get_model_env_vars( const std::string& slot_path, const std::string& nthreads, std::vector<std::pair<std::string, std::string>>& env_vars,
-                              std::string& err_msg )
-{
-    err_msg.clear();
-    env_vars.clear();
-
-    // check nthreads is valid integer
-    // parse_int can modify the string!
-    if ( std::string nthreads_copy = nthreads; !parse_int( nthreads_copy ) ) {
-        err_msg = "invalid value of 'nthreads': " + nthreads;
-        return false;
-    }
-
-    // OIFS_DUMMY_ACTION controls what the model does when it gets into a dummy subroutine.
-    // Possible values are 'quiet', 'verbose' or 'abort'. We use 'abort' to stop the model.
-    env_vars.emplace_back( "OIFS_DUMMY_ACTION", "abort" );
-    env_vars.emplace_back( "DR_HOOK", "1" );                // Enable DrHook tracing; 1=on, 0=off.
-    env_vars.emplace_back( "DR_HOOK_HEAPCHECK", "no" );     // Report heap size stats at end; yes/no.
-    env_vars.emplace_back( "DR_HOOK_STACKCHECK", "no" );    // Report stack usage stats at end; yes/no.
-    env_vars.emplace_back( "EC_MEMINFO", "0" );             // disable noisy EC_MEMINFO output
-    env_vars.emplace_back( "EC_PROFILE_HEAP", "0" );        // disable heap stats; does not work with CPDN version.
-    env_vars.emplace_back( "EC_PROFILE_MEM", "0" );         // disable memory stats; does not work with CPDN version.
-
-    auto grib_env_vars = oifs_get_grib_env_vars( slot_path );
-    env_vars.insert( env_vars.end(), grib_env_vars.begin(), grib_env_vars.end() );
-
-    auto omp_env_vars = oifs_get_omp_env_vars( nthreads );
-    env_vars.insert( env_vars.end(), omp_env_vars.begin(), omp_env_vars.end() );
-
-    return true;
-}
-
-
-/**
  *  @brief Construct the filename part of the output model filename containing the iteration count.
  *          nb. exptid is always 4 characters for OpenIFS.
  *  @param last_iter The last completed iteration as a string.

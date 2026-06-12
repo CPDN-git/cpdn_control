@@ -55,7 +55,7 @@ bool ensure_directory( const std::filesystem::path&, std::string* error_msg = nu
  */
 TimedProcessResult run_process_with_timeout( const std::string& executable, const std::vector<std::string>& args, const std::string& working_dir,
                                              int timeout_seconds, const std::filesystem::path& expected_output_file = {},
-                                             const std::vector<std::pair<std::string, std::string>>& child_env_vars = {},
+                                             const std::vector<std::string>& child_env_vars = {},
                                              const std::filesystem::path& combined_output_file = {} );
 
 /**

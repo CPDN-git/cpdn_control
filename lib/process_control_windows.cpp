@@ -51,6 +51,18 @@ std::wstring utf8_to_wide( const std::string& text )
 
 bool contains_embedded_nul( const std::string& text ) { return text.find( '\0' ) != std::string::npos; }
 
+bool parse_env_entry( const std::string& env_entry, std::string& name, std::string& value )
+{
+    auto sep = env_entry.find( '=' );
+    if ( sep == std::string::npos || sep == 0 || contains_embedded_nul( env_entry ) ) {
+        return false;
+    }
+
+    name = env_entry.substr( 0, sep );
+    value = env_entry.substr( sep + 1 );
+    return !contains_embedded_nul( value );
+}
+
 
 bool is_valid_env_name( const std::string& name )
 {
@@ -92,7 +104,13 @@ bool build_environment_block( const ChildEnvironment& env_vars, std::vector<wcha
         FreeEnvironmentStringsW( current_env );
     }
 
-    for ( const auto& [name, value] : env_vars ) {
+    for ( const auto& env_entry : env_vars ) {
+        std::string name;
+        std::string value;
+        if ( !parse_env_entry( env_entry, name, value ) ) {
+            err_msg = "invalid child environment entry";
+            return false;
+        }
         if ( !is_valid_env_name( name ) || contains_embedded_nul( value ) ) {
             err_msg = "invalid child environment entry";
             return false;

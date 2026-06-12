@@ -618,19 +618,42 @@ int main( int argc, char** argv )
         return finish_task( tstate, 1 );
     }
 
-    //  -------------- Unpack application executable into slot ------------------
+    //  ------------- Info: Naming and content of download applications and workunit files -----------------
 
-    retval = move_and_unzip_app_file( bconfig.app_name, bconfig.app_version, bconfig.project_dir, bconfig.slot_path );
+    //  The cpdn_control executable is a non-zipped binary file downloaded from main.cpdn.org/applications.
+    //  The model application, with any other executables (e.g. diagnostics.exe) is a zipped file
+    //  also downloaded from main.cpdn.org/applications as a BOINC logical file.
+    //
+    //  The workunit data files are downloaded from main.cpdn.org/download/batch_<no>
+    //    ../ancils  e.g. for OIFS : clim_data_<wu>.zip, ic_ancil_<wu>.zip and ifsdata_<wu>.zip.
+    //               The ic_ancil.zip file for OIFS contains the workunit initial conditions.
+    //    ../workunits
+    //       This contains the workunit input control data. e.g. for OIFS, fort.4 and wam_namelist.
+    //       Each filename is : <app_name>_<memberid>_<startdate>_<fclen>_<batch>_<workunit>.zip.
+    //
+    //  Different models will use a different number of files.
+    //
+    //  The boinc client will put the cpdn_control executable into the slot directory. All other files
+    //  will be downloaded as BOINC logical files (jf_*) into the project directory to be copied into the slot.
+    //
+    //  Each logical file (e.g. ic_ancil_<wu>.zip) contains a single line pointing to the downloaded real file
+    //  in the project dir. Via a call to boinc_resolve_filename() we can get the real file path (jf_<md5sum>,
+    //  verify the md5sum of the file, and stage the file (copy into the slot and unzip).
+    //
+    //  Note the logical file is not overwritten. If we overwrite the logical file we have no way
+    //  to recover the original source filename on a restart if something goes wrong.
+
+    //  -------------- Unpack application executables zipfile into slot ------------------
+    //  This will be the actual model executable and any accompanying executables (e.g. diagnostics.exe).
+
+    retval = stage_and_unzip_app_file( bconfig.app_name, bconfig.app_version, bconfig.project_dir, bconfig.slot_path );
     if ( retval ) {
-        std::cerr << "..move_and_unzip_app_file failed" << "\n";
+        std::cerr << "..stage_and_unzip_app_file failed" << "\n";
         return finish_task( tstate, retval );
     }
 
-    //---------------- Stage & unpack the app (model) file bundle ---------------------------
-
-    // This bundle is a BOINC logical input file in the slot. Resolve its jf_* source, copy that source
-    // into the slot, and unzip it without overwriting the BOINC logical file itself. If we overwrite
-    // the logical file we have no way to recover the original source filename.
+    //---------------- Stage & unpack the workunit file bundle ---------------------------
+    // This typically contains the model control file(s) (e.g. namelists).
 
     fs::path app_bundle_path = bconfig.slot_path;
     app_bundle_path /= std::string( bconfig.app_name ) + "_" + tconfig.memberid + "_" + tconfig.filename_startdate + "_" +
@@ -640,6 +663,19 @@ int main( int argc, char** argv )
     if ( !app_bundle_stage.ok ) {
         report_input_stage_failure( "app bundle", app_bundle_stage );
         std::cerr << "..App bundle logical path was: " << app_bundle_path.string() << std::endl;
+        return finish_task( tstate, 1 );    // should terminate, the model won't run.
+    }
+
+    //---------------- Unpack the remaining model input files -----------------------
+    // Unpack through model instance manifest context so main() stays generic.
+
+    // Do this before setup() so unpacking works correctly (may be a null op)
+    model_ctrl->setup_directories( bconfig.slot_path );
+
+    auto input_manifest = model_ctrl->get_input_manifest( tconfig.workunit );
+    auto manifest_stage = stage_model_input_manifest( input_manifest, bconfig.slot_path );
+    if ( !manifest_stage.ok ) {
+        report_input_stage_failure( "model input archive", manifest_stage );
         return finish_task( tstate, 1 );    // should terminate, the model won't run.
     }
 
@@ -689,16 +725,6 @@ int main( int argc, char** argv )
     std::cerr << "Trickle frequency is every : " << trickle_freq << " model steps, "
               << ( static_cast<double>( trickle_freq ) * static_cast<double>( timestep_seconds ) ) / 86400.0 << " days.\n";
 
-    //---------------- Unpack the remaining model input files -----------------------
-    // Unpack through model instance manifest context so main() stays generic.
-
-    model_ctrl->setup_directories( bconfig.slot_path );
-    auto input_manifest = model_ctrl->get_input_manifest( tconfig.workunit );
-    auto manifest_stage = stage_model_input_manifest( input_manifest, bconfig.slot_path );
-    if ( !manifest_stage.ok ) {
-        report_input_stage_failure( "model input archive", manifest_stage );
-        return finish_task( tstate, 1 );    // should terminate, the model won't run.
-    }
 
     // -------------- Initialise the task state and progress tracking ----------------
 

@@ -56,7 +56,6 @@ bool process_args( const ParseResult& parse_result, TaskConfig& tconfig, std::st
     // The filename metadata is used to resolve the app bundle before the model control input is parsed.
     // upload_interval is controller upload policy, not model configuration.
     tconfig.filename_startdate = parse_result.filename_startdate;
-    tconfig.exptid.clear();                      // Model experiment id is read later from CNMEXP in fort.4.
     tconfig.memberid = parse_result.memberid;    // CPDN's unique member id (umid)
     tconfig.batch = parse_result.batch;          // batch id
     tconfig.workunit = parse_result.workunit;    // workunit id

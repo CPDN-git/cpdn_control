@@ -65,13 +65,12 @@ int t_parse_control_input()
 
     std::cout << "Subtest: parse valid control input\n";
     auto parsed = model.parse_control_input();
-    if ( !parsed.ok || parsed.experiment_id != "ABCD" || parsed.timestep_seconds != 3600 || parsed.output_interval != 6 ||
-         parsed.restart_interval != -24 || parsed.total_steps != 48 || parsed.forecast_length_time != 172800.0 ) {
+    if ( !parsed.ok || parsed.timestep_seconds != 3600 || parsed.output_interval != 6 || parsed.restart_interval != -24 || parsed.total_steps != 48 ||
+         parsed.forecast_length_time != 172800.0 ) {
         TEST_FAIL;
-        std::cout << "Unexpected parse result:" << " ok=" << parsed.ok << ", exptid=" << parsed.experiment_id
-                  << ", timestep_seconds=" << parsed.timestep_seconds << ", output_interval=" << parsed.output_interval
-                  << ", restart_interval=" << parsed.restart_interval << ", total_steps=" << parsed.total_steps
-                  << ", forecast_length_time=" << parsed.forecast_length_time << "\n";
+        std::cout << "Unexpected parse result:" << " ok=" << parsed.ok << ", timestep_seconds=" << parsed.timestep_seconds
+                  << ", output_interval=" << parsed.output_interval << ", restart_interval=" << parsed.restart_interval
+                  << ", total_steps=" << parsed.total_steps << ", forecast_length_time=" << parsed.forecast_length_time << "\n";
         fs::current_path( original_cwd );
         fs::remove_all( tmp_dir, ec );
         return EXIT_FAILURE;

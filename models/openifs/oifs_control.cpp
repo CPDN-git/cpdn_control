@@ -211,9 +211,9 @@ ModelControlInputData OpenIFSControl::parse_control_input() const
             if ( !parse_int( tmpstr, parsed.restart_interval, err_msg ) ) {
                 return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
             }
-        } else if ( parsed_key == "CNMEXP" ) {
-            parsed.experiment_id = parsed_value;
-            if ( parsed.experiment_id.length() != 4 ) {
+        } else if ( parsed_key == "CNMEXP" ) {    // only needed for OpenIFS, identifier part of OIFS control class instance rather than base class.
+            experiment_id = parsed_value;
+            if ( experiment_id.length() != 4 ) {
                 return make_parse_error( control_input_file, "validate", parsed_key, "expected a 4-character experiment ID" );
             }
         } else if ( parsed_key == "CUSTOP" ) {
@@ -225,7 +225,7 @@ ModelControlInputData OpenIFSControl::parse_control_input() const
     }
 
     std::vector<std::string> missing_fields;
-    if ( parsed.experiment_id.empty() ) {
+    if ( experiment_id.empty() ) {
         missing_fields.push_back( "CNMEXP" );
     }
     if ( parsed.timestep_seconds <= 0 ) {
@@ -312,8 +312,7 @@ bool OpenIFSControl::get_current_step( int& current_step, const int total_steps 
  */
 std::vector<std::string> OpenIFSControl::get_output_filenames( int step ) const
 {
-    // TODO: exptid should come from the model instance, not via the args
-    std::string suffix = oifs_get_filename_part( std::to_string( step ), std::string( exptid ) );
+    std::string suffix = oifs_get_filename_part( std::to_string( step ), experiment_id );
     return { "ICMGG" + suffix, "ICMSH" + suffix, "ICMUA" + suffix };
 }
 

@@ -19,7 +19,7 @@ namespace fs = std::filesystem;
 struct ModelControlInputData {
     bool ok = false;
     fs::path source_file;
-    std::string error_step;
+    std::string error_step;    // TODO; do I need these?
     std::string error_field;
     std::string error_message;
 
@@ -28,7 +28,6 @@ struct ModelControlInputData {
     int restart_interval = 0;    // e.g. OpenIFS : NFRRES raw value: +ve model steps, -ve hours
     int total_steps = 0;         // e.g. OpenIFS : CUSTOP
     double forecast_length_time = 0.0;
-    // exptid only needed for OpenIFS, so make this identifier part of the OIFS control class instance rather than base class.
 };
 
 
@@ -95,7 +94,7 @@ class ModelControl {
     virtual bool get_current_step( int& current_step, const int total_steps ) const = 0;
 
     // Provide a list of model output filenames for uploading to server at a particular step count.
-    virtual std::vector<std::string> get_output_filenames( int step, std::string_view id ) const = 0;
+    virtual std::vector<std::string> get_output_filenames( int step ) const = 0;
 
     // Check whether a filename is a model output file that should be considered for upload packaging.
     virtual bool is_output_filename( std::string_view filename ) const = 0;

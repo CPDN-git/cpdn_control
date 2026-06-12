@@ -15,10 +15,7 @@ namespace {
 constexpr std::array<std::string_view, 3> WRF_OUTPUT_PREFIXES = { "wrfout_d01_", "wrfout_d02_", "wrfout_d03_" };
 constexpr std::array<std::string_view, 3> WRF_RESTART_PREFIXES = { "wrfrst_d01_", "wrfrst_d02_", "wrfrst_d03_" };
 
-std::vector<std::string> wrf_get_omp_env_vars( const std::string& nthreads )
-{
-    return { "OMP_NUM_THREADS=" + nthreads };
-}
+std::vector<std::string> wrf_get_omp_env_vars( const std::string& nthreads ) { return { "OMP_NUM_THREADS=" + nthreads }; }
 
 bool is_ascii_digit( char ch ) { return std::isdigit( static_cast<unsigned char>( ch ) ) != 0; }
 
@@ -40,12 +37,10 @@ bool is_wrf_datetime_suffix( std::string_view suffix )
 
 bool is_wrf_prefixed_datetime_filename( std::string_view filename, std::string_view prefix )
 {
-    return filename.size() == prefix.size() + 19 && filename.rfind( prefix, 0 ) == 0 &&
-           is_wrf_datetime_suffix( filename.substr( prefix.size() ) );
+    return filename.size() == prefix.size() + 19 && filename.rfind( prefix, 0 ) == 0 && is_wrf_datetime_suffix( filename.substr( prefix.size() ) );
 }
 
-template <std::size_t N>
-bool matches_any_wrf_prefix( std::string_view filename, const std::array<std::string_view, N>& prefixes )
+template <std::size_t N> bool matches_any_wrf_prefix( std::string_view filename, const std::array<std::string_view, N>& prefixes )
 {
     for ( std::string_view prefix : prefixes ) {
         if ( is_wrf_prefixed_datetime_filename( filename, prefix ) ) {
@@ -57,15 +52,9 @@ bool matches_any_wrf_prefix( std::string_view filename, const std::array<std::st
 
 }    // namespace
 
-void WRFControl::print_logs( const int nlines ) const
-{
-    (void)nlines;
-}
+void WRFControl::print_logs( const int nlines ) const { (void)nlines; }
 
-bool WRFControl::check_model_success() const
-{
-    return false;
-}
+bool WRFControl::check_model_success() const { return false; }
 
 ModelInputManifest WRFControl::get_input_manifest( const std::string& wu ) const
 {
@@ -93,27 +82,17 @@ bool WRFControl::get_current_step( int& step, const int total_steps ) const
     return false;
 }
 
-std::vector<std::string> WRFControl::get_output_filenames( int step, std::string_view id ) const
+std::vector<std::string> WRFControl::get_output_filenames( int step ) const
 {
     (void)step;
-    (void)id;
     return {};
 }
 
-bool WRFControl::is_output_filename( std::string_view filename ) const
-{
-    return matches_any_wrf_prefix( filename, WRF_OUTPUT_PREFIXES );
-}
+bool WRFControl::is_output_filename( std::string_view filename ) const { return matches_any_wrf_prefix( filename, WRF_OUTPUT_PREFIXES ); }
 
-bool WRFControl::is_restart_filename( std::string_view filename ) const
-{
-    return matches_any_wrf_prefix( filename, WRF_RESTART_PREFIXES );
-}
+bool WRFControl::is_restart_filename( std::string_view filename ) const { return matches_any_wrf_prefix( filename, WRF_RESTART_PREFIXES ); }
 
-std::vector<std::string> WRFControl::get_log_filenames() const
-{
-    return {};
-}
+std::vector<std::string> WRFControl::get_log_filenames() const { return {}; }
 
 bool WRFControl::setup_directories( const fs::path& slot_path ) const
 {
@@ -130,10 +109,7 @@ ModelControlInputData WRFControl::parse_control_input() const
     return parsed;
 }
 
-bool WRFControl::restart_ctl_exists() const
-{
-    return false;
-}
+bool WRFControl::restart_ctl_exists() const { return false; }
 
 bool WRFControl::restart_ctl_read( std::string& step, std::string& time ) const
 {

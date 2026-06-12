@@ -36,7 +36,7 @@ class OpenIFSControl : public ModelControl {
     ModelInputManifest get_input_manifest( const std::string& wu ) const override;
     std::vector<std::string> get_env_vars( const std::string& slot_path, const std::string& nthreads, std::string& err_msg ) const override;
     bool get_current_step( int& step, const int total_steps ) const override;
-    std::vector<std::string> get_output_filenames( int step, std::string_view id ) const override;
+    std::vector<std::string> get_output_filenames( int step ) const override;
     bool is_output_filename( std::string_view filename ) const override;
     bool is_restart_filename( std::string_view filename ) const override;
     std::vector<std::string> get_log_filenames() const override;
@@ -76,4 +76,9 @@ class OpenIFSControl : public ModelControl {
     // OpenIFS input data directories where files are unpacked.
     const fs::path ifsdata_dir{ "ifsdata" };
     const fs::path climdata_dir{ "climdata" };
+
+    // OpenIFS experiment ID, assigned by reading the namelist control_input_file.
+    // mutable so can change in parse_control_input() which is a const method as it does not
+    // change the returned state of ModelControlInputData, but held internally in this class only.
+    mutable std::string experiment_id;
 };

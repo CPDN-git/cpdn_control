@@ -29,10 +29,10 @@
 #include "boinc/md5_file.h"
 #include "boinc/util.h"
 
+#include "api/model_control.h"
 #include "cpdn_control.h"
 #include "cpdn_zip.h"
 #include "lib/utils.h"
-#include "api/model_control.h"
 
 namespace chrono = std::chrono;
 namespace fs = std::filesystem;
@@ -170,15 +170,15 @@ int init_boinc( BoincConfig& config )
 
 
 /**
- * @brief Copies the application zip file to the slot directory and unzips it.
+ * @brief Copies the model executable(s) zip file to the slot directory and unzips it.
  * 
- * @param app_name     The name of the application.
+ * @param app_name     The name of the application zip containing the model executables.
  * @param version      The version string of the application.
  * @param project_path The path to the project directory.
  * @param slot_path    The path to the slot directory.
  * @return int         Returns 0 on success, non-zero on failure.
  */
-int move_and_unzip_app_file( const std::string& app_name, const std::string& version, const std::string& project_path, const std::string& slot_path )
+int stage_and_unzip_app_file( const std::string& app_name, const std::string& version, const std::string& project_path, const std::string& slot_path )
 {
     // GC. TODO. This code could be combined with copy_and_unzip() to avoid code duplication.
 
@@ -196,7 +196,7 @@ int move_and_unzip_app_file( const std::string& app_name, const std::string& ver
     try {
         fs::copy_file( app_source, app_destination, fs::copy_options::overwrite_existing );
     } catch ( const fs::filesystem_error& e ) {
-        std::cerr << "..move_and_unzip_app: Error copying file: " << app_source << " to: " << app_destination << ",\nError: " << e.what()
+        std::cerr << "..stage_and_unzip_app: Error copying file: " << app_source << " to: " << app_destination << ",\nError: " << e.what()
                   << std::endl;
         return 1;
     }
@@ -212,7 +212,7 @@ int move_and_unzip_app_file( const std::string& app_name, const std::string& ver
         try {
             fs::remove( app_destination );
         } catch ( const fs::filesystem_error& e ) {
-            std::cerr << "..move_and_unzip_app_file(). Error removing file: " << app_destination << ",\nError: " << e.what() << std::endl;
+            std::cerr << "..stage_and_unzip_app_file(). Error removing file: " << app_destination << ",\nError: " << e.what() << std::endl;
         }
     }
     return retval;

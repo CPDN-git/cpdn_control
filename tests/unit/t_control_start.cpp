@@ -33,7 +33,7 @@ class FakeModelControl : public ModelControl {
     ModelInputManifest get_input_manifest( const std::string& ) const override { return {}; }
     ModelControlInputData parse_control_input() const override { return {}; }
     bool get_current_step( int&, const int ) const override { return false; }
-    std::vector<std::string> get_output_filenames( int, std::string_view ) const override { return {}; }
+    std::vector<std::string> get_output_filenames( int ) const override { return {}; }
     bool is_output_filename( std::string_view ) const override { return false; }
     bool is_restart_filename( std::string_view ) const override { return false; }
     std::vector<std::string> get_log_filenames() const override { return {}; }

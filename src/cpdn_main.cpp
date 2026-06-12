@@ -643,6 +643,16 @@ int main( int argc, char** argv )
         return finish_task( tstate, 1 );    // should terminate, the model won't run.
     }
 
+    //----------------  Ask model to run it's own setup before the model control file (e.g. namelist) is parsed.
+    // This allows the model to do any necessary edits before we ask it to parse the control file.
+    // For example, WRF restart flag might need to be reset.
+
+    auto model_setup_result = model_ctrl->setup();
+    if ( !model_setup_result ) {
+        std::cerr << "..Model setup failed.\n";
+        return finish_task( tstate, 1 );
+    }
+
     //----------------  Ask model for key control variables needed to manage the task  -------------------------------
 
     // Parse the model control file (e.g. namelist) through the model layer so controller code stays generic.
@@ -832,6 +842,11 @@ int main( int argc, char** argv )
             // GC. Why do this every timestep? This check only needs to be done at same frequency as NFRPOS.
             // GC. Added run of external diagnostics code if present. EXPERIMENTAL STILL.
             if ( observed_step != tstate.last_completed_step ) {
+
+                //  Run the model's tasks on a step (if any)
+                model_ctrl->do_step_tasks( observed_step );
+
+                // Start work on managing the model output files.
                 auto output_files = model_ctrl->get_output_filenames( observed_step, tconfig.exptid );
                 bool diagnostics_ran = run_step_diagnostics( *model_ctrl, diag_exe, bconfig.slot_path, output_files );
 
@@ -945,6 +960,13 @@ int main( int argc, char** argv )
     }
 
     //--------- End of main loop ---------
+
+    // -------- Allow the model to do any final work before we do our final steps -------
+
+    if ( !model_ctrl->finalize() ) {
+        std::cerr << "..Model finalize() function reported failure.\n";
+        // Not a critical failure so continue with final steps.
+    }
 
     // -------- Task cleanup & final uploads -----------
 

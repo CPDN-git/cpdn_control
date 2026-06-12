@@ -3,7 +3,7 @@
 //   This class is mainly abstract and provides an interface API
 //   for derived model control classes.
 //
-//   Glenn Carver, CPDN, 2025.
+//   Glenn Carver, CPDN, 2025-.
 
 #pragma once
 
@@ -36,8 +36,8 @@ class ModelControl {
 
   public:
     // Constructor and destructor methods
-    // In the final version of this base class constructor, we'll probably use a one which takes the XML model config file as arg.
-    // For now, use the default constructor and override it in derived classes.
+
+    // Use the default constructor and override it in derived classes.
     // C++ note: Compiler will not generate a default constructor if any other constructors are defined in the derived class.
     // C++ note: Destructor should be virtual in base classes so deleting derived class objects via base class pointers works correctly.
     ModelControl() = default;
@@ -45,59 +45,45 @@ class ModelControl {
 
 
     // Public interface methods
-    // Pure virtual functions. Overrides must be provided in derived classes.
+
+    // Pure virtual functions. Overrides *must* be provided in derived classes.
 
     // Prints last n lines of key log files produced by the model.
     virtual void print_logs( const int nlines ) const = 0;
 
     // Checks the model has completed successfully.
-    // This interface will change once the derived class is fully implemented.
     virtual bool check_model_success() const = 0;
 
+    // TODO: this is OIFS specific as WRF doesn't use a restart namelist file.
+    // WRF writes restarts to netcdf and the restart date/time is in the filename (and prob headers)
     virtual bool restart_ctl_exists() const = 0;
     virtual bool restart_ctl_read( std::string& step, std::string& time ) const = 0;
 
-    // Parse command line arguments (may not need this if controller process handles it).
-    //virtual bool parse_command_line(int argc, char* argv[]) = 0;
+
+    // Virtual functions with default implementations. Overrides may be provided in derived classes, but are not required.
 
     // Wrapper for various setup and initialization tasks before starting the model.
-    //virtual bool setup() = 0;
+    // This should be called after the model files have been staged (unpacked)
+    // but before the model is started. It could be used for example to modify
+    // the model namelist if restarting (as WRF needs).
+    virtual bool setup() const { return true; }
 
-    // Set model environment variables in forked process to run the model task.
-    //virtual bool set_envs() = 0;
+    // Wrapper for handling tasks during the model run.
+    // This should be called on a model step but may not do anything at every step.
+    // Example use would be to run external diagnostics at set intervals, or
+    // prune restart files as in the case of WRF.
+    // IMPORTANT. Because of the asynchronous nature of the control code tracking model steps,
+    // we cannot guarantee it's called every step.
+    virtual bool do_step_tasks( int current_step ) { return true; }
 
-    // Start the model job
-    //virtual int start() = 0;
+    // Tidy up and finalize after the model run has completed.
+    virtual bool finalize() const { return true; }
 
-    // Function for handling tasks during the model run.
-    // This should be called each step but may not do anything at every step.
-    //virtual void do_step_tasks(int current_step) = 0;
-
-    // Tidy up and finalise after the model run has completed.
-    //virtual bool teardown() = 0;
 
     // Getters & setters for model information (placeholders)
-    // C++ note: this provides "default implementation unless overridden" so must still be virtual.
 
-    // Gives the minimum and maximum number of threads the model can use based on the model configuration and/or system resources.
-    virtual void get_nthreads_range( int& min_threads, int& max_threads ) const
-    {
-        min_threads = 1;
-        max_threads = 1;
-    }
-
-    virtual std::string get_vendor_name() const { return vendor_name; }
-    virtual std::string get_model_name() const { return model_name; }
-    virtual std::string get_model_version() const { return model_version; }
-    virtual std::string get_executable_name() const { return executable; }
-    virtual std::vector<std::string> get_env_vars( const std::string& slot_path, const std::string& nthreads,
-                                                   std::string& err_msg ) const
-    {
-        (void)slot_path;
-        (void)nthreads;
-        err_msg.clear();
-        return {};
-    }
+    // Pure functions first to enforce overrides in derived classes,
+    // then virtual functions with default implementations.
 
     // Get list of model input files to unpack from the project directory.
     virtual ModelInputManifest get_input_manifest( const std::string& wu_id ) const = 0;
@@ -122,6 +108,25 @@ class ModelControl {
 
     virtual std::vector<std::string> get_log_filenames() const = 0;
 
+    // Gives the minimum and maximum number of threads the model can use based on the model configuration and/or system resources.
+    virtual void get_nthreads_range( int& min_threads, int& max_threads ) const
+    {
+        min_threads = 1;
+        max_threads = 1;
+    }
+
+    virtual std::string get_vendor_name() const { return vendor_name; }
+    virtual std::string get_model_name() const { return model_name; }
+    virtual std::string get_model_version() const { return model_version; }
+    virtual std::string get_executable_name() const { return executable; }
+    virtual std::vector<std::string> get_env_vars( const std::string& slot_path, const std::string& nthreads, std::string& err_msg ) const
+    {
+        (void)slot_path;
+        (void)nthreads;
+        err_msg.clear();
+        return {};
+    }
+
 
     // Delete copy constructor and assignment operator as these are not appropriate for this class.
     // C++ note: In a polymorphic base class, the copy constructor and assignment operator
@@ -135,7 +140,7 @@ class ModelControl {
 
 
   protected:
-    // Protected constructor for use by derived classes (may change in future when we use the model XML config file)
+    // Protected constructor for use by derived classes *only*.
     // Use init list here, no need to use 'setters' in constructor.
     // C++ note. Allows keeping member variables private while still enabling derived classes to use init-list construction.
     ModelControl( std::string_view vendor, std::string_view model, std::string_view version, std::string_view exe )

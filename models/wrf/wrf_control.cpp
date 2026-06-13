@@ -8,6 +8,8 @@
 #include <array>
 #include <cctype>
 
+
+// Helpers
 namespace {
 
 // These are fixed-size compile-time lookup tables, so std::array is the right tool:
@@ -52,9 +54,20 @@ template <std::size_t N> bool matches_any_wrf_prefix( std::string_view filename,
 
 }    // namespace
 
+
+// Implementations of the virtual functions from ModelControl
+
+/**
+ * @brief WRF does not have any additional log files other than stdout & stderr.
+ */
 void WRFControl::print_logs( const int nlines ) const { (void)nlines; }
 
+
+/**
+ * @brief 
+ */
 bool WRFControl::check_model_success() const { return false; }
+
 
 ModelInputManifest WRFControl::get_input_manifest( const std::string& wu ) const
 {
@@ -75,6 +88,7 @@ std::vector<std::string> WRFControl::get_env_vars( const std::string& slot_path,
     return wrf_get_omp_env_vars( nthreads );
 }
 
+
 bool WRFControl::get_current_step( int& step, const int total_steps ) const
 {
     (void)total_steps;
@@ -82,23 +96,29 @@ bool WRFControl::get_current_step( int& step, const int total_steps ) const
     return false;
 }
 
+
 std::vector<std::string> WRFControl::get_output_filenames( int step ) const
 {
     (void)step;
     return {};
 }
 
+
 bool WRFControl::is_output_filename( std::string_view filename ) const { return matches_any_wrf_prefix( filename, WRF_OUTPUT_PREFIXES ); }
+
 
 bool WRFControl::is_restart_filename( std::string_view filename ) const { return matches_any_wrf_prefix( filename, WRF_RESTART_PREFIXES ); }
 
+
 std::vector<std::string> WRFControl::get_log_filenames() const { return {}; }
+
 
 bool WRFControl::setup_directories( const fs::path& slot_path ) const
 {
     (void)slot_path;
     return false;
 }
+
 
 ModelControlInputData WRFControl::parse_control_input() const
 {
@@ -109,11 +129,28 @@ ModelControlInputData WRFControl::parse_control_input() const
     return parsed;
 }
 
+
 bool WRFControl::restart_ctl_exists() const { return false; }
+
 
 bool WRFControl::restart_ctl_read( std::string& step, std::string& time ) const
 {
     step.clear();
     time.clear();
     return false;
+}
+
+
+bool WRFControl::setup( const fs::path& slot_path ) const
+{
+    (void)slot_path;
+    return true;
+}
+
+
+bool WRFControl::do_step_tasks( int current_step, const fs::path& slot_path )
+{
+    (void)current_step;
+    (void)slot_path;
+    return true;
 }

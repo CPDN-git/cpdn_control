@@ -34,16 +34,28 @@ namespace fs = std::filesystem;
 struct ModelControlInputData {
     bool ok = false;
     fs::path source_file;
-    std::string error_step;    // TODO; do I need these?
+    std::string error_step;    // TODO: revise.  I don't like GPT putting the error vars in with the control data
     std::string error_field;
     std::string error_message;
 
     int timestep_seconds = 0;    // Model timestep in seconds e.g. OpenIFS : UTSTEP
-    int output_interval = 0;     // Output of model results in model steps e.g. OpenIFS : NFRPOS raw value: +ve model steps, -ve hours
+    int output_interval = 0;     // Interval between creation of new output file in model steps e.g. OpenIFS : NFRPOS
     int restart_interval = 0;    // Output of model restarts in model steps e.g. OpenIFS : NFRRES raw value: +ve model steps, -ve hours
     int total_steps = 0;         // Length of forecast in model steps e.g. OpenIFS : CUSTOP
     double forecast_length_time = 0.0;
 };
+
+// 'inline' here avoids multiple definition errors when this header is included in multiple translation units.
+inline ModelControlInputData make_parse_error( const fs::path& source_file, std::string_view error_step, std::string_view error_field,
+                                               std::string_view message )
+{
+    ModelControlInputData result;
+    result.source_file = source_file;
+    result.error_step = std::string( error_step );
+    result.error_field = std::string( error_field );
+    result.error_message = std::string( message );
+    return result;
+}
 
 
 class ModelControl {

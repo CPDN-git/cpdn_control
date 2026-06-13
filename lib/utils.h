@@ -46,6 +46,9 @@ void sleep_seconds( double seconds );
 bool parse_int( std::string& value, int& out, std::string& err_msg );
 bool parse_int( std::string& value );
 bool ensure_directory( const std::filesystem::path&, std::string* error_msg = nullptr );
+bool is_ascii_alpha( std::string_view text );
+bool is_ascii_digit( std::string_view text );
+bool is_ascii_digit( char ch );
 
 /**
  * @brief Run an executable in a given working directory and wait up to a timeout.

@@ -749,8 +749,7 @@ bool parse_int( std::string& value )
  */
 TimedProcessResult run_process_with_timeout( const std::string& executable, const std::vector<std::string>& args, const std::string& working_dir,
                                              int timeout_seconds, const std::filesystem::path& expected_output_file,
-                                             const std::vector<std::string>& child_env_vars,
-                                             const std::filesystem::path& combined_output_file )
+                                             const std::vector<std::string>& child_env_vars, const std::filesystem::path& combined_output_file )
 {
     TimedProcessResult result;
 
@@ -1010,3 +1009,16 @@ bool ensure_directory( const fs::path& dir, std::string* error_msg )
     }
     return true;
 }
+
+
+bool is_ascii_alpha( std::string_view text )
+{
+    return std::all_of( text.begin(), text.end(), []( unsigned char ch ) { return std::isalpha( ch ) != 0; } );
+}
+
+// Two versions
+bool is_ascii_digit( std::string_view text )
+{
+    return std::all_of( text.begin(), text.end(), []( unsigned char ch ) { return std::isdigit( ch ) != 0; } );
+}
+bool is_ascii_digit( char ch ) { return std::isdigit( static_cast<unsigned char>( ch ) ) != 0; }

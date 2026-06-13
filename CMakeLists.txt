@@ -161,7 +161,6 @@ endif()
 add_library(cpdn_control 
         ./src/cpdn_control.cpp
         ./src/control_start.cpp
-        ./src/external_diagnostics.cpp
         ./src/parse_args.cpp
         ${CPDN_PROCESS_CONTROL_SOURCE}
         ./lib/logging_utils.cpp

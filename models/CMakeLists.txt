@@ -15,6 +15,7 @@
 
 # Object library for all the different model instances
 add_library(cpdn_models OBJECT
+    ${CMAKE_CURRENT_SOURCE_DIR}/openifs/external_diagnostics.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/openifs/oifs_utils.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/openifs/oifs_control.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/wrf/wrf_control.cpp

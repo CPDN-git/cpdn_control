@@ -666,7 +666,7 @@ int main( int argc, char** argv )
         return finish_task( tstate, 1 );    // should terminate, the model won't run.
     }
 
-    //---------------- Unpack the remaining model input files -----------------------
+    //---------------- Stage (copy & unpack) remaining model input files -----------------------
     // Unpack through model instance manifest context so main() stays generic.
 
     // Do this before setup() so unpacking works correctly (may be a null op)

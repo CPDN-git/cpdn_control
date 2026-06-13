@@ -65,6 +65,12 @@ class WRFControl : public ModelControl {
 
 
   private:
-    // Private helper methods
+    // Private helper variables
+
+    // WRF control namelist file
     const fs::path control_input_file{ "namelist.input" };    // WRF control input file
+
+    // Number of domains this WRF configuration is set up to run.
+    // This is used to determine how many output and restart files to expect.
+    mutable int max_domains = 0;
 };

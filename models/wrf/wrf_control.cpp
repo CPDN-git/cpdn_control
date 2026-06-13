@@ -7,6 +7,9 @@
 #include "../../lib/utils.h"
 #include <array>
 #include <cctype>
+#include <fstream>
+#include <iostream>
+#include <string>
 
 
 // Helpers
@@ -19,7 +22,6 @@ constexpr std::array<std::string_view, 3> WRF_RESTART_PREFIXES = { "wrfrst_d01_"
 
 std::vector<std::string> wrf_get_omp_env_vars( const std::string& nthreads ) { return { "OMP_NUM_THREADS=" + nthreads }; }
 
-bool is_ascii_digit( char ch ) { return std::isdigit( static_cast<unsigned char>( ch ) ) != 0; }
 
 bool is_wrf_datetime_suffix( std::string_view suffix )
 {
@@ -40,6 +42,61 @@ bool is_wrf_datetime_suffix( std::string_view suffix )
 bool is_wrf_prefixed_datetime_filename( std::string_view filename, std::string_view prefix )
 {
     return filename.size() == prefix.size() + 19 && filename.rfind( prefix, 0 ) == 0 && is_wrf_datetime_suffix( filename.substr( prefix.size() ) );
+}
+
+bool extract_namelist_rhs_preserving_list( const std::string& line, std::string& value )
+{
+    std::string working_line = line;
+    if ( auto comment_pos = working_line.find( '!' ); comment_pos != std::string::npos ) {
+        working_line = working_line.substr( 0, comment_pos );
+    }
+
+    auto equals_pos = working_line.find( '=' );
+    if ( equals_pos == std::string::npos ) {
+        return false;
+    }
+
+    value = working_line.substr( equals_pos + 1 );
+    trim_whitespace( value );
+    if ( !value.empty() && value.back() == ',' ) {
+        value.pop_back();
+        trim_whitespace( value );
+    }
+    return !value.empty();
+}
+
+bool parse_wrf_domain_list_value( const std::string& values, int domain_index, int& parsed_value, std::string& err_msg )
+{
+    err_msg.clear();
+    if ( domain_index <= 0 ) {
+        err_msg = "domain index must be positive";
+        return false;
+    }
+
+    std::size_t start = 0;
+    int current_index = 1;
+    while ( start <= values.size() ) {
+        std::size_t end = values.find( ',', start );
+        std::string token = values.substr( start, end == std::string::npos ? std::string::npos : end - start );
+        trim_whitespace( token );
+
+        if ( current_index == domain_index ) {
+            if ( token.empty() ) {
+                err_msg = "empty value for requested domain";
+                return false;
+            }
+            return parse_int( token, parsed_value, err_msg );
+        }
+
+        if ( end == std::string::npos ) {
+            break;
+        }
+        start = end + 1;
+        ++current_index;
+    }
+
+    err_msg = "requested domain value not present";
+    return false;
 }
 
 template <std::size_t N> bool matches_any_wrf_prefix( std::string_view filename, const std::array<std::string_view, N>& prefixes )
@@ -122,10 +179,161 @@ bool WRFControl::setup_directories( const fs::path& slot_path ) const
 
 ModelControlInputData WRFControl::parse_control_input() const
 {
+    // Code is based on OpenIFSControl::parse_control_input()
+    // but WRF doesn#t have a restart namelist file, so this is a stub for now.
     ModelControlInputData parsed;
-    parsed.ok = false;
-    parsed.error_step = "not_implemented";
-    parsed.error_message = "WRFControl::parse_control_input is not implemented";
+    parsed.source_file = control_input_file;
+
+    if ( !fs::exists( control_input_file ) ) {
+        return make_parse_error( control_input_file, "exists", "", "model control input file does not exist" );
+    }
+
+    std::ifstream control_input_stream( control_input_file );
+    if ( !control_input_stream.is_open() ) {
+        return make_parse_error( control_input_file, "open", "", "failed to open model control input file" );
+    }
+
+    std::string input_line;
+    std::string parsed_key;
+    std::string parsed_value;
+    std::string tmpstr;
+    std::string err_msg;
+    std::string history_interval;
+    std::string frames_per_outfile;
+    int restart_interval_minutes = 0;
+    long long run_len_secs = 0;
+
+    while ( std::getline( control_input_stream, input_line ) ) {
+        trim_whitespace( input_line );
+        if ( input_line.empty() ) {
+            continue;
+        }
+
+        parsed_key.clear();
+        parsed_value.clear();
+
+        bool have_kv = false;
+
+        // Ignore comments.
+        if ( input_line.front() == '!' ) {
+            have_kv = false;
+        } else if ( parse_namelist_key_value( input_line, parsed_key, parsed_value ) ) {
+            have_kv = true;
+        }
+
+        if ( !have_kv ) {
+            continue;
+        }
+
+        // Parse the 'time_step' parameter (secs) from the namelist.input file.
+        // Ignore any decimal point and treat as an integer.
+        // Ignore other variables beginning with 'time_step'.
+
+        if ( parsed_key == "time_step" ) {
+            tmpstr = parsed_value;
+            if ( auto decimal_point = tmpstr.find( '.' ); decimal_point != std::string::npos ) {
+                tmpstr = tmpstr.substr( 0, decimal_point );
+            }
+            if ( !parse_int( tmpstr, parsed.timestep_seconds, err_msg ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+            }
+        }
+
+        // Parse the run length.
+        // First, read the run_days, run_hours, run_minutes, and run_seconds parameters from the namelist.input file.
+        // Then, convert the total run length to seconds and calculate the total number of model steps based on the timestep interval.
+        else if ( parsed_key == "run_days" ) {
+            tmpstr = parsed_value;
+            int days = 0;
+            if ( !parse_int( tmpstr, days, err_msg ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+            }
+            run_len_secs = days * 86400;    // Convert days to seconds
+        } else if ( parsed_key == "run_hours" ) {
+            tmpstr = parsed_value;
+            int hours = 0;
+            if ( !parse_int( tmpstr, hours, err_msg ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+            }
+            run_len_secs = run_len_secs + hours * 3600;    // Convert hours to seconds and add to total
+        } else if ( parsed_key == "run_minutes" ) {
+            tmpstr = parsed_value;
+            int minutes = 0;
+            if ( !parse_int( tmpstr, minutes, err_msg ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+            }
+            run_len_secs = run_len_secs + minutes * 60;    // Convert minutes to seconds and add to total
+        } else if ( parsed_key == "run_seconds" ) {
+            tmpstr = parsed_value;
+            int seconds = 0;
+            if ( !parse_int( tmpstr, seconds, err_msg ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+            }
+            run_len_secs = run_len_secs + seconds;    // Add seconds to total
+        }
+
+        // Restart interval 'restart_interval' in mins
+        else if ( parsed_key == "restart_interval" ) {
+            tmpstr = parsed_value;
+            if ( !parse_int( tmpstr, restart_interval_minutes, err_msg ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+            }
+        }
+
+        // Find out how many domains we're using.
+        // We'll need this to determine how many output and restart files to expect.
+        else if ( parsed_key == "max_dom" ) {
+            tmpstr = parsed_value;
+            if ( !parse_int( tmpstr, max_domains, err_msg ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+            }
+        }
+
+        //  Output interval.
+        //  For now assume we only want to upload the smallest grid. The namelist variables we need are e.g.:
+        //     history_interval = 9999, 9999, 60,   ! in minutes
+        //     frames_per_outfile = 1, 1, 24,       ! count of output instances; ie. 24x60 = 1 day.
+        //  The value of max_dom gives the value to use from these.
+        else if ( parsed_key == "history_interval" ) {
+            if ( !extract_namelist_rhs_preserving_list( input_line, history_interval ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, "failed to extract namelist value list" );
+            }
+        } else if ( parsed_key == "frames_per_outfile" ) {
+            if ( !extract_namelist_rhs_preserving_list( input_line, frames_per_outfile ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, "failed to extract namelist value list" );
+            }
+        }
+    }
+
+    // Compute output interval in model steps for the smallest grid.
+    // By 'output_interval', we mean the frequency at which new model output files are created,
+    // which is not the rate at which WRF output fields are written to that file.
+    if ( parsed.timestep_seconds <= 0 ) {
+        return make_parse_error( control_input_file, "validate", "time_step", "time_step must be a positive integer" );
+    }
+
+    int domain_history_interval = 0;
+    int domain_frames_per_outfile = 0;
+    if ( !parse_wrf_domain_list_value( history_interval, max_domains, domain_history_interval, err_msg ) ) {
+        return make_parse_error( control_input_file, "parse", "history_interval", err_msg );
+    }
+    if ( !parse_wrf_domain_list_value( frames_per_outfile, max_domains, domain_frames_per_outfile, err_msg ) ) {
+        return make_parse_error( control_input_file, "parse", "frames_per_outfile", err_msg );
+    }
+    parsed.output_interval = ( domain_history_interval * domain_frames_per_outfile * 60 ) / parsed.timestep_seconds;
+    parsed.restart_interval = ( restart_interval_minutes * 60 ) / parsed.timestep_seconds;
+
+    // Compute remaining time related variables
+    parsed.total_steps = static_cast<decltype( parsed.total_steps )>( run_len_secs / static_cast<long long>( parsed.timestep_seconds ) );
+    parsed.forecast_length_time = static_cast<double>( run_len_secs );
+
+    std::cerr << "WRF namelist.input parsed successfully:\n"
+              << "Timestep (secs)=" << parsed.timestep_seconds << ", total_steps=" << parsed.total_steps
+              << ", output_interval=" << parsed.output_interval << ", forecast_length_time=" << parsed.forecast_length_time
+              << ", max_domains=" << max_domains << ", restart interval=" << parsed.restart_interval << ", output_interval=" << parsed.output_interval
+              << '\n';
+
+    parsed.ok = true;
     return parsed;
 }
 

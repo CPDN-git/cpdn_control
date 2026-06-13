@@ -47,11 +47,11 @@ class ModelControl {
 
     // Pure virtual functions. Overrides *must* be provided in derived classes.
 
-    // Prints last n lines of key log files produced by the model.
-    virtual void print_logs( const int nlines ) const = 0;
-
     // Checks the model has completed successfully.
     virtual bool check_model_success() const = 0;
+
+    // Prints last n lines of key log files produced by the model.
+    virtual void print_logs( const int nlines ) const = 0;
 
     // TODO: this is OIFS specific as WRF doesn't use a restart namelist file.
     // WRF writes restarts to netcdf and the restart date/time is in the filename (and prob headers)
@@ -65,7 +65,7 @@ class ModelControl {
     // This should be called after the model files have been staged (unpacked)
     // but before the model is started. It could be used for example to modify
     // the model namelist if restarting (as WRF needs).
-    virtual bool setup() const { return true; }
+    virtual bool setup( const fs::path& slot_path ) const { return true; }
 
     // Wrapper for handling tasks during the model run.
     // This should be called on a model step but may not do anything at every step.
@@ -73,10 +73,10 @@ class ModelControl {
     // prune restart files as in the case of WRF.
     // IMPORTANT. Because of the asynchronous nature of the control code tracking model steps,
     // we cannot guarantee it's called every step.
-    virtual bool do_step_tasks( int current_step ) { return true; }
+    virtual bool do_step_tasks( int current_step, const fs::path& slot_path ) { return true; }
 
     // Tidy up and finalize after the model run has completed.
-    virtual bool finalize() const { return true; }
+    virtual bool finalize( const fs::path& slot_path ) const { return true; }
 
 
     // Getters & setters for model information (placeholders)

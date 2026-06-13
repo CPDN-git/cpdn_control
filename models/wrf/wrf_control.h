@@ -1,5 +1,5 @@
 //
-// WRF 4.6.1 Urban configuration control class header.
+// WRF 4.6.1  configuration control class header.
 //   Glenn Carver, CPDN, 2026.
 
 #pragma once
@@ -11,6 +11,8 @@
 
 #include "../../api/model_control.h"
 
+
+namespace fs = std::filesystem;
 
 class WRFControl : public ModelControl {
 
@@ -28,6 +30,9 @@ class WRFControl : public ModelControl {
     void print_logs( const int nlines ) const override;
     bool check_model_success() const override;
 
+    bool setup( const fs::path& slot_path ) const override;
+    bool do_step_tasks( int current_step, const fs::path& slot_path ) override;
+
     // Getters and setters
 
     ModelInputManifest get_input_manifest( const std::string& wu ) const override;
@@ -42,7 +47,7 @@ class WRFControl : public ModelControl {
     void get_nthreads_range( int& min_threads, int& max_threads ) const override
     {
         min_threads = 1;
-        max_threads = 16;
+        max_threads = 12;    // tests show OpenMP efficiency dropss off significantly above 8
     }
 
     // Model specific methods
@@ -57,4 +62,9 @@ class WRFControl : public ModelControl {
     // Delete copy constructor and assignment operator
     WRFControl( const WRFControl& ) = delete;
     WRFControl& operator=( const WRFControl& ) = delete;
+
+
+  private:
+    // Private helper methods
+    const fs::path control_input_file{ "namelist.input" };    // WRF control input file
 };

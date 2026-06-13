@@ -8,6 +8,7 @@
 #include <string>
 
 #include "../models/openifs/oifs_control.h"
+#include "../models/wrf/wrf_control.h"
 #include "unit_tests.h"
 
 namespace fs = std::filesystem;
@@ -65,7 +66,7 @@ int t_parse_control_input()
 
     std::cout << "Subtest: parse valid control input\n";
     auto parsed = model.parse_control_input();
-    if ( !parsed.ok || parsed.timestep_seconds != 3600 || parsed.output_interval != 6 || parsed.restart_interval != -24 || parsed.total_steps != 48 ||
+    if ( !parsed.ok || parsed.timestep_seconds != 3600 || parsed.output_interval != 6 || parsed.restart_interval != 24 || parsed.total_steps != 48 ||
          parsed.forecast_length_time != 172800.0 ) {
         TEST_FAIL;
         std::cout << "Unexpected parse result:" << " ok=" << parsed.ok << ", timestep_seconds=" << parsed.timestep_seconds
@@ -99,6 +100,41 @@ int t_parse_control_input()
         TEST_FAIL;
         std::cout << "Expected validate failure, got ok=" << parsed.ok << ", error_step=" << parsed.error_step
                   << ", error_message=" << parsed.error_message << "\n";
+        fs::current_path( original_cwd );
+        fs::remove_all( tmp_dir, ec );
+        return EXIT_FAILURE;
+    }
+
+    std::cout << "Subtest: parse WRF control input output interval\n";
+    WRFControl wrf_model( "UCAR", "wrf_4.6.1_urban", "4.6.1", "wrf_4.6.1_urban.exe" );
+    const std::string wrf_content = "&time_control\n"
+                                    " run_days = 0,\n"
+                                    " run_hours = 1,\n"
+                                    " run_minutes = 0,\n"
+                                    " run_seconds = 0,\n"
+                                    " history_interval = 9999, 9999, 60,\n"
+                                    " frames_per_outfile = 1, 1, 24,\n"
+                                    " restart_interval = 180,\n"
+                                    "/\n"
+                                    "&domains\n"
+                                    " time_step = 300,\n"
+                                    " max_dom = 3,\n"
+                                    "/\n";
+    if ( !write_control_input( tmp_dir / "namelist.input", wrf_content ) ) {
+        TEST_FAIL;
+        std::cout << "Unable to write WRF namelist.input test file\n";
+        fs::current_path( original_cwd );
+        fs::remove_all( tmp_dir, ec );
+        return EXIT_FAILURE;
+    }
+
+    parsed = wrf_model.parse_control_input();
+    if ( !parsed.ok || parsed.timestep_seconds != 300 || parsed.output_interval != 288 || parsed.restart_interval != 36 || parsed.total_steps != 12 ||
+         parsed.forecast_length_time != 3600.0 ) {
+        TEST_FAIL;
+        std::cout << "Unexpected WRF parse result:" << " ok=" << parsed.ok << ", timestep_seconds=" << parsed.timestep_seconds
+                  << ", output_interval=" << parsed.output_interval << ", restart_interval=" << parsed.restart_interval
+                  << ", total_steps=" << parsed.total_steps << ", forecast_length_time=" << parsed.forecast_length_time << "\n";
         fs::current_path( original_cwd );
         fs::remove_all( tmp_dir, ec );
         return EXIT_FAILURE;

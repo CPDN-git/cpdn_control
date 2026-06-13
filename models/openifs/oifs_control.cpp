@@ -20,16 +20,6 @@ namespace {
 
 constexpr std::string_view OIFS_RCF_FILENAME = "rcf";
 
-ModelControlInputData make_parse_error( const fs::path& source_file, std::string_view error_step, std::string_view error_field,
-                                        std::string_view message )
-{
-    ModelControlInputData result;
-    result.source_file = source_file;
-    result.error_step = std::string( error_step );
-    result.error_field = std::string( error_field );
-    result.error_message = std::string( message );
-    return result;
-}
 
 std::vector<std::string> oifs_get_grib_env_vars( const std::string& slot_path )
 {
@@ -39,16 +29,6 @@ std::vector<std::string> oifs_get_grib_env_vars( const std::string& slot_path )
 std::vector<std::string> oifs_get_omp_env_vars( const std::string& nthreads )
 {
     return { "OMP_NUM_THREADS=" + nthreads, "OMP_SCHEDULE=STATIC", "OMP_STACKSIZE=128M" };
-}
-
-bool is_ascii_alpha( std::string_view text )
-{
-    return std::all_of( text.begin(), text.end(), []( unsigned char ch ) { return std::isalpha( ch ) != 0; } );
-}
-
-bool is_ascii_digit( std::string_view text )
-{
-    return std::all_of( text.begin(), text.end(), []( unsigned char ch ) { return std::isdigit( ch ) != 0; } );
 }
 
 bool parse_oifs_output_filename( std::string_view filename )
@@ -274,6 +254,13 @@ ModelControlInputData OpenIFSControl::parse_control_input() const
         parsed.output_interval = abs( parsed.output_interval ) * 3600 / parsed.timestep_seconds;
     }
     parsed.forecast_length_time = static_cast<double>( parsed.total_steps ) * static_cast<double>( parsed.timestep_seconds );
+
+    std::cerr << "OpenIFS namelist (fort.4) parsed successfully: \n"
+              << " Timestep interval (secs): " << parsed.timestep_seconds << '\n'
+              << " Frequency of model output (steps): " << parsed.output_interval << '\n'
+              << " Frequency of restarts/checkpoints (steps): " << parsed.restart_interval << '\n'
+              << " Total number of model steps: " << parsed.total_steps << '\n'
+              << " Forecast length: " << parsed.forecast_length_time << '\n';
 
     parsed.ok = true;
     return parsed;

@@ -710,13 +710,6 @@ int main( int argc, char** argv )
     const int trickle_freq = TrickleHandler::get_trickle_frequency( timestep_seconds, total_steps );
     const double total_length_of_simulation_time = control_input.forecast_length_time;
 
-    std::cerr << "Values read from model control input are: \n"
-              << " Timestep interval (secs): " << timestep_seconds << '\n'
-              << " Frequency of model output (steps): " << output_interval << '\n'
-              << " Frequency of restarts/checkpoints (steps): " << restart_interval_steps << '\n'
-              << " Total number of model steps: " << total_steps << '\n'
-              << " Forecast length: " << total_length_of_simulation_time << '\n';
-
     std::cerr << "Trickle frequency is every : " << trickle_freq << " model steps, "
               << ( static_cast<double>( trickle_freq ) * static_cast<double>( timestep_seconds ) ) / 86400.0 << " days.\n";
 

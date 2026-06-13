@@ -243,6 +243,27 @@ Comparison against the previous refactor point:
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `src/cpdn_main.cpp::main()` | 67 | 67 | `0` | 323 | 323 | `0` |
 
+## After moving step diagnostics behind `OpenIFSControl::do_step_tasks()`
+
+Measured on 2026-06-13 after:
+
+- moving the diagnostics helper from `src/external_diagnostics.cpp` to `models/openifs/external_diagnostics.cpp`
+- removing the direct `run_step_diagnostics(...)` call sites from `src/cpdn_main.cpp`
+- routing both the polling-loop and final-step diagnostics trigger through `OpenIFSControl::do_step_tasks(...)`
+
+| File | Function | `pmccabe` | `lizard` CCN | `lizard` NLOC | Notes |
+| --- | --- | ---: | ---: | ---: | --- |
+| `src/cpdn_main.cpp` | `main()` | 67 | 67 | 318 | Top-level orchestration is slightly shorter; OpenIFS step diagnostics no longer leaks into `main()` |
+| `models/openifs/oifs_control.cpp` | `OpenIFSControl::do_step_tasks()` | 2 | 2 | 8 | Small model-owned step hook now owns diagnostics dispatch and duplicate-step suppression |
+| `models/openifs/external_diagnostics.cpp` | `run_step_diagnostics()` | 9 | 9 | 49 | Diagnostics helper keeps the same local complexity after moving under model ownership |
+
+Comparison against the previous refactor point:
+
+| Function | Prior `pmccabe` | Current `pmccabe` | Change | Prior `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src/cpdn_main.cpp::main()` | 67 | 67 | `0` | 323 | 318 | -5 (`-1.5%`) |
+| `run_step_diagnostics()` | 9 | 9 | `0` | 49 | 49 | `0` |
+
 ## Current observations
 
 - `main()` is still the dominant complexity hotspot, but it is materially smaller than the original baseline.
@@ -262,10 +283,14 @@ Comparison against the previous refactor point:
   - upload-file discovery now asks the model whether a filename matches
   - OpenIFS and WRF filename layouts are checked with simple string helpers rather than `std::regex`
   - model-specific parsing remains private to each model implementation instead of being lifted into `ModelControl`
+- The step-diagnostics refactor follows the same containment pattern:
+  - `main()` now triggers only the generic model step hook
+  - OpenIFS keeps the diagnostics executable discovery and dispatch behind `setup(...)` and `do_step_tasks(...)`
+  - the helper remains split into a separate OpenIFS-owned translation unit so it can evolve without growing `oifs_control.cpp`
 - `process_args(...)` was a good cohesion move as well as a useful reduction in `main()` complexity; the parsing/validation split now lives together in `src/parse_args.cpp`.
 - The timestamped logging refactor improved operability but, as expected, did not materially change control-flow complexity.
 - The `control_start` extraction is valuable mainly because it creates a direct unit-test seam for a high-risk state machine, even though it does not reduce the `main()` metric further.
-- The next likely low-hanging fruit remains the per-step processing and upload/trickle block inside `main()`.
+- The next likely low-hanging fruit is now more clearly the upload/trickle portion of the per-step block inside `main()` rather than the OpenIFS-specific diagnostics dispatch.
 
 ## After hardening process-control launch and containment
 

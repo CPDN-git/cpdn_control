@@ -16,6 +16,7 @@
 
 namespace fs = std::filesystem;
 
+// Struct to hold key time variables read from the model control input (e.g. namelist files)
 struct ModelControlInputData {
     bool ok = false;
     fs::path source_file;
@@ -23,10 +24,10 @@ struct ModelControlInputData {
     std::string error_field;
     std::string error_message;
 
-    int timestep_seconds = 0;    // e.g. OpenIFS : UTSTEP
-    int output_interval = 0;     // e.g. OpenIFS : NFRPOS raw value: +ve model steps, -ve hours
-    int restart_interval = 0;    // e.g. OpenIFS : NFRRES raw value: +ve model steps, -ve hours
-    int total_steps = 0;         // e.g. OpenIFS : CUSTOP
+    int timestep_seconds = 0;    // Model timestep in seconds e.g. OpenIFS : UTSTEP
+    int output_interval = 0;     // Output of model results in model steps e.g. OpenIFS : NFRPOS raw value: +ve model steps, -ve hours
+    int restart_interval = 0;    // Output of model restarts in model steps e.g. OpenIFS : NFRRES raw value: +ve model steps, -ve hours
+    int total_steps = 0;         // Length of forecast in model steps e.g. OpenIFS : CUSTOP
     double forecast_length_time = 0.0;
 };
 

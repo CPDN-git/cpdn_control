@@ -3,8 +3,8 @@
 //  Glenn Carver, CPDN, 2025.
 
 #include "oifs_control.h"
-#include "external_diagnostics.h"
 #include "../../lib/utils.h"
+#include "external_diagnostics.h"
 #include "oifs_utils.h"    // for oifs_parse_stat()
 #include <algorithm>
 #include <cctype>
@@ -266,7 +266,15 @@ ModelControlInputData OpenIFSControl::parse_control_input() const
         return make_parse_error( control_input_file, "validate", "", message );
     }
 
+    // Adjust restart and output intervals if negative, indicates they're in hours rather than steps.
+    if ( parsed.restart_interval < 0 ) {
+        parsed.restart_interval = abs( parsed.restart_interval ) * 3600 / parsed.timestep_seconds;
+    }
+    if ( parsed.output_interval < 0 ) {
+        parsed.output_interval = abs( parsed.output_interval ) * 3600 / parsed.timestep_seconds;
+    }
     parsed.forecast_length_time = static_cast<double>( parsed.total_steps ) * static_cast<double>( parsed.timestep_seconds );
+
     parsed.ok = true;
     return parsed;
 }
@@ -443,7 +451,7 @@ bool OpenIFSControl::do_step_tasks( int current_step, const fs::path& slot_path 
     //  Run the external diagnostics program
     bool status = true;
 
-    if ( ! diag_exe_path.empty() ) {
+    if ( !diag_exe_path.empty() ) {
         bool diag_stat = run_step_diagnostics( *this, diag_exe_path, slot_path, get_output_filenames( current_step ) );
     }
 

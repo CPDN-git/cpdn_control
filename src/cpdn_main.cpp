@@ -651,7 +651,7 @@ int main( int argc, char** argv )
         return finish_task( tstate, retval );
     }
 
-    //---------------- Stage & unpack the workunit file bundle ---------------------------
+    //---------------- Stage (copy into slot & unpack) the workunit file bundle ---------------------------
     // This typically contains the model control file(s) (e.g. namelists).
 
     fs::path app_bundle_path = bconfig.slot_path;
@@ -680,7 +680,7 @@ int main( int argc, char** argv )
 
     //----------------  Ask model to run it's own setup before the model control file (e.g. namelist) is parsed.
     // This allows the model to do any necessary edits before we ask it to parse the control file.
-    // For example, WRF restart flag might need to be reset.
+    // For example, WRF restart flag might need to be reset if restart files are present.
 
     auto model_setup_result = model_ctrl->setup( bconfig.slot_path );
     if ( !model_setup_result ) {
@@ -705,10 +705,6 @@ int main( int argc, char** argv )
     const int timestep_seconds = control_input.timestep_seconds;
     const int output_interval = control_input.output_interval;
     int restart_interval_steps = control_input.restart_interval;
-    if ( restart_interval_steps < 0 ) {
-        restart_interval_steps = abs( restart_interval_steps ) * 3600 / timestep_seconds;
-        std::cerr << " Restart dump frequency (in steps) " << restart_interval_steps << '\n';
-    }
 
     const int total_steps = control_input.total_steps;
     const int trickle_freq = TrickleHandler::get_trickle_frequency( timestep_seconds, total_steps );
@@ -730,7 +726,7 @@ int main( int argc, char** argv )
     // Initialise the ProgressFile handler
     ProgressFileHandler progress_file( bconfig.slot_path );
 
-    // Check whether the rcf file and the progress file (contains model progress) are not already present from an unscheduled shutdown
+    // Check if a model restart file and progress file are not already present from an unscheduled shutdown
     std::cerr << "Checking model's restart file and CPDN progress file: " << progress_file.path() << '\n';
 
     auto startup_state = initialize_task_state_from_restart( *model_ctrl, progress_file, restart_interval_steps, tstate, err_msg );
@@ -845,7 +841,6 @@ int main( int argc, char** argv )
 
             // Move the model result files to the task folder in the project directory
             // GC. Why do this every timestep? This check only needs to be done at same frequency as NFRPOS.
-            // GC. Added run of external diagnostics code if present. EXPERIMENTAL STILL.
             if ( observed_step != tstate.last_completed_step ) {
 
                 //  Run the model's tasks on a step (e.g. external diagnostics executable; pruning restarts etc)
@@ -967,7 +962,7 @@ int main( int argc, char** argv )
 
     // -------- Allow the model to do any final work before we do our final steps -------
 
-    if ( !model_ctrl->finalize( bconfig.slot_path) ) {
+    if ( !model_ctrl->finalize( bconfig.slot_path ) ) {
         std::cerr << "..Model finalize() function reported failure.\n";
         // Not a critical failure so continue with final steps.
     }

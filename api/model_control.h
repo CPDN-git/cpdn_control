@@ -16,7 +16,21 @@
 
 namespace fs = std::filesystem;
 
-// Struct to hold key time variables read from the model control input (e.g. namelist files)
+
+/**
+ * @brief Struct to hold key time variables read from the model control input (e.g. namelist files)
+ * 
+ * Notes:
+ *  - Assume any model can be monitored using a fixed timestep with a forecast time in number of steps.
+ *  - Assume restart and model output frequencies are also a fixed interval.
+ *  - For nested models, assume cpdn_control only monitors the top level model.
+ *  - This should cover most models.
+ * 
+ *  Any model with a variable timestepping scheme or variable output frequency would need to be
+ * handled in a model-specific way, which is outside the scope of this generic controller. It would
+ * likely require coding adding callback functions to the model instance class.
+ * 
+ */
 struct ModelControlInputData {
     bool ok = false;
     fs::path source_file;

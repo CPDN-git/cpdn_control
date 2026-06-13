@@ -6,9 +6,16 @@
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
+#include <system_error>
 #include <thread>
+
+#ifndef _WIN32
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 #include "../api/model_control.h"
 #include "../src/cpdn_control.h"
@@ -23,6 +30,8 @@ namespace fs = std::filesystem;
 
 namespace {
 constexpr const char* kSleepEnv = "CPDN_LAUNCH_PROCESS_SLEEP_MS";
+constexpr const char* kStdoutEnv = "CPDN_LAUNCH_PROCESS_STDOUT_TEXT";
+constexpr const char* kStderrEnv = "CPDN_LAUNCH_PROCESS_STDERR_TEXT";
 
 class LaunchProcessModelControl : public ModelControl {
 
@@ -87,6 +96,55 @@ bool wait_for_status( ChildProcessHandle& child_process, int expected_status, in
     std::cerr << "  Timeout waiting for process_status=" << expected_status << "\n";
     return false;
 }
+
+#ifndef _WIN32
+bool redirect_stderr_to_file( const fs::path& path, int& saved_stderr_fd, std::string& err_msg )
+{
+    err_msg.clear();
+    saved_stderr_fd = dup( STDERR_FILENO );
+    if ( saved_stderr_fd == -1 ) {
+        err_msg = "dup(STDERR_FILENO) failed";
+        return false;
+    }
+
+    int capture_fd = open( path.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0644 );
+    if ( capture_fd == -1 ) {
+        err_msg = "open(stderr capture file) failed";
+        close( saved_stderr_fd );
+        saved_stderr_fd = -1;
+        return false;
+    }
+
+    if ( dup2( capture_fd, STDERR_FILENO ) == -1 ) {
+        err_msg = "dup2(capture_fd, STDERR_FILENO) failed";
+        close( capture_fd );
+        close( saved_stderr_fd );
+        saved_stderr_fd = -1;
+        return false;
+    }
+
+    close( capture_fd );
+    return true;
+}
+
+bool restore_stderr( int saved_stderr_fd, std::string& err_msg )
+{
+    err_msg.clear();
+    if ( saved_stderr_fd == -1 ) {
+        err_msg = "saved stderr fd is invalid";
+        return false;
+    }
+
+    if ( dup2( saved_stderr_fd, STDERR_FILENO ) == -1 ) {
+        err_msg = "dup2(saved_stderr_fd, STDERR_FILENO) failed";
+        close( saved_stderr_fd );
+        return false;
+    }
+
+    close( saved_stderr_fd );
+    return true;
+}
+#endif
 }    // namespace
 
 int t_launch_process()
@@ -129,6 +187,51 @@ int t_launch_process()
     } else {
         std::cerr << "  Skipping normal exit status check due to launch failure\n";
     }
+
+#ifndef _WIN32
+    // Child stdout should be redirected into the inherited stderr stream.
+    set_test_env( kSleepEnv, "0" );
+    set_test_env( kStdoutEnv, "helper stdout line" );
+    set_test_env( kStderrEnv, "helper stderr line" );
+    test_count++;
+    {
+        fs::path stderr_capture = tmp_dir / "launch_process_stderr_capture.txt";
+        int saved_stderr_fd = -1;
+        std::string err_msg;
+        std::string captured_output;
+
+        if ( redirect_stderr_to_file( stderr_capture, saved_stderr_fd, err_msg ) ) {
+            child_process = launch_process( model_ctrl, project_path, slot_path, cmd, nthreads );
+            bool restored_ok = restore_stderr( saved_stderr_fd, err_msg );
+            if ( !restored_ok ) {
+                std::cerr << "  Failed to restore stderr after capture: " << err_msg << "\n";
+            }
+
+            if ( child_process_is_valid( child_process ) ) {
+                bool saw_running = false;
+                int exit_code = 0;
+                if ( wait_for_status( child_process, 1, 10, saw_running, exit_code ) ) {
+                    std::ifstream capture_in( stderr_capture );
+                    captured_output.assign( std::istreambuf_iterator<char>( capture_in ), std::istreambuf_iterator<char>() );
+                    if ( captured_output.find( "helper stdout line" ) != std::string::npos &&
+                         captured_output.find( "helper stderr line" ) != std::string::npos ) {
+                        test_passed++;
+                    } else {
+                        std::cerr << "  Expected helper stdout/stderr in captured stderr output, got: " << captured_output << "\n";
+                    }
+                } else {
+                    std::cerr << "  Captured-output launch case did not exit normally\n";
+                }
+            } else {
+                std::cerr << "  launch_process failed to start helper process (captured-output case)\n";
+            }
+        } else {
+            std::cerr << "  Failed to redirect stderr for capture: " << err_msg << "\n";
+        }
+    }
+    clear_test_env( kStdoutEnv );
+    clear_test_env( kStderrEnv );
+#endif
 
     // Controller-driven termination case.
     set_test_env( kSleepEnv, "5000" );

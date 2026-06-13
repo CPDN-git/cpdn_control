@@ -127,6 +127,12 @@ ChildProcessHandle start_child_process( const std::string& executable, const std
             _exit( 126 );
         }
 
+        // Fold child stdout into the inherited stderr stream so model output
+        // follows the BOINC stderr redirection path (for example stderr.txt).
+        if ( dup2( STDERR_FILENO, STDOUT_FILENO ) == -1 ) {
+            _exit( 122 );
+        }
+
         struct rlimit core_limits;
         core_limits.rlim_cur = core_limits.rlim_max = 0;
         if ( setrlimit( RLIMIT_CORE, &core_limits ) != 0 ) {

@@ -155,6 +155,24 @@ bool create_job_object( HANDLE& job_handle, std::string& err_msg )
 }
 
 
+HANDLE duplicate_inheritable_handle( HANDLE source_handle, std::string& err_msg )
+{
+    err_msg.clear();
+    if ( source_handle == nullptr || source_handle == INVALID_HANDLE_VALUE ) {
+        err_msg = "standard handle is not available";
+        return nullptr;
+    }
+
+    HANDLE duplicated_handle = nullptr;
+    if ( !DuplicateHandle( GetCurrentProcess(), source_handle, GetCurrentProcess(), &duplicated_handle, 0, TRUE, DUPLICATE_SAME_ACCESS ) ) {
+        err_msg = get_windows_error_message( GetLastError() );
+        return nullptr;
+    }
+
+    return duplicated_handle;
+}
+
+
 bool get_job_process_ids( HANDLE job_handle, std::vector<DWORD>& process_ids, std::string& err_msg )
 {
     err_msg.clear();
@@ -337,21 +355,45 @@ ChildProcessHandle start_child_process( const std::string& executable, const std
 
     STARTUPINFOW startup_info{};
     startup_info.cb = sizeof( startup_info );
+    BOOL inherit_handles = FALSE;
+    HANDLE child_stderr_handle = nullptr;
+    HANDLE parent_stderr_handle = GetStdHandle( STD_ERROR_HANDLE );
+    if ( parent_stderr_handle != nullptr && parent_stderr_handle != INVALID_HANDLE_VALUE ) {
+        child_stderr_handle = duplicate_inheritable_handle( parent_stderr_handle, err_msg );
+        if ( child_stderr_handle == nullptr ) {
+            CloseHandle( job_handle );
+            return child_process;
+        }
+
+        startup_info.dwFlags |= STARTF_USESTDHANDLES;
+        startup_info.hStdInput = GetStdHandle( STD_INPUT_HANDLE );
+        startup_info.hStdOutput = child_stderr_handle;
+        startup_info.hStdError = child_stderr_handle;
+        inherit_handles = TRUE;
+    }
+
     PROCESS_INFORMATION process_info{};
 
     if ( !CreateProcessW( executable_w.c_str(),
                           command_line_buffer.data(),
                           nullptr,
                           nullptr,
-                          FALSE,
+                          inherit_handles,
                           CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED,
                           env_block.data(),
                           working_dir_w.empty() ? nullptr : working_dir_w.c_str(),
                           &startup_info,
                           &process_info ) ) {
         err_msg = get_windows_error_message( GetLastError() );
+        if ( child_stderr_handle != nullptr ) {
+            CloseHandle( child_stderr_handle );
+        }
         CloseHandle( job_handle );
         return child_process;
+    }
+
+    if ( child_stderr_handle != nullptr ) {
+        CloseHandle( child_stderr_handle );
     }
 
     if ( !AssignProcessToJobObject( job_handle, process_info.hProcess ) ) {

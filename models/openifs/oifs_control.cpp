@@ -3,6 +3,7 @@
 //  Glenn Carver, CPDN, 2025.
 
 #include "oifs_control.h"
+#include "external_diagnostics.h"
 #include "../../lib/utils.h"
 #include "oifs_utils.h"    // for oifs_parse_stat()
 #include <algorithm>
@@ -13,6 +14,8 @@
 #include <string_view>
 #include <unordered_set>
 
+
+// Helpers.
 namespace {
 
 constexpr std::string_view OIFS_RCF_FILENAME = "rcf";
@@ -102,6 +105,19 @@ bool OpenIFSControl::check_model_success() const
         std::cerr << "ifs.stat file not found: " << ifs_stat << '\n';
     }
     return success;
+}
+
+
+/**
+ * @brief Print the last n lines of key log files produced by the model.
+ * @param nlines Number of lines to print from end of each log file.
+ */
+void OpenIFSControl::print_logs( const int nlines ) const
+{
+    // TODO: could this be pushed down to the base class rather than re-implemented in each derived class?
+    for ( const auto& log_file : log_files ) {
+        print_last_lines( log_file, nlines );    // from lib/utils.h; will check file exists
+    }
 }
 
 
@@ -257,19 +273,6 @@ ModelControlInputData OpenIFSControl::parse_control_input() const
 
 
 /**
- * @brief Print the last n lines of key log files produced by the model.
- * @param nlines Number of lines to print from end of each log file.
- */
-void OpenIFSControl::print_logs( const int nlines ) const
-{
-    // TODO: could this be pushed down to the base class rather than re-implemented in each derived class?
-    for ( const auto& log_file : log_files ) {
-        print_last_lines( log_file, nlines );    // from lib/utils.h; will check file exists
-    }
-}
-
-
-/**
  * @brief Get the current model step from the status file.
  * 
  * @param status_file Path to the model status file.
@@ -396,4 +399,53 @@ bool OpenIFSControl::setup_directories( const fs::path& slot_path ) const
         }
     }
     return true;
+}
+
+
+/**
+ * @brief Carries out any setup tasks AFTER all the model input files have been staged (unpacked),
+ * but BEFORE the model is started. One use is to check the external diagnostics exe exists.
+ * 
+ * @param slot_path The path to the model run slot directory where the input files are staged and the model runs.
+ * @returns True if the setup tasks were successful, false otherwise.
+ */
+bool OpenIFSControl::setup( const fs::path& slot_path ) const
+{
+    //  External diagnostics program check
+    diag_exe_path = slot_path;
+    diag_exe_path /= diag_exe_name;
+
+    if ( !fs::exists( diag_exe_path ) ) {
+        std::cerr << " NOTE: No external diagnostics program found. No extra trickle data will be written.";
+        diag_exe_path.clear();    // set to empty path to indicate no diagnostics program.
+        diag_exe_name.clear();
+    } else {
+        // Set execute permissions on diagnostics program if it exists (as above)
+        if ( !set_exec_perms( diag_exe_path.string() ) ) {
+            std::cerr << "..WARNING. Will not run diagnostics. Cannot set execute permission for diagnostics program: " << diag_exe_path << std::endl;
+            diag_exe_path.clear();
+            diag_exe_name.clear();
+        }
+    }
+
+    return true;
+}
+
+
+bool OpenIFSControl::do_step_tasks( int current_step, const fs::path& slot_path )
+{
+    // Only run something if step has changed
+    if ( current_step <= last_step_tasks_step ) {
+        return false;
+    }
+    last_step_tasks_step = current_step;
+
+    //  Run the external diagnostics program
+    bool status = true;
+
+    if ( ! diag_exe_path.empty() ) {
+        bool diag_stat = run_step_diagnostics( *this, diag_exe_path, slot_path, get_output_filenames( current_step ) );
+    }
+
+    return status;
 }

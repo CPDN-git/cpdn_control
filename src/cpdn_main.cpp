@@ -24,7 +24,6 @@
 #include "control_start.h"
 #include "cpdn_control.h"
 #include "cpdn_zip.h"
-#include "external_diagnostics.h"
 #include "lib/cpdn_cpu_time.h"
 #include "lib/logging_utils.h"
 #include "lib/utils.h"
@@ -683,7 +682,7 @@ int main( int argc, char** argv )
     // This allows the model to do any necessary edits before we ask it to parse the control file.
     // For example, WRF restart flag might need to be reset.
 
-    auto model_setup_result = model_ctrl->setup();
+    auto model_setup_result = model_ctrl->setup( bconfig.slot_path );
     if ( !model_setup_result ) {
         std::cerr << "..Model setup failed.\n";
         return finish_task( tstate, 1 );
@@ -795,26 +794,6 @@ int main( int argc, char** argv )
         return finish_task( tstate, 1 );
     }
 
-    // ------------- EXPERIMENTAL DIAGNOSTICS CODE SETUP ---------------
-    // This code is hardwired while I test the use of external diagnostics program
-    // The test is Chris O'Reilly's batches where we run a modified sptogp to compute
-    // the zonal mean zonal wind.
-
-    fs::path diag_exe = bconfig.slot_path;
-    diag_exe /= "diagnostics.exe";
-
-    if ( !fs::exists( diag_exe ) ) {
-        std::cerr << " NOTE: No external diagnostics program found. No extra trickle data will be written.";
-        diag_exe.clear();    // set to empty path to indicate no diagnostics program. check with diag_exe.empty() before trying to run diagnostics.
-    } else {
-        // Set execute permissions on diagnostics program if it exists (as above)
-        if ( !set_exec_perms( diag_exe.string() ) ) {
-            std::cerr << "..WARNING. Will not run diagnostics. Cannot set execute permission for diagnostics program: " << diag_exe << std::endl;
-            diag_exe.clear();
-        }
-    }
-    // -- END OF EXPERIMENTAL CODE --
-
     // --------------- Start the model process -----------------
 
     std::cerr << "Launching model executable: " << model_exe << std::endl;
@@ -869,12 +848,11 @@ int main( int argc, char** argv )
             // GC. Added run of external diagnostics code if present. EXPERIMENTAL STILL.
             if ( observed_step != tstate.last_completed_step ) {
 
-                //  Run the model's tasks on a step (if any)
-                model_ctrl->do_step_tasks( observed_step );
+                //  Run the model's tasks on a step (e.g. external diagnostics executable; pruning restarts etc)
+                const bool step_tasks_ran = model_ctrl->do_step_tasks( observed_step, bconfig.slot_path );
 
                 // Start work on managing the model output files.
                 auto output_files = model_ctrl->get_output_filenames( observed_step );
-                bool diagnostics_ran = run_step_diagnostics( *model_ctrl, diag_exe, bconfig.slot_path, output_files );
 
                 for ( const auto& result : output_files ) {
                     retval = move_result_file( bconfig.slot_path, upload_dir, result );
@@ -947,7 +925,7 @@ int main( int argc, char** argv )
                 }
 
                 tstate.last_completed_step = observed_step;
-                delay_max = diagnostics_ran ? LOOP_DELAY_FAST : LOOP_DELAY_DEFAULT;
+                delay_max = step_tasks_ran ? LOOP_DELAY_FAST : LOOP_DELAY_DEFAULT;
             } else {
                 delay_max = LOOP_DELAY_DEFAULT;
             }    // end of if it's a new timestep block.
@@ -989,7 +967,7 @@ int main( int argc, char** argv )
 
     // -------- Allow the model to do any final work before we do our final steps -------
 
-    if ( !model_ctrl->finalize() ) {
+    if ( !model_ctrl->finalize( bconfig.slot_path) ) {
         std::cerr << "..Model finalize() function reported failure.\n";
         // Not a critical failure so continue with final steps.
     }
@@ -1031,8 +1009,8 @@ int main( int argc, char** argv )
     boinc_begin_critical_section();
 
     // Move the final model result files ready for upload
+    model_ctrl->do_step_tasks( tstate.last_completed_step, bconfig.slot_path );
     auto output_files = model_ctrl->get_output_filenames( tstate.last_completed_step );
-    run_step_diagnostics( *model_ctrl, diag_exe, bconfig.slot_path, output_files );
     for ( const auto& result : output_files ) {
         retval = move_result_file( bconfig.slot_path, upload_dir, result );
         if ( retval ) {

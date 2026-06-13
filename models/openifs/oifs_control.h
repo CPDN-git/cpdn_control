@@ -26,10 +26,13 @@ class OpenIFSControl : public ModelControl {
     ~OpenIFSControl() override = default;
 
     // Public interface methods
-    // overrides of pure virtual functions in ModelControl
+    // Overrides of virtual functions in ModelControl
 
     void print_logs( const int nlines ) const override;
     bool check_model_success() const override;
+
+    bool setup( const fs::path& slot_path ) const override;
+    bool do_step_tasks( int current_step, const fs::path& slot_path ) override;
 
     // Getters and setters
 
@@ -81,4 +84,9 @@ class OpenIFSControl : public ModelControl {
     // mutable so can change in parse_control_input() which is a const method as it does not
     // change the returned state of ModelControlInputData, but held internally in this class only.
     mutable std::string experiment_id;
+
+    // External diagnostics executable name, if present.
+    mutable std::string diag_exe_name{ "diagnostics.exe" };
+    mutable fs::path diag_exe_path{};
+    int last_step_tasks_step = -1;
 };

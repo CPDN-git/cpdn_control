@@ -115,15 +115,41 @@ template <std::size_t N> bool matches_any_wrf_prefix( std::string_view filename,
 // Implementations of the virtual functions from ModelControl
 
 /**
- * @brief WRF does not have any additional log files other than stdout & stderr.
+ * @brief Check if the model has succeeded. Must be called after model process terminates.
+ * @returns True if successful, otherwise false.
  */
-void WRFControl::print_logs( const int nlines ) const { (void)nlines; }
+bool WRFControl::check_model_success() const
+{
+    bool success = false;
+    fs::path stderr_out = "stderr.txt";
+
+    // Check for 'success' string in WRF output.
+    // Output is normally written to stdout when running standalone but the control
+    // process will merge stdout onto stderr and the boinc init call redirects stderr
+    // to stderr.txt. So, check the final line in the stderr.txt file.
+
+    if ( fs::exists( stderr_out ) ) {
+        std::string last_line{};
+
+        fread_last_line( stderr_out.string(), last_line );
+        if ( last_line.find( "SUCCESS COMPLETE WRF" ) != std::string::npos ) {
+            success = true;
+            std::cerr << "'SUCCESS COMPLETE WRF' found in model log. Model succeeded." << '\n';
+        } else {
+            std::cerr << "Did not find 'SUCCESS COMPLETE WRF' in model log. Model failed." << '\n';
+        }
+    } else {
+        std::cerr << "Warning! Could not find model log : " << stderr_out << '\n';
+    }
+
+    return success;
+}
 
 
 /**
- * @brief 
+ * @brief WRF does not have any additional log files other than stdout & stderr.
  */
-bool WRFControl::check_model_success() const { return false; }
+void WRFControl::print_logs( const int nlines ) const { (void)nlines; }
 
 
 ModelInputManifest WRFControl::get_input_manifest( const std::string& wu ) const

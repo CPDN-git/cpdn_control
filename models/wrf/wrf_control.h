@@ -70,6 +70,15 @@ class WRFControl : public ModelControl {
     // WRF control namelist file
     const fs::path control_input_file{ "namelist.input" };    // WRF control input file
 
+    // Start date and time for the run read from namelist.input.
+    // Needed to construct time periods for output and restart files.
+    mutable int start_year = 0;
+    mutable int start_month = 0;
+    mutable int start_day = 0;
+    mutable int start_hour = 0;
+    mutable int start_min = 0;
+    mutable int start_sec = 0;    // this should never be anything other than zero!
+
     // Number of domains this WRF configuration is set up to run.
     // This is used to determine how many output and restart files to expect.
     mutable int max_domains = 0;

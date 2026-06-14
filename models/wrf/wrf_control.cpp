@@ -39,11 +39,18 @@ bool is_wrf_datetime_suffix( std::string_view suffix )
     return suffix[4] == '-' && suffix[7] == '-' && suffix[10] == '_' && suffix[13] == ':' && suffix[16] == ':';
 }
 
+
 bool is_wrf_prefixed_datetime_filename( std::string_view filename, std::string_view prefix )
 {
     return filename.size() == prefix.size() + 19 && filename.rfind( prefix, 0 ) == 0 && is_wrf_datetime_suffix( filename.substr( prefix.size() ) );
 }
 
+/**
+ * @brief This function is required because the default parse code will strip any 
+ *        remaining characters beyond the first comma. It was coded for OpenIFS and did not
+ *        expect multiple values per line. Ideally the parse fn needs recoding.
+ *        For now this is a workaround. It preserves the right-hand-side of the namelist name=value pair.
+ */
 bool extract_namelist_rhs_preserving_list( const std::string& line, std::string& value )
 {
     std::string working_line = line;
@@ -64,6 +71,7 @@ bool extract_namelist_rhs_preserving_list( const std::string& line, std::string&
     }
     return !value.empty();
 }
+
 
 bool parse_wrf_domain_list_value( const std::string& values, int domain_index, int& parsed_value, std::string& err_msg )
 {
@@ -99,6 +107,10 @@ bool parse_wrf_domain_list_value( const std::string& values, int domain_index, i
     return false;
 }
 
+
+/**
+ * @brief Used to check wrf filename is a restart or output file
+ */
 template <std::size_t N> bool matches_any_wrf_prefix( std::string_view filename, const std::array<std::string_view, N>& prefixes )
 {
     for ( std::string_view prefix : prefixes ) {
@@ -176,9 +188,12 @@ ModelInputManifest WRFControl::get_input_manifest( const std::string& workunit_i
     };
 }
 
+/**
+ * @brief Provide runtime environment variables.
+ *        The only one WRF uses it OMP_NUM_THREADS
+ */
 std::vector<std::string> WRFControl::get_env_vars( const std::string& slot_path, const std::string& nthreads, std::string& err_msg ) const
 {
-    (void)slot_path;
     err_msg.clear();
 
     if ( std::string nthreads_copy = nthreads; !parse_int( nthreads_copy ) ) {
@@ -211,9 +226,11 @@ bool WRFControl::is_output_filename( std::string_view filename ) const { return 
 bool WRFControl::is_restart_filename( std::string_view filename ) const { return matches_any_wrf_prefix( filename, WRF_RESTART_PREFIXES ); }
 
 
+// No additional log files. WRF writes to stdout & stderr which the controller merge to stderr.txt
 std::vector<std::string> WRFControl::get_log_filenames() const { return {}; }
 
 
+// WRF doesn't need any separate subdirectories.
 bool WRFControl::setup_directories( const fs::path& slot_path ) const
 {
     (void)slot_path;
@@ -314,6 +331,43 @@ ModelControlInputData WRFControl::parse_control_input() const
                 return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
             }
             run_len_secs = run_len_secs + seconds;    // Add seconds to total
+        }
+
+        // Get the start date and time. We'll need this to work out the date/time strings
+        // for the model output & restart files.
+        // These lines in the namelist.input file have multiple values, one per domain.
+        // However, parse_namelist_key_value by default removes all values after the first comma,
+        // which for these values is ok, because all domains start from the same date/time.
+        else if ( parsed_key == "start_year" ) {
+            tmpstr = parsed_value;
+            if ( !parse_int( tmpstr, start_year, err_msg ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+            }
+        } else if ( parsed_key == "start_month" ) {
+            tmpstr = parsed_value;
+            if ( !parse_int( tmpstr, start_month, err_msg ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+            }
+        } else if ( parsed_key == "start_day" ) {
+            tmpstr = parsed_value;
+            if ( !parse_int( tmpstr, start_day, err_msg ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+            }
+        } else if ( parsed_key == "start_hour" ) {
+            tmpstr = parsed_value;
+            if ( !parse_int( tmpstr, start_hour, err_msg ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+            }
+        } else if ( parsed_key == "start_minute" ) {
+            tmpstr = parsed_value;
+            if ( !parse_int( tmpstr, start_min, err_msg ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+            }
+        } else if ( parsed_key == "start_second" ) {
+            tmpstr = parsed_value;
+            if ( !parse_int( tmpstr, start_sec, err_msg ) ) {
+                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+            }
         }
 
         // Restart interval 'restart_interval' in mins

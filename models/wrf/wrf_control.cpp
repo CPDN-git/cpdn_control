@@ -205,6 +205,7 @@ std::vector<std::string> WRFControl::get_env_vars( const std::string& slot_path,
 }
 
 
+// TODO
 bool WRFControl::get_current_step( int& step, const int total_steps ) const
 {
     (void)total_steps;
@@ -213,6 +214,7 @@ bool WRFControl::get_current_step( int& step, const int total_steps ) const
 }
 
 
+// TODO
 std::vector<std::string> WRFControl::get_output_filenames( int step ) const
 {
     (void)step;
@@ -238,6 +240,10 @@ bool WRFControl::setup_directories( const fs::path& slot_path ) const
 }
 
 
+/**
+ * @brief  Read the WRF control file (namelist.input) and extract all the
+ *         variables we need to manage the forecast.
+ */
 ModelControlInputData WRFControl::parse_control_input() const
 {
     // Code is based on OpenIFSControl::parse_control_input()
@@ -436,9 +442,11 @@ ModelControlInputData WRFControl::parse_control_input() const
 }
 
 
+// TODO
 bool WRFControl::restart_ctl_exists() const { return false; }
 
 
+// TODO
 bool WRFControl::restart_ctl_read( std::string& step, std::string& time ) const
 {
     step.clear();
@@ -447,16 +455,19 @@ bool WRFControl::restart_ctl_read( std::string& step, std::string& time ) const
 }
 
 
+// TODO
 bool WRFControl::setup( const fs::path& slot_path ) const
 {
-    (void)slot_path;
+    //  Need to check if valid restart files are present and
+    //  if they are change the namelist.input 'restart' switch to true.
+    //  Otherwise WRF will repeat the run from the initial files.
     return true;
 }
 
 
+// TODO
 bool WRFControl::do_step_tasks( int current_step, const fs::path& slot_path )
 {
-    (void)current_step;
-    (void)slot_path;
+    //  Keep the number of restart files under control. Delete old ones.
     return true;
 }

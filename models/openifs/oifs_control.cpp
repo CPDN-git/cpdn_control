@@ -78,8 +78,9 @@ bool OpenIFSControl::check_model_success() const
         std::cerr << "Last line of ifs.stat, ifs_word: '" << stat_lastline << "', '" << ifs_word << "'\n";
         if ( ifs_word == "CNT0" ) {
             success = true;
+            std::cerr << "CNT0 found in log last line. Model succeeded." << '\n';
         } else {
-            std::cerr << "CNT0 not found; string returned was: " << "'" << ifs_word << "'" << '\n';
+            std::cerr << "CNT0 not found; model did not succeed. String returned was: " << "'" << ifs_word << "'" << '\n';
         }
     } else {
         std::cerr << "ifs.stat file not found: " << ifs_stat << '\n';
@@ -109,7 +110,7 @@ void OpenIFSControl::print_logs( const int nlines ) const
  */
 ModelInputManifest OpenIFSControl::get_input_manifest( const std::string& workunit_id ) const
 {
-    // The controller keeps BOINC resolution, checksum verification, copying, and unzip generic.
+    // The controller keeps BOINC filename resolution, checksum verification and staging generic.
     // OpenIFS only declares the logical BOINC files it needs and where each archive unpacks.
     return {
         { "ic_ancil_" + workunit_id + ".zip", fs::path( "." ) },

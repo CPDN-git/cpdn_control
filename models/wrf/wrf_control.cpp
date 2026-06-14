@@ -152,10 +152,28 @@ bool WRFControl::check_model_success() const
 void WRFControl::print_logs( const int nlines ) const { (void)nlines; }
 
 
-ModelInputManifest WRFControl::get_input_manifest( const std::string& wu ) const
+/**
+ * @brief Get list of logical model input files to unpack from project directory as
+ *        delivered from CPDN servers. So these are the *packed* files.
+ *        For WRF these will be the model initial conditions and boundary data files
+ *        together with the 'run' files; climatologies etc.
+ */
+ModelInputManifest WRFControl::get_input_manifest( const std::string& workunit_id ) const
 {
-    (void)wu;
-    return {};
+    // The controller keeps BOINC filename resolution, checksum verification and staging generic.
+    // This function declares the logical BOINC files it expects from the CPDN server and where
+    // each archive unpacks.
+    // NOTE!! These filenames are preliminary and assume the WRF input files are packed as:
+    //    ic_ancil  : wrfinput_d*, wrfbdy_d01
+    //    run_ancil : what WRF doc calls the 'run' files; essentially climatologies:
+    //                CAMtr_volume_mixing_ratio*, *.TBL, ozone*, RRTMG_LW/SW_DATA
+    //    Both these unpack into the slot directory, no subdirs used.
+    //
+    //    The namelist.input and accompanying iofields_d*.txt files are packed in the wu zip.
+    return {
+        { "ic_ancil_" + workunit_id + ".zip", fs::path( "." ) },
+        { "run_ancil_" + workunit_id + ".zip", fs::path( "." ) },
+    };
 }
 
 std::vector<std::string> WRFControl::get_env_vars( const std::string& slot_path, const std::string& nthreads, std::string& err_msg ) const

@@ -77,7 +77,7 @@ struct UploadSendResult {
  * @param modelName The name of the model.
  * @return A unique pointer to the created ModelControl instance. Maybe nullptr if model not supported.
 */
-static std::unique_ptr<ModelControl> create_model_control( std::string_view model_name, std::string_view model_version )
+static std::unique_ptr<ModelControl> create_model_control( std::string_view model_name, std::string_view app_version )
 {
     std::unique_ptr<ModelControl> model;    // create a null unique_ptr ready for a new model control instance.
 
@@ -85,16 +85,16 @@ static std::unique_ptr<ModelControl> create_model_control( std::string_view mode
     // As the test model is an OpenIFS skeleton clone, we use the OpenIFSControl class.
 
     if ( model_name == "test_model" ) {
-        model = std::make_unique<OpenIFSControl>( "CPDN", model_name, model_version, "test_model" );
+        model = std::make_unique<OpenIFSControl>( "CPDN", model_name, app_version, "test_model" );
 
     } else if ( model_name == "oifs_43r3_omp_l159" || model_name == "oifs_43r3_omp_l319" || model_name == "oifs_43r3_parest_omp_l319" ) {
-        model = std::make_unique<OpenIFSControl>( "ECMWF", model_name, model_version, "oifs_43r3_omp_model.exe" );
+        model = std::make_unique<OpenIFSControl>( "ECMWF", model_name, app_version, "oifs_43r3_omp_model.exe" );
 
-    } else if ( model_name == "wrf_4.6.1_urban" && model_version == "4.6.1" ) {
-        model = std::make_unique<WRFControl>( "UCAR", model_name, model_version, "wrf_4.6.1_urban.exe" );
+    } else if ( model_name == "wrf_4.6.1_urban" ) {
+        model = std::make_unique<WRFControl>( "UCAR", model_name, app_version, "wrf_4.6.1_urban.exe" );
 
     } else {
-        std::cerr << "Unsupported model '" << model_name << "'\n";
+        std::cerr << "Unsupported model. Name : " << model_name << ", app version : " << app_version << '\n';
     }
 
     return model;
@@ -103,6 +103,7 @@ static std::unique_ptr<ModelControl> create_model_control( std::string_view mode
 
 /**
  * @brief Report failure to stage an input file with as much context as possible.
+ *        Includes diagnostic hints for common failure modes (e.g., unresolved logical files).
  */
 static void report_input_stage_failure( std::string_view context, const InputStageResult& result )
 {
@@ -123,6 +124,13 @@ static void report_input_stage_failure( std::string_view context, const InputSta
         std::cerr << ": " << result.message;
     }
     std::cerr << '\n';
+
+    // Provide diagnostic hint if logical file was not resolved to a project archive
+    if ( !result.logical_file.empty() && !result.resolved_project_file.empty() && result.resolved_project_file == result.logical_file ) {
+        std::cerr << "   DIAGNOSTIC HINT: The logical file was NOT resolved to a project (jf_*) archive.\n";
+        std::cerr << "   This typically means: soft link XML has malformed tags (e.g., <softlink> instead of <soft_link>),\n";
+        std::cerr << "   missing/corrupted soft link file, or BOINC resolution failure.\n";
+    }
 }
 
 
@@ -611,7 +619,7 @@ int main( int argc, char** argv )
     // BOINC measures the disk usage on the slots directory so we must move all results out of this folder
     fs::path upload_dir = fs::path( bconfig.project_dir ) / ( bconfig.app_name + "_" + tconfig.workunit );
 
-    std::cerr << "Location of upload folder in project direoctory: " << upload_dir << '\n';
+    std::cerr << "Location of upload folder in project directory: " << upload_dir << '\n';
     if ( !ensure_directory( upload_dir, &err_msg ) ) {
         std::cerr << "..Failed to create temp upload folder for results: " << err_msg << std::endl;
         return finish_task( tstate, 1 );
@@ -645,19 +653,21 @@ int main( int argc, char** argv )
     //  -------------- Unpack application executables zipfile into slot ------------------
     //  This will be the actual model executable and any accompanying executables (e.g. diagnostics.exe).
 
+    std::cerr << ".. Staging application executable(s) into slot.." << '\n';
     retval = stage_and_unzip_app_file( bconfig.app_name, bconfig.app_version, bconfig.project_dir, bconfig.slot_path );
     if ( retval ) {
-        std::cerr << "..stage_and_unzip_app_file failed" << "\n";
+        std::cerr << "..stage_and_unzip_app_file failed" << '\n';
         return finish_task( tstate, retval );
     }
 
-    //---------------- Stage (copy into slot & unpack) the workunit file bundle ---------------------------
+    //---------------- Stage (copy into slot & unpack) the workunit file(s) zip ---------------------------
     // This typically contains the model control file(s) (e.g. namelists).
 
     fs::path app_bundle_path = bconfig.slot_path;
     app_bundle_path /= std::string( bconfig.app_name ) + "_" + tconfig.memberid + "_" + tconfig.filename_startdate + "_" +
                        std::to_string( (int)num_days ) + "_" + tconfig.batch + "_" + tconfig.workunit + ".zip";
 
+    std::cerr << ".. Staging workunit files zipfile into slot.." << '\n';
     auto app_bundle_stage = stage_boinc_input_file( app_bundle_path, bconfig.slot_path, fs::path( "." ), "app_bundle" );
     if ( !app_bundle_stage.ok ) {
         report_input_stage_failure( "app bundle", app_bundle_stage );
@@ -671,6 +681,7 @@ int main( int argc, char** argv )
     // Do this before setup() so unpacking works correctly (may be a null op)
     model_ctrl->setup_directories( bconfig.slot_path );
 
+    std::cerr << ".. Staging remaining workunit model zipfiles into slot.." << '\n';
     auto input_manifest = model_ctrl->get_input_manifest( tconfig.workunit );
     auto manifest_stage = stage_model_input_manifest( input_manifest, bconfig.slot_path );
     if ( !manifest_stage.ok ) {
@@ -682,8 +693,7 @@ int main( int argc, char** argv )
     // This allows the model to do any necessary edits before we ask it to parse the control file.
     // For example, WRF restart flag might need to be reset if restart files are present.
 
-    auto model_setup_result = model_ctrl->setup( bconfig.slot_path );
-    if ( !model_setup_result ) {
+    if ( !model_ctrl->setup( bconfig.slot_path ) ) {
         std::cerr << "..Model setup failed.\n";
         return finish_task( tstate, 1 );
     }

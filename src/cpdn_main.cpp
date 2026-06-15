@@ -986,16 +986,16 @@ int main( int argc, char** argv )
     tstate.model_success = model_ctrl->check_model_success();
 
     if ( tstate.model_success ) {
-        std::cerr << "..Model completed successfully" << std::endl;
+        std::cerr << ".. Model completed successfully" << std::endl;
     } else {
-        std::cerr << "..Failed, model did not complete successfully" << std::endl;
-        std::cerr << "..Model exit code: " << tstate.exit_code << std::endl;
+        std::cerr << ".. Failed, model did not complete successfully" << std::endl;
+        std::cerr << ".. Model exit code: " << tstate.exit_code << std::endl;
     }
 
     // Print the model logs & progress file (if they exist)
-    std::cerr << ".. Printing tail of model log files .." << std::endl;
+    std::cerr << ".. Printing tail of model log files (if any) .." << std::endl;
     model_ctrl->print_logs( 40 );
-    std::cerr << "... Printing controller progress file .. " << std::endl;
+    std::cerr << ".. Printing controller progress file .. " << std::endl;
     progress_file.print( std::cerr );
 
 
@@ -1007,12 +1007,11 @@ int main( int argc, char** argv )
     boinc_begin_critical_section();
 
     // Move the final model result files ready for upload
-    model_ctrl->do_step_tasks( tstate.last_completed_step, bconfig.slot_path );
     auto output_files = model_ctrl->get_output_filenames( tstate.last_completed_step );
     for ( const auto& result : output_files ) {
         retval = move_result_file( bconfig.slot_path, upload_dir, result );
         if ( retval ) {
-            std::cerr << "..Copying " << result << " model output file to the temp upload folder in projects directory failed" << "\n";
+            std::cerr << ".. Copying " << result << " model output file to the temp upload folder in projects directory failed" << "\n";
         }
     }
 

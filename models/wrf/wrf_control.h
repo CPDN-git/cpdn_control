@@ -70,6 +70,10 @@ class WRFControl : public ModelControl {
     // WRF control namelist file
     const fs::path control_input_file{ "namelist.input" };    // WRF control input file
 
+    // Timestep in seconds
+    // Used to contruct time period differences
+    mutable int timestep_seconds = 0;
+
     // Start date and time for the run read from namelist.input.
     // Needed to construct time periods for output and restart files.
     mutable int start_year = 0;

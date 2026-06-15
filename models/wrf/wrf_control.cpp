@@ -7,6 +7,7 @@
 #include "../../lib/utils.h"
 #include <array>
 #include <cctype>
+#include <cstdio>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -21,6 +22,22 @@ constexpr std::array<std::string_view, 3> WRF_OUTPUT_PREFIXES = { "wrfout_d01_",
 constexpr std::array<std::string_view, 3> WRF_RESTART_PREFIXES = { "wrfrst_d01_", "wrfrst_d02_", "wrfrst_d03_" };
 
 std::vector<std::string> wrf_get_omp_env_vars( const std::string& nthreads ) { return { "OMP_NUM_THREADS=" + nthreads }; }
+
+
+bool is_leap_year( int year ) { return ( year % 400 == 0 ) || ( year % 4 == 0 && year % 100 != 0 ); }
+
+
+int days_in_month( int year, int month )
+{
+    static constexpr int month_lengths[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+    if ( month < 1 || month > 12 ) {
+        return 0;
+    }
+    if ( month == 2 && is_leap_year( year ) ) {
+        return 29;
+    }
+    return month_lengths[month - 1];
+}
 
 
 bool is_wrf_datetime_suffix( std::string_view suffix )
@@ -214,11 +231,97 @@ bool WRFControl::get_current_step( int& step, const int total_steps ) const
 }
 
 
-// TODO
+/**
+ * @brief WRF uses date-time stamped output files, return list given the step count
+ * 
+ * This is not the ideal way for WRF to work. Rather than convert from date-time to steps
+ * it would be more natural for the model instance to use an internal date-time diff rather
+ * than keep converting. TODO.
+ */
 std::vector<std::string> WRFControl::get_output_filenames( int step ) const
 {
-    (void)step;
-    return {};
+    // Take the model step count, compute a time difference and add to the start time.
+    if ( step < 0 || timestep_seconds <= 0 || max_domains <= 0 ) {
+        return {};
+    }
+
+    int year = start_year;
+    int month = start_month;
+    int day = start_day;
+    int hour = start_hour;
+    int minute = start_min;
+    int second = start_sec;
+
+    // Reject unset or invalid start date/time components before doing any rollover math.
+    if ( year <= 0 || month < 1 || month > 12 || day < 1 || day > days_in_month( year, month ) || hour < 0 || hour > 23 || minute < 0 ||
+         minute > 59 || second < 0 || second > 59 ) {
+        return {};
+    }
+
+    // Split elapsed model time into whole days and the remaining seconds within the target day.
+    const long long elapsed_seconds = static_cast<long long>( step ) * static_cast<long long>( timestep_seconds );
+    long long elapsed_days = elapsed_seconds / 86400;
+    long long elapsed_day_seconds = elapsed_seconds % 86400;
+
+    // Add the intra-day offset first, then carry any overflow into the next larger field.
+    second += static_cast<int>( elapsed_day_seconds % 60 );
+    elapsed_day_seconds /= 60;
+    minute += static_cast<int>( elapsed_day_seconds % 60 );
+    elapsed_day_seconds /= 60;
+    hour += static_cast<int>( elapsed_day_seconds );
+
+    if ( second >= 60 ) {
+        second -= 60;
+        ++minute;
+    }
+    if ( minute >= 60 ) {
+        minute -= 60;
+        ++hour;
+    }
+    if ( hour >= 24 ) {
+        hour -= 24;
+        ++elapsed_days;
+    }
+
+    // Advance the calendar across month and year boundaries using the remaining whole-day offset.
+    while ( elapsed_days > 0 ) {
+        const int month_days = days_in_month( year, month );
+        const long long days_remaining_in_month = static_cast<long long>( month_days - day );
+
+        if ( elapsed_days <= days_remaining_in_month ) {
+            day += static_cast<int>( elapsed_days );
+            elapsed_days = 0;
+            break;
+        }
+
+        elapsed_days -= ( days_remaining_in_month + 1 );
+        day = 1;
+        ++month;
+        if ( month > 12 ) {
+            month = 1;
+            ++year;
+        }
+    }
+
+    // WRF output files use a fixed YYYY-MM-DD_HH:MM:SS suffix.
+    std::array<char, 20> timestamp_buffer{};
+    const int timestamp_len = std::snprintf(
+        timestamp_buffer.data(), timestamp_buffer.size(), "%04d-%02d-%02d_%02d:%02d:%02d", year, month, day, hour, minute, second );
+    if ( timestamp_len != 19 ) {
+        return {};
+    }
+
+    std::string timestamp( timestamp_buffer.data(), static_cast<std::size_t>( timestamp_len ) );
+
+    // Emit one output filename per WRF domain for the computed timestamp.
+    std::vector<std::string> output_filenames;
+    const int domain_count = max_domains;
+    output_filenames.reserve( static_cast<std::size_t>( domain_count ) );
+    for ( int i = 0; i < domain_count; ++i ) {
+        output_filenames.emplace_back( std::string( WRF_OUTPUT_PREFIXES[static_cast<std::size_t>( i )] ) + timestamp );
+    }
+
+    return output_filenames;
 }
 
 
@@ -247,7 +350,6 @@ bool WRFControl::setup_directories( const fs::path& slot_path ) const
 ModelControlInputData WRFControl::parse_control_input() const
 {
     // Code is based on OpenIFSControl::parse_control_input()
-    // but WRF doesn#t have a restart namelist file, so this is a stub for now.
     ModelControlInputData parsed;
     parsed.source_file = control_input_file;
 
@@ -304,6 +406,7 @@ ModelControlInputData WRFControl::parse_control_input() const
             if ( !parse_int( tmpstr, parsed.timestep_seconds, err_msg ) ) {
                 return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
             }
+            timestep_seconds = parsed.timestep_seconds;    // internal var for later use
         }
 
         // Parse the run length.

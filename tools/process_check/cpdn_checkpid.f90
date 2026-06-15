@@ -58,9 +58,9 @@ module cpdn_checkpid_mod
     character(len=*), parameter :: cpdn_progfile = 'cpdn_progressfile.txt'
 
     !  CPDN control code namelist format in progress file.
-    integer :: control_pid, upload_file_number, last_step, last_upload, model_completed
-    real    :: prior_acc_cpu_time
-    namelist /cpdn/ control_pid, prior_acc_cpu_time, upload_file_number, last_step, last_upload, model_completed
+    integer           :: control_pid, upload_file_number, last_completed_step, model_completed
+    double precision  :: prior_acc_cpu_time, last_upload_time
+    namelist /cpdn/ control_pid, prior_acc_cpu_time, upload_file_number, last_completed_step, last_upload_time, model_completed
 
 contains
 

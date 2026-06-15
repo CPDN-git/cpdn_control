@@ -389,6 +389,11 @@ bool resolve_boinc_input_file( const fs::path& logical_file, fs::path& physical_
         }
         return false;
     }
+    // boinc_resolve_filename will return the logical filename if it could not read a <soft_link> XML tag.
+    // This may be ok if it's a real symlink but usually CPDN uses the soft_link approach.
+    if ( logical_file.string() == resolved ) {
+        std::cerr << " WARNING: boinc_resolve_filename : resolved filename and logical filename identical!\n";
+    }
 
     fs::path candidate = resolved;
 #ifndef _WIN32
@@ -424,7 +429,14 @@ bool verify_project_zip_md5( const fs::path& project_file, std::string* error_ms
     std::string expected_md5;
     if ( !extract_expected_md5( project_file, expected_md5 ) ) {
         if ( error_msg ) {
-            *error_msg = "project file name is not of the form jf_<md5>: " + project_file.string();
+            std::string msg = "project file name is not of the form jf_<md5>: " + project_file.string();
+            // Detect if this looks like an unresolved logical file
+            std::string filename = project_file.filename().string();
+            if ( filename.rfind( "jf_", 0 ) == 0 ) {
+                msg += ". This appears to be an unresolved logical BOINC filename (not jf_<md5> format). ";
+                msg += "Check that BOINC file resolution or soft link XML parsing succeeded.";
+            }
+            *error_msg = msg;
         }
         return false;
     }
@@ -644,16 +656,6 @@ int move_result_file( const fs::path& slot_path, const fs::path& temp_path, cons
     return retval;
 }
 
-
-/**
- * @brief Takes the zip file, checks existence and whether empty and copies it to destination and unzips it
- * @param zipfile The path to the zip file containing the jf_ reference.
- * @param destination The path to copy the zip file to.
- * @param unzip_path The path to unzip the contents to.
- * @param type A string indicating the type of file (for logging purposes).
- * @return int Returns 0 on success, non-zero on failure.
- */
-// GC. TODO. Convert this to accept  fs::path args.
 /**
  * @brief Zips the upload files and deletes the original files upon success.
  * 

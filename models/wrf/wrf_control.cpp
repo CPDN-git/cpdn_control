@@ -581,10 +581,68 @@ bool WRFControl::restart_ctl_read( std::string& step, std::string& time ) const
 // TODO
 bool WRFControl::setup( const fs::path& slot_path ) const
 {
-    //  Need to check if valid restart files are present and
-    //  if they are change the namelist.input 'restart' switch to true.
-    //  Otherwise WRF will repeat the run from the initial files.
-    return true;
+    (void)slot_path;
+
+    // If no valid restart set exists, leave namelist.input unchanged.
+    if ( !restart_exists() ) {
+        return true;
+    }
+
+    std::ifstream input_stream( control_input_file );
+    if ( !input_stream.is_open() ) {
+        std::cerr << "Failed to open WRF control file for restart update: " << control_input_file << '\n';
+        return false;
+    }
+
+    std::vector<std::string> lines;
+    std::string line;
+    bool restart_line_updated = false;
+
+    while ( std::getline( input_stream, line ) ) {
+        std::string updated_line = line;
+
+        // Match the namelist restart key on the left-hand side while ignoring spacing.
+        std::string uncommented = line;
+        if ( const auto comment_pos = uncommented.find( '!' ); comment_pos != std::string::npos ) {
+            uncommented = uncommented.substr( 0, comment_pos );
+        }
+
+        if ( const auto equals_pos = uncommented.find( '=' ); equals_pos != std::string::npos ) {
+            std::string lhs = uncommented.substr( 0, equals_pos );
+            trim_whitespace( lhs );
+
+            if ( lhs == "restart" ) {
+                const auto false_pos = updated_line.find( ".false." );
+                if ( false_pos != std::string::npos ) {
+                    updated_line.replace( false_pos, 7, ".true." );
+                }
+                restart_line_updated = true;
+            }
+        }
+
+        lines.push_back( updated_line );
+    }
+    input_stream.close();
+
+    if ( !restart_line_updated ) {
+        std::cerr << "Failed to find WRF restart setting in control file: " << control_input_file << '\n';
+        return false;
+    }
+
+    std::ofstream output_stream( control_input_file, std::ios::trunc );
+    if ( !output_stream.is_open() ) {
+        std::cerr << "Failed to reopen WRF control file for restart update: " << control_input_file << '\n';
+        return false;
+    }
+
+    for ( std::size_t i = 0; i < lines.size(); ++i ) {
+        output_stream << lines[i];
+        if ( i + 1 < lines.size() ) {
+            output_stream << '\n';
+        }
+    }
+
+    return output_stream.good();
 }
 
 

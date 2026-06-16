@@ -569,7 +569,10 @@ bool WRFControl::restart_exists() const
 }
 
 
-// TODO
+/**
+ * @brief  WRF doesn't have a separate namelist file for restart control.
+ *         TODO. See cpdn_main for what's needed here.
+ */
 bool WRFControl::restart_ctl_read( std::string& step, std::string& time ) const
 {
     step.clear();
@@ -578,11 +581,14 @@ bool WRFControl::restart_ctl_read( std::string& step, std::string& time ) const
 }
 
 
-// TODO
+/**
+ * @brief Run setup tasks before the model is launched.
+ *        For WRF this means checking if a valid restart file exists and
+ *        if it does change the 'restart' logical in namelist.input, otherwise
+ *        WRF will start from initial files again.
+ */
 bool WRFControl::setup( const fs::path& slot_path ) const
 {
-    (void)slot_path;
-
     // If no valid restart set exists, leave namelist.input unchanged.
     if ( !restart_exists() ) {
         return true;
@@ -594,6 +600,7 @@ bool WRFControl::setup( const fs::path& slot_path ) const
         return false;
     }
 
+    //  Read the namelist.input file and find the 'restart' line to change (if not already .true.)
     std::vector<std::string> lines;
     std::string line;
     bool restart_line_updated = false;
@@ -635,6 +642,7 @@ bool WRFControl::setup( const fs::path& slot_path ) const
         return false;
     }
 
+    //  Write out the modified namelist.input file
     for ( std::size_t i = 0; i < lines.size(); ++i ) {
         output_stream << lines[i];
         if ( i + 1 < lines.size() ) {

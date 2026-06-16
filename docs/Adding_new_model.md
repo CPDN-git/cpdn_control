@@ -48,7 +48,7 @@ At a minimum this means implementing:
 - `is_output_filename(...)`
 - `is_restart_filename(...)`
 - `get_log_filenames()`
-- `restart_ctl_exists()`
+- `restart_exists()`
 - `restart_ctl_read(...)`
 
 The new class will also need the necessary private member variables, for example:
@@ -131,7 +131,7 @@ The controller startup and run loop currently depend on model hooks for:
 
 So `NewModel` must provide behaviour for:
 
-- `restart_ctl_exists()`
+- `restart_exists()`
 - `restart_ctl_read(...)`
 - `get_current_step(...)`
 - `get_output_filenames(...)`

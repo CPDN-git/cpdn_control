@@ -23,7 +23,7 @@ class FakeModelControl : public ModelControl {
 
     void print_logs( const int ) const override {}
     bool check_model_success() const override { return true; }
-    bool restart_ctl_exists() const override { return restart_exists; }
+    bool restart_exists() const override { return restart_file_exists; }
     bool restart_ctl_read( std::string& step, std::string& time ) const override
     {
         step = restart_step;
@@ -39,7 +39,7 @@ class FakeModelControl : public ModelControl {
     std::vector<std::string> get_log_filenames() const override { return {}; }
     bool setup_directories( const fs::path& ) const override { return true; }
 
-    bool restart_exists = false;
+    bool restart_file_exists = false;
     bool restart_read_ok = true;
     std::string restart_step = "0";
     std::string restart_time = "00000000";
@@ -108,7 +108,7 @@ int t_control_start()
     {
         const fs::path dir = make_temp_dir();
         FakeModelControl model_ctrl;
-        model_ctrl.restart_exists = true;
+        model_ctrl.restart_file_exists = true;
         model_ctrl.restart_step = "13";
         ProgressFileHandler progress_file( dir.string() );
         TaskState tstate;
@@ -134,7 +134,7 @@ int t_control_start()
     {
         const fs::path dir = make_temp_dir();
         FakeModelControl model_ctrl;
-        model_ctrl.restart_exists = true;
+        model_ctrl.restart_file_exists = true;
         model_ctrl.restart_step = "14";
         ProgressFileHandler progress_file( dir.string() );
         TaskState tstate;
@@ -229,7 +229,7 @@ int t_control_start()
     {
         const fs::path dir = make_temp_dir();
         FakeModelControl model_ctrl;
-        model_ctrl.restart_exists = true;
+        model_ctrl.restart_file_exists = true;
         ProgressFileHandler progress_file( dir.string() );
         TaskState tstate;
 

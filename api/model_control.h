@@ -80,9 +80,11 @@ class ModelControl {
     // Prints last n lines of key log files produced by the model.
     virtual void print_logs( const int nlines ) const = 0;
 
-    // TODO: this is OIFS specific as WRF doesn't use a restart namelist file.
-    // WRF writes restarts to netcdf and the restart date/time is in the filename (and prob headers)
-    virtual bool restart_ctl_exists() const = 0;
+    // Returns true if a valid model restart file exists.
+    virtual bool restart_exists() const = 0;
+
+    // Allows for a restart 'control' file (possibly a namelist) to be read.
+    // TODO. It might be possible to eliminate this entirely; make it openifs specific only.
     virtual bool restart_ctl_read( std::string& step, std::string& time ) const = 0;
 
 

@@ -132,7 +132,7 @@ This is already the right direction. The main issue is that some state uses mixe
 | `delay_count` | Loop delay counter | Upload polling cadence control. |
 | `delay_max` | Active loop delay target | Toggled by diagnostics run. |
 | `zfl` | List of files to zip for upload | Temporary upload working set. |
-| `restart_ctl_exists` | Snapshot of restart-file presence before startup recovery logic | Narrow-scope state, ok as local. |
+| `restart_exists` | Snapshot of restart-file presence before startup recovery logic | Narrow-scope state, ok as local. |
 
 ## Observations About The Current Split
 

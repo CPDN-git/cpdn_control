@@ -483,7 +483,7 @@ ModelControlInputData WRFControl::parse_control_input() const
 
 
 // TODO
-bool WRFControl::restart_ctl_exists() const { return false; }
+bool WRFControl::restart_exists() const { return false; }
 
 
 // TODO

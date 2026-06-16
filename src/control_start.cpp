@@ -11,14 +11,14 @@ TaskStartupStateResult initialize_task_state_from_restart( ModelControl& model_c
     err_msg.clear();
 
     const bool progress_file_exists = progress_file.exists();
-    const bool restart_ctl_exists = model_ctrl.restart_ctl_exists();
+    const bool restart_exists = model_ctrl.restart_exists();
     const bool progress_file_is_empty = progress_file_exists ? progress_file.is_empty() : false;
 
-    if ( !progress_file_exists && !restart_ctl_exists ) {
+    if ( !progress_file_exists && !restart_exists ) {
         return { true, TaskStartupMode::fresh_run, "-- Starting new model run --\n", false };
     }
 
-    if ( progress_file_exists && !progress_file_is_empty && restart_ctl_exists ) {
+    if ( progress_file_exists && !progress_file_is_empty && restart_exists ) {
         std::string restart_step;
         std::string restart_time;
         if ( !model_ctrl.restart_ctl_read( restart_step, restart_time ) ) {
@@ -48,8 +48,8 @@ TaskStartupStateResult initialize_task_state_from_restart( ModelControl& model_c
                     << "Adjusting last_completed_step, " << tstate.last_completed_step << ", to previous model restart step.\n";
 
         int adjusted_restart_step = tstate.last_completed_step;
-        adjusted_restart_step =
-            adjusted_restart_step - ( ( adjusted_restart_step % restart_interval_steps ) - 1 );    // -1 because the model will continue from restart_step.
+        adjusted_restart_step = adjusted_restart_step - ( ( adjusted_restart_step % restart_interval_steps ) -
+                                                          1 );    // -1 because the model will continue from restart_step.
         tstate.last_completed_step = adjusted_restart_step;
 
         return { true, TaskStartupMode::restart_run, log_message.str(), false };
@@ -60,7 +60,7 @@ TaskStartupStateResult initialize_task_state_from_restart( ModelControl& model_c
         return { false, TaskStartupMode::invalid, "", true };
     }
 
-    if ( progress_file_exists && !restart_ctl_exists ) {
+    if ( progress_file_exists && !restart_exists ) {
         if ( !progress_file.read( tstate, err_msg ) ) {
             err_msg = "Failed to read progress file: " + err_msg;
             return { false, TaskStartupMode::invalid, "", false };
@@ -74,7 +74,7 @@ TaskStartupStateResult initialize_task_state_from_restart( ModelControl& model_c
         return { true, TaskStartupMode::fresh_run, "", false };
     }
 
-    if ( !progress_file_exists && restart_ctl_exists ) {
+    if ( !progress_file_exists && restart_exists ) {
         err_msg = "rcf file exists, but progress file does not exist => problem with task, quitting run";
         return { false, TaskStartupMode::invalid, "", true };
     }

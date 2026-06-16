@@ -56,7 +56,7 @@ class OpenIFSControl : public ModelControl {
 
     ModelControlInputData parse_control_input() const override;
 
-    bool restart_ctl_exists() const override;
+    bool restart_exists() const override;
     bool restart_ctl_read( std::string& step, std::string& time ) const override;
 
 

@@ -40,7 +40,7 @@ class LaunchProcessModelControl : public ModelControl {
 
     void print_logs( const int ) const override {}
     bool check_model_success() const override { return true; }
-    bool restart_ctl_exists() const override { return false; }
+    bool restart_exists() const override { return false; }
     bool restart_ctl_read( std::string& step, std::string& time ) const override
     {
         step.clear();

@@ -328,7 +328,7 @@ std::vector<std::string> OpenIFSControl::get_log_filenames() const { return log_
 /** 
  * @brief Returns true if OpenIFS rcf file exists in current dir 
  */
-bool OpenIFSControl::restart_ctl_exists() const { return fs::exists( rcf ); }
+bool OpenIFSControl::restart_exists() const { return fs::exists( rcf ); }
 
 
 /**

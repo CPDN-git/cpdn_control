@@ -5,6 +5,7 @@
 #include "wrf_control.h"
 
 #include "../../lib/utils.h"
+#include "wrf_datetime.h"
 #include <array>
 #include <cctype>
 #include <cstdio>
@@ -22,22 +23,6 @@ constexpr std::array<std::string_view, 3> WRF_OUTPUT_PREFIXES = { "wrfout_d01_",
 constexpr std::array<std::string_view, 3> WRF_RESTART_PREFIXES = { "wrfrst_d01_", "wrfrst_d02_", "wrfrst_d03_" };
 
 std::vector<std::string> wrf_get_omp_env_vars( const std::string& nthreads ) { return { "OMP_NUM_THREADS=" + nthreads }; }
-
-
-bool is_leap_year( int year ) { return ( year % 400 == 0 ) || ( year % 4 == 0 && year % 100 != 0 ); }
-
-
-int days_in_month( int year, int month )
-{
-    static constexpr int month_lengths[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
-    if ( month < 1 || month > 12 ) {
-        return 0;
-    }
-    if ( month == 2 && is_leap_year( year ) ) {
-        return 29;
-    }
-    return month_lengths[month - 1];
-}
 
 
 bool is_wrf_datetime_suffix( std::string_view suffix )
@@ -205,6 +190,7 @@ ModelInputManifest WRFControl::get_input_manifest( const std::string& workunit_i
     };
 }
 
+
 /**
  * @brief Provide runtime environment variables.
  *        The only one WRF uses it OMP_NUM_THREADS
@@ -245,68 +231,18 @@ std::vector<std::string> WRFControl::get_output_filenames( int step ) const
         return {};
     }
 
-    int year = start_year;
-    int month = start_month;
-    int day = start_day;
-    int hour = start_hour;
-    int minute = start_min;
-    int second = start_sec;
+    DateTime start_of_run = { start_year, start_month, start_day, start_hour, start_min, start_sec };
 
-    // Reject unset or invalid start date/time components before doing any rollover math.
-    if ( year <= 0 || month < 1 || month > 12 || day < 1 || day > days_in_month( year, month ) || hour < 0 || hour > 23 || minute < 0 ||
-         minute > 59 || second < 0 || second > 59 ) {
-        return {};
-    }
-
-    // Split elapsed model time into whole days and the remaining seconds within the target day.
+    // Calculate duration and add to the start time.
     const long long elapsed_seconds = static_cast<long long>( step ) * static_cast<long long>( timestep_seconds );
-    long long elapsed_days = elapsed_seconds / 86400;
-    long long elapsed_day_seconds = elapsed_seconds % 86400;
 
-    // Add the intra-day offset first, then carry any overflow into the next larger field.
-    second += static_cast<int>( elapsed_day_seconds % 60 );
-    elapsed_day_seconds /= 60;
-    minute += static_cast<int>( elapsed_day_seconds % 60 );
-    elapsed_day_seconds /= 60;
-    hour += static_cast<int>( elapsed_day_seconds );
-
-    if ( second >= 60 ) {
-        second -= 60;
-        ++minute;
-    }
-    if ( minute >= 60 ) {
-        minute -= 60;
-        ++hour;
-    }
-    if ( hour >= 24 ) {
-        hour -= 24;
-        ++elapsed_days;
-    }
-
-    // Advance the calendar across month and year boundaries using the remaining whole-day offset.
-    while ( elapsed_days > 0 ) {
-        const int month_days = days_in_month( year, month );
-        const long long days_remaining_in_month = static_cast<long long>( month_days - day );
-
-        if ( elapsed_days <= days_remaining_in_month ) {
-            day += static_cast<int>( elapsed_days );
-            elapsed_days = 0;
-            break;
-        }
-
-        elapsed_days -= ( days_remaining_in_month + 1 );
-        day = 1;
-        ++month;
-        if ( month > 12 ) {
-            month = 1;
-            ++year;
-        }
-    }
+    DateTime duration = secs_to_datetime_duration( elapsed_seconds );
+    DateTime output_date = add_duration_to_datetime( start_of_run, duration );
 
     // WRF output files use a fixed YYYY-MM-DD_HH:MM:SS suffix.
     std::array<char, 20> timestamp_buffer{};
-    const int timestamp_len = std::snprintf(
-        timestamp_buffer.data(), timestamp_buffer.size(), "%04d-%02d-%02d_%02d:%02d:%02d", year, month, day, hour, minute, second );
+    const int timestamp_len = std::snprintf( timestamp_buffer.data(), timestamp_buffer.size(), "%04d-%02d-%02d_%02d:%02d:%02d", output_date.year,
+                                             output_date.month, output_date.day, output_date.hour, output_date.minute, output_date.second );
     if ( timestamp_len != 19 ) {
         return {};
     }
@@ -321,6 +257,7 @@ std::vector<std::string> WRFControl::get_output_filenames( int step ) const
         output_filenames.emplace_back( std::string( WRF_OUTPUT_PREFIXES[static_cast<std::size_t>( i )] ) + timestamp );
     }
 
+    std::cerr << "DEBUG: output_filenames = " << output_filenames[1] << '\n' << output_filenames[2] << '\n' << output_filenames[3] << '\n';
     return output_filenames;
 }
 

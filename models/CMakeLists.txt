@@ -19,6 +19,7 @@ add_library(cpdn_models OBJECT
     ${CMAKE_CURRENT_SOURCE_DIR}/openifs/oifs_utils.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/openifs/oifs_control.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/wrf/wrf_control.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/wrf/wrf_datetime.cpp
 )
 
 

@@ -482,8 +482,91 @@ ModelControlInputData WRFControl::parse_control_input() const
 }
 
 
-// TODO
-bool WRFControl::restart_exists() const { return false; }
+/**
+ * @brief Scans current (slot) directory and returns true if a valid set
+ *        of WRF restart files is found. A valid set is defined as restart files
+ *        for all domains of the same date and non-zero size.
+ */
+bool WRFControl::restart_exists() const
+{
+    // Keep the newest valid restart timestamp found during the scan.
+    static std::string restart_datetime;
+    // Count how many distinct restart-date groups were seen, regardless of validity.
+    static int restart_set_count = 0;
+    restart_datetime.clear();
+    restart_set_count = 0;
+
+    if ( max_domains <= 0 || max_domains > static_cast<int>( WRF_RESTART_PREFIXES.size() ) ) {
+        return false;
+    }
+
+    struct RestartSet {
+        std::string datetime;
+        std::vector<bool> domains_present;
+    };
+
+    std::vector<RestartSet> restart_sets;
+
+    // Scan the slot directory and group non-empty restart files by their timestamp suffix.
+    for ( const auto& entry : fs::directory_iterator( fs::current_path() ) ) {
+        if ( !entry.is_regular_file() ) {
+            continue;
+        }
+
+        std::error_code ec;
+        const auto file_size = entry.file_size( ec );
+        if ( ec || file_size == 0 ) {
+            continue;
+        }
+
+        const std::string filename = entry.path().filename().string();
+
+        for ( int domain_index = 0; domain_index < max_domains; ++domain_index ) {
+            const std::string_view prefix = WRF_RESTART_PREFIXES[static_cast<std::size_t>( domain_index )];
+            if ( !is_wrf_prefixed_datetime_filename( filename, prefix ) ) {
+                continue;
+            }
+
+            const std::string datetime = filename.substr( prefix.size() );
+
+            auto restart_set = restart_sets.begin();
+            for ( ; restart_set != restart_sets.end(); ++restart_set ) {
+                if ( restart_set->datetime == datetime ) {
+                    break;
+                }
+            }
+
+            if ( restart_set == restart_sets.end() ) {
+                restart_sets.push_back( RestartSet{ datetime, std::vector<bool>( static_cast<std::size_t>( max_domains ), false ) } );
+                ++restart_set_count;
+                restart_set = restart_sets.end() - 1;
+            }
+
+            restart_set->domains_present[static_cast<std::size_t>( domain_index )] = true;
+            break;
+        }
+    }
+
+    bool found_valid_restart = false;
+    // A valid restart requires one non-empty restart file per configured domain for the same timestamp.
+    for ( const auto& restart_set : restart_sets ) {
+        bool all_domains_present = true;
+        for ( bool domain_present : restart_set.domains_present ) {
+            if ( !domain_present ) {
+                all_domains_present = false;
+                break;
+            }
+        }
+
+        // WRF timestamps sort lexically in chronological order, so keep the newest valid set.
+        if ( all_domains_present && ( !found_valid_restart || restart_set.datetime > restart_datetime ) ) {
+            restart_datetime = restart_set.datetime;
+            found_valid_restart = true;
+        }
+    }
+
+    return found_valid_restart;
+}
 
 
 // TODO

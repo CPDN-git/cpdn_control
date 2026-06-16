@@ -33,3 +33,4 @@ int t_control_start();
 int t_logging_utils();
 int t_get_env_vars();
 int t_model_filename_match();
+int t_wrf_datetime();

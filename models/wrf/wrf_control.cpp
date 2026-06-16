@@ -1,5 +1,5 @@
 //
-// Implementation of the WRF 4.6.1 Urban model control class.
+// Implementation of the WRF model control class.
 //   Glenn Carver, CPDN, 2026.
 
 #include "wrf_control.h"

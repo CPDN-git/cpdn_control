@@ -185,6 +185,31 @@ bool parse_wrf_domain_list_value( const std::string& values, int domain_index, i
 }
 
 
+int* get_wrf_start_datetime_field( DateTime& datetime, std::string_view parsed_key )
+{
+    if ( parsed_key == "start_year" ) {
+        return &datetime.year;
+    }
+    if ( parsed_key == "start_month" ) {
+        return &datetime.month;
+    }
+    if ( parsed_key == "start_day" ) {
+        return &datetime.day;
+    }
+    if ( parsed_key == "start_hour" ) {
+        return &datetime.hour;
+    }
+    if ( parsed_key == "start_minute" ) {
+        return &datetime.minute;
+    }
+    if ( parsed_key == "start_second" ) {
+        return &datetime.second;
+    }
+
+    return nullptr;
+}
+
+
 /**
  * @brief Used to check wrf filename is a restart or output file
  */
@@ -412,9 +437,8 @@ bool WRFControl::get_current_step( int& step, const int total_steps ) const
         return false;
     }
 
-    const DateTime start_of_run = { start_year, start_month, start_day, start_hour, start_min, start_sec };
     // Convert the log timestamp back into "seconds since model start".
-    const long long elapsed_seconds = datetime_duration_seconds( start_of_run, latest_domain1_timestamp );
+    const long long elapsed_seconds = datetime_duration_seconds( start_datetime, latest_domain1_timestamp );
     if ( elapsed_seconds < 0 || ( elapsed_seconds % static_cast<long long>( timestep_seconds ) ) != 0 ) {
         return false;
     }
@@ -445,13 +469,11 @@ std::vector<std::string> WRFControl::get_output_filenames( int step ) const
         return {};
     }
 
-    DateTime start_of_run = { start_year, start_month, start_day, start_hour, start_min, start_sec };
-
     // Calculate duration and add to the start time.
     const long long elapsed_seconds = static_cast<long long>( step ) * static_cast<long long>( timestep_seconds );
 
     DateTime duration = secs_to_datetime_duration( elapsed_seconds );
-    DateTime output_date = add_duration_to_datetime( start_of_run, duration );
+    DateTime output_date = add_duration_to_datetime( start_datetime, duration );
 
     // WRF output files use a fixed YYYY-MM-DD_HH:MM:SS suffix.
     std::array<char, 20> timestamp_buffer{};
@@ -605,39 +627,12 @@ ModelControlInputData WRFControl::parse_control_input() const
             run_len_secs = run_len_secs + seconds;    // Add seconds to total
         }
 
-        // Get the start date and time. We'll need this to work out the date/time strings
-        // for the model output & restart files.
-        // These lines in the namelist.input file have multiple values, one per domain.
-        // However, parse_namelist_key_value by default removes all values after the first comma,
-        // which for these values is ok, because all domains start from the same date/time.
-        else if ( parsed_key == "start_year" ) {
+        // Get the run start date/time used to build output and restart timestamps.
+        // WRF lists one value per domain, but the first value is enough because all
+        // domains share the same start time.
+        else if ( int* start_field = get_wrf_start_datetime_field( start_datetime, parsed_key ); start_field != nullptr ) {
             tmpstr = parsed_value;
-            if ( !parse_int( tmpstr, start_year, err_msg ) ) {
-                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
-            }
-        } else if ( parsed_key == "start_month" ) {
-            tmpstr = parsed_value;
-            if ( !parse_int( tmpstr, start_month, err_msg ) ) {
-                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
-            }
-        } else if ( parsed_key == "start_day" ) {
-            tmpstr = parsed_value;
-            if ( !parse_int( tmpstr, start_day, err_msg ) ) {
-                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
-            }
-        } else if ( parsed_key == "start_hour" ) {
-            tmpstr = parsed_value;
-            if ( !parse_int( tmpstr, start_hour, err_msg ) ) {
-                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
-            }
-        } else if ( parsed_key == "start_minute" ) {
-            tmpstr = parsed_value;
-            if ( !parse_int( tmpstr, start_min, err_msg ) ) {
-                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
-            }
-        } else if ( parsed_key == "start_second" ) {
-            tmpstr = parsed_value;
-            if ( !parse_int( tmpstr, start_sec, err_msg ) ) {
+            if ( !parse_int( tmpstr, *start_field, err_msg ) ) {
                 return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
             }
         }

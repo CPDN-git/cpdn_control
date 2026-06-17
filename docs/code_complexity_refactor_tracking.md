@@ -264,6 +264,25 @@ Comparison against the previous refactor point:
 | `src/cpdn_main.cpp::main()` | 67 | 67 | `0` | 323 | 318 | -5 (`-1.5%`) |
 | `run_step_diagnostics()` | 9 | 9 | `0` | 49 | 49 | `0` |
 
+## After consolidating WRF start-time state into `DateTime`
+
+Measured on 2026-06-17 after replacing the six separate WRF `start_*` members with one cached `DateTime` and collapsing the `start_year` / `start_month` / `start_day` / `start_hour` / `start_minute` / `start_second` parse branches behind a shared helper.
+
+| File | Function | `pmccabe` | `lizard` CCN | `lizard` NLOC | Notes |
+| --- | --- | ---: | ---: | ---: | --- |
+| `models/wrf/wrf_control.cpp` | `WRFControl::parse_control_input()` | 35 | 35 | 136 | Main WRF parser hotspot reduced by grouping start-time parsing into one helper |
+| `models/wrf/wrf_control.cpp` | `WRFControl::get_current_step()` | 11 | 11 | 39 | Uses cached `DateTime` directly rather than rebuilding from six fields |
+| `models/wrf/wrf_control.cpp` | `WRFControl::get_output_filenames()` | 7 | 7 | 23 | Uses cached `DateTime` directly rather than rebuilding from six fields |
+| `models/wrf/wrf_control.cpp` | `WRFControl::restart_exists()` | 18 | 18 | 61 | Unchanged dominant WRF hotspot after this refactor |
+
+Comparison against the prior WRF refactor point:
+
+| Function | Prior `pmccabe` | Current `pmccabe` | Change | Prior `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `models/wrf/wrf_control.cpp::parse_control_input()` | 42 | 35 | -7 (`-16.7%`) | 151 | 136 | -15 (`-9.9%`) |
+| `models/wrf/wrf_control.cpp::get_current_step()` | 11 | 11 | `0` | 40 | 39 | -1 (`-2.5%`) |
+| `models/wrf/wrf_control.cpp::get_output_filenames()` | 7 | 7 | `0` | 25 | 23 | -2 (`-8.0%`) |
+
 ## Current observations
 
 - `main()` is still the dominant complexity hotspot, but it is materially smaller than the original baseline.

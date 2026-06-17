@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "../../api/model_control.h"
+#include "wrf_datetime.h"
 
 
 namespace fs = std::filesystem;
@@ -79,12 +80,7 @@ class WRFControl : public ModelControl {
 
     // Start date and time for the run read from namelist.input.
     // Needed to construct time periods for output and restart files.
-    mutable int start_year = 0;
-    mutable int start_month = 0;
-    mutable int start_day = 0;
-    mutable int start_hour = 0;
-    mutable int start_min = 0;
-    mutable int start_sec = 0;    // this should never be anything other than zero!
+    mutable DateTime start_datetime{};
 
     // Number of domains this WRF configuration is set up to run.
     // This is used to determine how many output and restart files to expect.

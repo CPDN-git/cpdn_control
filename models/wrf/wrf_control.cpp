@@ -17,12 +17,31 @@
 // Helpers
 namespace {
 
-// These are fixed-size compile-time lookup tables, so std::array is the right tool:
-// it keeps the size in the type and avoids the dynamic allocation/extra machinery that std::vector would add.
-constexpr std::array<std::string_view, 3> WRF_OUTPUT_PREFIXES = { "wrfout_d01_", "wrfout_d02_", "wrfout_d03_" };
-constexpr std::array<std::string_view, 3> WRF_RESTART_PREFIXES = { "wrfrst_d01_", "wrfrst_d02_", "wrfrst_d03_" };
-
 std::vector<std::string> wrf_get_omp_env_vars( const std::string& nthreads ) { return { "OMP_NUM_THREADS=" + nthreads }; }
+
+
+std::vector<std::string> build_wrf_domain_prefixes( std::string_view file_stem, int domain_count )
+{
+    if ( domain_count <= 0 ) {
+        return {};
+    }
+
+    std::vector<std::string> prefixes;
+    prefixes.reserve( static_cast<std::size_t>( domain_count ) );
+
+    for ( int domain_index = 1; domain_index <= domain_count; ++domain_index ) {
+        std::array<char, 16> prefix_buffer{};
+        const int prefix_len = std::snprintf( prefix_buffer.data(), prefix_buffer.size(), "%.*s_d%02d_", static_cast<int>( file_stem.size() ),
+                                              file_stem.data(), domain_index );
+        if ( prefix_len <= 0 || prefix_len >= static_cast<int>( prefix_buffer.size() ) ) {
+            return {};
+        }
+
+        prefixes.emplace_back( prefix_buffer.data(), static_cast<std::size_t>( prefix_len ) );
+    }
+
+    return prefixes;
+}
 
 
 bool is_wrf_datetime_suffix( std::string_view suffix )
@@ -169,9 +188,9 @@ bool parse_wrf_domain_list_value( const std::string& values, int domain_index, i
 /**
  * @brief Used to check wrf filename is a restart or output file
  */
-template <std::size_t N> bool matches_any_wrf_prefix( std::string_view filename, const std::array<std::string_view, N>& prefixes )
+bool matches_any_wrf_prefix( std::string_view filename, const std::vector<std::string>& prefixes )
 {
-    for ( std::string_view prefix : prefixes ) {
+    for ( const auto& prefix : prefixes ) {
         if ( is_wrf_prefixed_datetime_filename( filename, prefix ) ) {
             return true;
         }
@@ -264,6 +283,83 @@ std::vector<std::string> WRFControl::get_env_vars( const std::string& slot_path,
 }
 
 
+bool WRFControl::read_validated_max_domains( int& parsed_max_domains, std::string& err_msg ) const
+{
+    err_msg.clear();
+    parsed_max_domains = 0;
+
+    if ( !fs::exists( control_input_file ) ) {
+        err_msg = "model control input file does not exist";
+        return false;
+    }
+
+    std::ifstream control_input_stream( control_input_file );
+    if ( !control_input_stream.is_open() ) {
+        err_msg = "failed to open model control input file";
+        return false;
+    }
+
+    std::string input_line;
+    std::string parsed_key;
+    std::string parsed_value;
+
+    while ( std::getline( control_input_stream, input_line ) ) {
+        trim_whitespace( input_line );
+        if ( input_line.empty() || input_line.front() == '!' ) {
+            continue;
+        }
+
+        parsed_key.clear();
+        parsed_value.clear();
+        if ( !parse_namelist_key_value( input_line, parsed_key, parsed_value ) || parsed_key != "max_dom" ) {
+            continue;
+        }
+
+        std::string value_text = parsed_value;
+        if ( !parse_int( value_text, parsed_max_domains, err_msg ) ) {
+            return false;
+        }
+
+        if ( parsed_max_domains <= 0 || parsed_max_domains > max_dom_allowed ) {
+            err_msg = "max_dom must be between 1 and " + std::to_string( max_dom_allowed );
+            return false;
+        }
+
+        return true;
+    }
+
+    err_msg = "missing required field max_dom";
+    return false;
+}
+
+
+void WRFControl::set_domain_prefixes( int domain_count ) const
+{
+    output_prefixes = build_wrf_domain_prefixes( "wrfout", domain_count );
+    restart_prefixes = build_wrf_domain_prefixes( "wrfrst", domain_count );
+}
+
+
+bool WRFControl::ensure_domain_prefixes_initialized() const
+{
+    if ( max_domains > 0 && max_domains <= max_dom_allowed && output_prefixes.size() == static_cast<std::size_t>( max_domains ) &&
+         restart_prefixes.size() == static_cast<std::size_t>( max_domains ) ) {
+        return true;
+    }
+
+    std::string err_msg;
+    int parsed_max_domains = 0;
+    if ( !read_validated_max_domains( parsed_max_domains, err_msg ) ) {
+        return false;
+    }
+
+    max_domains = parsed_max_domains;
+    set_domain_prefixes( max_domains );
+
+    return output_prefixes.size() == static_cast<std::size_t>( max_domains ) && restart_prefixes.size() == static_cast<std::size_t>( max_domains );
+}
+
+
 /**
  * @brief Read the WRF log and return the latest completed model step.
  *
@@ -345,7 +441,7 @@ bool WRFControl::get_current_step( int& step, const int total_steps ) const
 std::vector<std::string> WRFControl::get_output_filenames( int step ) const
 {
     // Take the model step count, compute a time difference and add to the start time.
-    if ( step < 0 || timestep_seconds <= 0 || max_domains <= 0 ) {
+    if ( step < 0 || timestep_seconds <= 0 || !ensure_domain_prefixes_initialized() || max_domains <= 0 ) {
         return {};
     }
 
@@ -372,18 +468,29 @@ std::vector<std::string> WRFControl::get_output_filenames( int step ) const
     const int domain_count = max_domains;
     output_filenames.reserve( static_cast<std::size_t>( domain_count ) );
     for ( int i = 0; i < domain_count; ++i ) {
-        output_filenames.emplace_back( std::string( WRF_OUTPUT_PREFIXES[static_cast<std::size_t>( i )] ) + timestamp );
+        output_filenames.emplace_back( output_prefixes[static_cast<std::size_t>( i )] + timestamp );
     }
 
-    std::cerr << "DEBUG: output_filenames = " << output_filenames[1] << '\n' << output_filenames[2] << '\n' << output_filenames[3] << '\n';
     return output_filenames;
 }
 
 
-bool WRFControl::is_output_filename( std::string_view filename ) const { return matches_any_wrf_prefix( filename, WRF_OUTPUT_PREFIXES ); }
+bool WRFControl::is_output_filename( std::string_view filename ) const
+{
+    if ( !ensure_domain_prefixes_initialized() ) {
+        return false;
+    }
+    return matches_any_wrf_prefix( filename, output_prefixes );
+}
 
 
-bool WRFControl::is_restart_filename( std::string_view filename ) const { return matches_any_wrf_prefix( filename, WRF_RESTART_PREFIXES ); }
+bool WRFControl::is_restart_filename( std::string_view filename ) const
+{
+    if ( !ensure_domain_prefixes_initialized() ) {
+        return false;
+    }
+    return matches_any_wrf_prefix( filename, restart_prefixes );
+}
 
 
 // No additional log files. WRF writes to stdout & stderr which the controller merge to stderr.txt
@@ -425,6 +532,7 @@ ModelControlInputData WRFControl::parse_control_input() const
     std::string history_interval;
     std::string frames_per_outfile;
     int restart_interval_minutes = 0;
+    int parsed_max_domains = 0;
     long long run_len_secs = 0;
 
     while ( std::getline( control_input_stream, input_line ) ) {
@@ -546,8 +654,12 @@ ModelControlInputData WRFControl::parse_control_input() const
         // We'll need this to determine how many output and restart files to expect.
         else if ( parsed_key == "max_dom" ) {
             tmpstr = parsed_value;
-            if ( !parse_int( tmpstr, max_domains, err_msg ) ) {
+            if ( !parse_int( tmpstr, parsed_max_domains, err_msg ) ) {
                 return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+            }
+            if ( parsed_max_domains <= 0 || parsed_max_domains > max_dom_allowed ) {
+                return make_parse_error( control_input_file, "validate", parsed_key,
+                                         "max_dom must be between 1 and " + std::to_string( max_dom_allowed ) );
             }
         }
 
@@ -573,6 +685,12 @@ ModelControlInputData WRFControl::parse_control_input() const
     if ( parsed.timestep_seconds <= 0 ) {
         return make_parse_error( control_input_file, "validate", "time_step", "time_step must be a positive integer" );
     }
+    if ( parsed_max_domains <= 0 ) {
+        return make_parse_error( control_input_file, "validate", "max_dom", "max_dom must be between 1 and " + std::to_string( max_dom_allowed ) );
+    }
+
+    max_domains = parsed_max_domains;
+    set_domain_prefixes( max_domains );
 
     int domain_history_interval = 0;
     int domain_frames_per_outfile = 0;
@@ -614,7 +732,7 @@ bool WRFControl::restart_exists() const
     restart_datetime.clear();
     restart_set_count = 0;
 
-    if ( max_domains <= 0 || max_domains > static_cast<int>( WRF_RESTART_PREFIXES.size() ) ) {
+    if ( !ensure_domain_prefixes_initialized() || max_domains <= 0 ) {
         return false;
     }
 
@@ -640,7 +758,7 @@ bool WRFControl::restart_exists() const
         const std::string filename = entry.path().filename().string();
 
         for ( int domain_index = 0; domain_index < max_domains; ++domain_index ) {
-            const std::string_view prefix = WRF_RESTART_PREFIXES[static_cast<std::size_t>( domain_index )];
+            const std::string& prefix = restart_prefixes[static_cast<std::size_t>( domain_index )];
             if ( !is_wrf_prefixed_datetime_filename( filename, prefix ) ) {
                 continue;
             }

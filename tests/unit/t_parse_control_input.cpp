@@ -140,6 +140,38 @@ int t_parse_control_input()
         return EXIT_FAILURE;
     }
 
+    std::cout << "Subtest: reject WRF max_dom above allowed limit\n";
+    const std::string wrf_invalid_max_dom_content = "&time_control\n"
+                                                    " run_days = 0,\n"
+                                                    " run_hours = 1,\n"
+                                                    " run_minutes = 0,\n"
+                                                    " run_seconds = 0,\n"
+                                                    " history_interval = 9999, 9999, 60,\n"
+                                                    " frames_per_outfile = 1, 1, 24,\n"
+                                                    " restart_interval = 180,\n"
+                                                    "/\n"
+                                                    "&domains\n"
+                                                    " time_step = 300,\n"
+                                                    " max_dom = 4,\n"
+                                                    "/\n";
+    if ( !write_control_input( tmp_dir / "namelist.input", wrf_invalid_max_dom_content ) ) {
+        TEST_FAIL;
+        std::cout << "Unable to write invalid WRF namelist.input test file\n";
+        fs::current_path( original_cwd );
+        fs::remove_all( tmp_dir, ec );
+        return EXIT_FAILURE;
+    }
+
+    parsed = wrf_model.parse_control_input();
+    if ( parsed.ok || parsed.error_step != "validate" || parsed.error_field != "max_dom" ) {
+        TEST_FAIL;
+        std::cout << "Expected WRF max_dom validate failure, got ok=" << parsed.ok << ", error_step=" << parsed.error_step
+                  << ", error_field=" << parsed.error_field << ", error_message=" << parsed.error_message << "\n";
+        fs::current_path( original_cwd );
+        fs::remove_all( tmp_dir, ec );
+        return EXIT_FAILURE;
+    }
+
     fs::current_path( original_cwd );
     fs::remove_all( tmp_dir, ec );
     TEST_SUCCESS;

@@ -23,6 +23,37 @@ int days_in_month( int year, int month )
     return month_lengths[month - 1];
 }
 
+bool is_valid_datetime( const DateTime& datetime )
+{
+    if ( datetime.year <= 0 || datetime.month < 1 || datetime.month > 12 || datetime.day < 1 ) {
+        return false;
+    }
+
+    if ( datetime.hour < 0 || datetime.hour > 23 || datetime.minute < 0 || datetime.minute > 59 || datetime.second < 0 || datetime.second > 59 ) {
+        return false;
+    }
+
+    return datetime.day <= days_in_month( datetime.year, datetime.month );
+}
+
+long long days_before_year( int year )
+{
+    const long long completed_years = static_cast<long long>( year ) - 1;
+    return ( completed_years * 365 ) + ( completed_years / 4 ) - ( completed_years / 100 ) + ( completed_years / 400 );
+}
+
+long long datetime_to_absolute_seconds( const DateTime& datetime )
+{
+    long long days = days_before_year( datetime.year );
+    for ( int month = 1; month < datetime.month; ++month ) {
+        days += days_in_month( datetime.year, month );
+    }
+    days += static_cast<long long>( datetime.day ) - 1;
+
+    return ( days * 86400 ) + ( static_cast<long long>( datetime.hour ) * 3600 ) + ( static_cast<long long>( datetime.minute ) * 60 ) +
+           static_cast<long long>( datetime.second );
+}
+
 }    // namespace
 
 
@@ -100,4 +131,25 @@ DateTime add_duration_to_datetime( const DateTime& start, const DateTime& durati
     }
 
     return end_date;
+}
+
+
+/**
+ * @brief Convert a WRF timestamp back to elapsed seconds from the model start time.
+ * @returns Elapsed seconds, or -1 if either timestamp is invalid or the end time precedes the start.
+ */
+long long datetime_duration_seconds( const DateTime& start, const DateTime& end )
+{
+    if ( !is_valid_datetime( start ) || !is_valid_datetime( end ) ) {
+        return -1;
+    }
+
+    const long long start_seconds = datetime_to_absolute_seconds( start );
+    const long long end_seconds = datetime_to_absolute_seconds( end );
+
+    if ( end_seconds < start_seconds ) {
+        return -1;
+    }
+
+    return end_seconds - start_seconds;
 }

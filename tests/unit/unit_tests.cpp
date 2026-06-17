@@ -42,6 +42,7 @@ int main( int argc, char* argv[] )
         { "Get Env Vars", t_get_env_vars },
         { "Model Filename Match", t_model_filename_match },
         { "WRF Datetime", t_wrf_datetime },
+        { "WRF Current Step", t_wrf_current_step },
         // Add new test functions here! Remember previous trailing comma!
     };
 

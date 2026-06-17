@@ -16,3 +16,4 @@ struct DateTime {
 
 DateTime secs_to_datetime_duration( long long seconds );
 DateTime add_duration_to_datetime( const DateTime& start, const DateTime& duration );
+long long datetime_duration_seconds( const DateTime& start, const DateTime& end );

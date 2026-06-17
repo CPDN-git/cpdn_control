@@ -39,6 +39,17 @@ bool check_timestamp_case( const char* label, const DateTime& start, long long e
     return false;
 }
 
+bool check_elapsed_case( const char* label, const DateTime& start, const DateTime& end, long long expected_seconds )
+{
+    const long long actual_seconds = datetime_duration_seconds( start, end );
+    if ( actual_seconds == expected_seconds ) {
+        return true;
+    }
+
+    std::cerr << "  " << label << " expected " << expected_seconds << " but got " << actual_seconds << '\n';
+    return false;
+}
+
 }    // namespace
 
 int t_wrf_datetime()
@@ -65,6 +76,26 @@ int t_wrf_datetime()
 
     test_count++;
     if ( check_timestamp_case( "new year boundary", DateTime{ 2023, 12, 31, 23, 59, 30 }, 90, "2024-01-01_00:01:00" ) ) {
+        test_passed++;
+    }
+
+    test_count++;
+    if ( check_elapsed_case( "reverse simple duration", DateTime{ 2022, 7, 1, 0, 0, 0 }, DateTime{ 2022, 7, 1, 1, 30, 0 }, 5400 ) ) {
+        test_passed++;
+    }
+
+    test_count++;
+    if ( check_elapsed_case( "reverse month boundary", DateTime{ 2022, 1, 31, 23, 0, 0 }, DateTime{ 2022, 2, 1, 1, 0, 0 }, 7200 ) ) {
+        test_passed++;
+    }
+
+    test_count++;
+    if ( check_elapsed_case( "reverse leap year boundary", DateTime{ 2024, 2, 28, 23, 30, 0 }, DateTime{ 2024, 3, 1, 0, 30, 0 }, 90000 ) ) {
+        test_passed++;
+    }
+
+    test_count++;
+    if ( check_elapsed_case( "reverse invalid earlier end", DateTime{ 2022, 7, 1, 0, 0, 0 }, DateTime{ 2022, 6, 30, 23, 59, 55 }, -1 ) ) {
         test_passed++;
     }
 

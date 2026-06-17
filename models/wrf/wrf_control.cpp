@@ -47,6 +47,62 @@ bool is_wrf_prefixed_datetime_filename( std::string_view filename, std::string_v
     return filename.size() == prefix.size() + 19 && filename.rfind( prefix, 0 ) == 0 && is_wrf_datetime_suffix( filename.substr( prefix.size() ) );
 }
 
+
+bool parse_wrf_timestamp( std::string_view text, DateTime& datetime )
+{
+    if ( !is_wrf_datetime_suffix( text ) ) {
+        return false;
+    }
+
+    datetime.year = ( text[0] - '0' ) * 1000 + ( text[1] - '0' ) * 100 + ( text[2] - '0' ) * 10 + ( text[3] - '0' );
+    datetime.month = ( text[5] - '0' ) * 10 + ( text[6] - '0' );
+    datetime.day = ( text[8] - '0' ) * 10 + ( text[9] - '0' );
+    datetime.hour = ( text[11] - '0' ) * 10 + ( text[12] - '0' );
+    datetime.minute = ( text[14] - '0' ) * 10 + ( text[15] - '0' );
+    datetime.second = ( text[17] - '0' ) * 10 + ( text[18] - '0' );
+    return true;
+}
+
+
+bool parse_wrf_timing_line( const std::string& line, int& domain, DateTime& timestamp )
+{
+    constexpr std::string_view prefix = "Timing for main: time ";
+    constexpr std::string_view domain_marker = " on domain";
+
+    if ( line.rfind( prefix.data(), 0 ) != 0 ) {
+        return false;
+    }
+
+    const std::size_t timestamp_pos = prefix.size();
+    if ( line.size() < timestamp_pos + 19 ) {
+        return false;
+    }
+
+    if ( !parse_wrf_timestamp( std::string_view( line ).substr( timestamp_pos, 19 ), timestamp ) ) {
+        return false;
+    }
+
+    const std::size_t domain_pos = line.find( domain_marker.data(), timestamp_pos + 19 );
+    if ( domain_pos == std::string::npos ) {
+        return false;
+    }
+
+    const std::size_t domain_text_pos = domain_pos + domain_marker.size();
+    const std::size_t colon_pos = line.find( ':', domain_text_pos );
+    if ( colon_pos == std::string::npos ) {
+        return false;
+    }
+
+    std::string domain_text = line.substr( domain_text_pos, colon_pos - domain_text_pos );
+    trim_whitespace( domain_text );
+    if ( domain_text.empty() ) {
+        return false;
+    }
+
+    std::string err_msg;
+    return parse_int( domain_text, domain, err_msg );
+}
+
 /**
  * @brief This function is required because the default parse code will strip any 
  *        remaining characters beyond the first comma. It was coded for OpenIFS and did not
@@ -208,12 +264,74 @@ std::vector<std::string> WRFControl::get_env_vars( const std::string& slot_path,
 }
 
 
-// TODO
+/**
+ * @brief Read the WRF log and return the latest completed model step.
+ *
+ * WRF writes progress messages into `stderr.txt`. We only care about lines that
+ * begin with `Timing for main`, and from those we only use the records for
+ * domain 1, which is the outermost grid and the one the controller tracks for
+ * overall task progress.
+ *
+ * The timestamp in the latest matching domain-1 line is converted back into
+ * elapsed seconds from the model start time. We then divide by the configured
+ * timestep length to recover the completed step count expected by `cpdn_main()`.
+ */
 bool WRFControl::get_current_step( int& step, const int total_steps ) const
 {
-    (void)total_steps;
     step = 0;
-    return false;
+
+    // The namelist parser must already have filled in the timestep.
+    if ( timestep_seconds <= 0 ) {
+        return false;
+    }
+
+    // WRF writes its progress timing lines to stderr.txt in the slot directory.
+    std::ifstream log_stream( "stderr.txt" );
+    if ( !log_stream.is_open() ) {
+        return false;
+    }
+
+    std::string line;
+    DateTime latest_domain1_timestamp{};
+    bool found_domain1_timing = false;
+
+    // Read the log from top to bottom and keep replacing the saved timestamp.
+    // That means the final saved value is the latest domain-1 timing record.
+    while ( std::getline( log_stream, line ) ) {
+        int domain = 0;
+        DateTime timestamp{};
+        if ( !parse_wrf_timing_line( line, domain, timestamp ) ) {
+            continue;
+        }
+        // Ignore timing lines for the nested domains. Progress is tracked on domain 1 only.
+        if ( domain != 1 ) {
+            continue;
+        }
+
+        latest_domain1_timestamp = timestamp;
+        found_domain1_timing = true;
+    }
+
+    if ( !found_domain1_timing ) {
+        return false;
+    }
+
+    const DateTime start_of_run = { start_year, start_month, start_day, start_hour, start_min, start_sec };
+    // Convert the log timestamp back into "seconds since model start".
+    const long long elapsed_seconds = datetime_duration_seconds( start_of_run, latest_domain1_timestamp );
+    if ( elapsed_seconds < 0 || ( elapsed_seconds % static_cast<long long>( timestep_seconds ) ) != 0 ) {
+        return false;
+    }
+
+    // Step count is just elapsed model time divided by seconds per step.
+    const long long computed_step = elapsed_seconds / static_cast<long long>( timestep_seconds );
+    // Reject impossible values so callers do not act on corrupt or partial log data.
+    if ( computed_step < 0 || computed_step > total_steps ) {
+        return false;
+    }
+
+    step = static_cast<int>( computed_step );
+    return true;
 }
 
 

@@ -90,6 +90,6 @@ cmake --build "${build_dir}"
 
 if [[ "${skip_tests}" == "0" ]]; then
     echo "[build_with_local_boinc] Running tests"
-    ctest --test-dir "${build_dir}" --output-on-failure -V
+    ctest --test-dir "${build_dir}" --output-on-failure
 fi
 

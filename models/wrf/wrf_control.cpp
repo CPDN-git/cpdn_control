@@ -921,6 +921,7 @@ bool WRFControl::setup( const fs::path& slot_path ) const
     return output_stream.good();
 }
 
+
 /**
  * @brief Periodically prune older WRF restart-file sets in the slot directory.
  *
@@ -931,8 +932,15 @@ bool WRFControl::setup( const fs::path& slot_path ) const
  */
 bool WRFControl::do_step_tasks( int current_step, const fs::path& slot_path )
 {
-    // Only prune on the requested step cadence.
-    if ( current_step <= 0 || current_step % 24 != 0 ) {
+
+    // ----------- Prune restarts -----------
+
+    // Only prune on the requested step delay.
+    // May need adjusting.
+
+    constexpr int restart_check_delay = 24;
+
+    if ( current_step <= 0 || current_step % restart_check_delay != 0 ) {
         return true;
     }
 
@@ -1010,6 +1018,8 @@ bool WRFControl::do_step_tasks( int current_step, const fs::path& slot_path )
 
         std::cerr << "Warning! Failed to delete old WRF restart file: " << restart_file.path.filename().string() << '\n';
     }
+
+    // ------- Add additional steps here  ----------
 
     return true;
 }

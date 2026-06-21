@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <fstream>
 #include <iostream>
+#include <set>
 #include <string>
 
 
@@ -220,6 +221,29 @@ bool matches_any_wrf_prefix( std::string_view filename, const std::vector<std::s
             return true;
         }
     }
+    return false;
+}
+
+
+bool extract_wrf_restart_timestamp( std::string_view filename, const std::vector<std::string>& prefixes, std::string& timestamp )
+{
+    timestamp.clear();
+
+    for ( const auto& prefix : prefixes ) {
+        if ( !is_wrf_prefixed_datetime_filename( filename, prefix ) ) {
+            continue;
+        }
+
+        const std::string candidate_timestamp( filename.substr( prefix.size() ) );
+        DateTime parsed_timestamp{};
+        if ( !parse_wrf_timestamp( candidate_timestamp, parsed_timestamp ) ) {
+            return false;
+        }
+
+        timestamp = candidate_timestamp;
+        return true;
+    }
+
     return false;
 }
 
@@ -897,10 +921,95 @@ bool WRFControl::setup( const fs::path& slot_path ) const
     return output_stream.good();
 }
 
-
-// TODO
+/**
+ * @brief Periodically prune older WRF restart-file sets in the slot directory.
+ *
+ * WRF writes one restart file per domain for each restart timestamp. To limit disk
+ * growth during longer runs, keep only the two most recent non-empty timestamp sets
+ * and delete older ones. This is opportunistic housekeeping only: warnings are logged
+ * for scan/delete failures, but the controller does not abort the task.
+ */
 bool WRFControl::do_step_tasks( int current_step, const fs::path& slot_path )
 {
-    //  Keep the number of restart files under control. Delete old ones.
+    // Only prune on the requested step cadence.
+    if ( current_step <= 0 || current_step % 24 != 0 ) {
+        return true;
+    }
+
+    if ( !ensure_domain_prefixes_initialized() ) {
+        std::cerr << "Warning! Could not initialize WRF restart prefixes for pruning.\n";
+        return false;
+    }
+
+    const fs::path scan_dir = slot_path.empty() ? fs::current_path() : slot_path;
+
+    struct RestartFileInfo {
+        fs::path path;
+        std::string timestamp;
+    };
+
+    std::vector<RestartFileInfo> restart_files;
+    std::set<std::string> timestamps;
+
+    std::error_code iter_ec;
+    fs::directory_iterator dir_iter( scan_dir, iter_ec );
+    if ( iter_ec ) {
+        std::cerr << "Warning! Could not scan WRF slot directory for restart pruning: " << scan_dir << '\n';
+        return false;
+    }
+
+    for ( const auto& entry : dir_iter ) {
+        if ( !entry.is_regular_file() ) {
+            continue;
+        }
+
+        std::error_code size_ec;
+        const auto file_size = entry.file_size( size_ec );
+        if ( size_ec || file_size == 0 ) {
+            continue;
+        }
+
+        std::string timestamp;
+        const std::string filename = entry.path().filename().string();
+        if ( !extract_wrf_restart_timestamp( filename, restart_prefixes, timestamp ) ) {
+            continue;
+        }
+
+        // Collect both the physical file path and its logical restart timestamp.
+        timestamps.insert( timestamp );
+        restart_files.push_back( RestartFileInfo{ entry.path(), std::move( timestamp ) } );
+    }
+
+    // Nothing to prune if there are at most two restart times on disk already.
+    if ( timestamps.size() <= 2 ) {
+        return true;
+    }
+
+    std::set<std::string> timestamps_to_keep;
+    auto keep_it = timestamps.rbegin();
+    // WRF timestamp strings sort lexically in chronological order.
+    for ( int kept_count = 0; keep_it != timestamps.rend() && kept_count < 2; ++keep_it, ++kept_count ) {
+        timestamps_to_keep.insert( *keep_it );
+    }
+
+    for ( const auto& restart_file : restart_files ) {
+        if ( timestamps_to_keep.find( restart_file.timestamp ) != timestamps_to_keep.end() ) {
+            continue;
+        }
+
+        std::error_code remove_ec;
+        fs::remove( restart_file.path, remove_ec );
+
+        // Re-check existence so we can warn if deletion silently failed.
+        std::error_code exists_ec;
+        const bool still_exists = fs::exists( restart_file.path, exists_ec );
+        if ( !remove_ec && !exists_ec && !still_exists ) {
+            std::cerr << "Deleted old WRF restart file: " << restart_file.path.filename().string() << '\n';
+            continue;
+        }
+
+        std::cerr << "Warning! Failed to delete old WRF restart file: " << restart_file.path.filename().string() << '\n';
+    }
+
     return true;
 }

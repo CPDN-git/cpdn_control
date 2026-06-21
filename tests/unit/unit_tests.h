@@ -36,3 +36,4 @@ int t_model_filename_match();
 int t_wrf_datetime();
 int t_wrf_current_step();
 int t_wrf_check_model_success();
+int t_wrf_restart_pruning();

@@ -44,6 +44,7 @@ int main( int argc, char* argv[] )
         { "WRF Datetime", t_wrf_datetime },
         { "WRF Current Step", t_wrf_current_step },
         { "WRF Check Model Success", t_wrf_check_model_success },
+        { "WRF Restart Pruning", t_wrf_restart_pruning },
         // Add new test functions here! Remember previous trailing comma!
     };
 

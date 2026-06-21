@@ -43,6 +43,7 @@ int main( int argc, char* argv[] )
         { "Model Filename Match", t_model_filename_match },
         { "WRF Datetime", t_wrf_datetime },
         { "WRF Current Step", t_wrf_current_step },
+        { "WRF Check Model Success", t_wrf_check_model_success },
         // Add new test functions here! Remember previous trailing comma!
     };
 

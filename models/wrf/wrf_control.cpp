@@ -236,18 +236,31 @@ bool WRFControl::check_model_success() const
 {
     bool success = false;
     fs::path stderr_out = "stderr.txt";
+    constexpr std::string_view success_marker = "SUCCESS COMPLETE WRF";
 
     // Check for 'success' string in WRF output.
     // Output is normally written to stdout when running standalone but the control
     // process will merge stdout onto stderr and the boinc init call redirects stderr
-    // to stderr.txt. So, check the final line in the stderr.txt file.
+    // to stderr.txt. Scan the full file because the success line may not be last.
 
     if ( fs::exists( stderr_out ) ) {
-        std::string last_line{};
+        std::ifstream stderr_stream( stderr_out );
+        if ( !stderr_stream.is_open() ) {
+            std::cerr << "Warning! Could not open model log : " << stderr_out << '\n';
+            return false;
+        }
 
-        fread_last_line( stderr_out.string(), last_line );
-        if ( last_line.find( "SUCCESS COMPLETE WRF" ) != std::string::npos ) {
-            success = true;
+        std::string line{};
+        while ( std::getline( stderr_stream, line ) ) {
+            if ( line.rfind( success_marker, 0 ) == 0 ) {
+                success = true;
+                break;
+            }
+        }
+
+        stderr_stream.close();
+
+        if ( success ) {
             std::cerr << "'SUCCESS COMPLETE WRF' found in model log. Model succeeded." << '\n';
         } else {
             std::cerr << "Did not find 'SUCCESS COMPLETE WRF' in model log. Model failed." << '\n';

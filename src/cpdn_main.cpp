@@ -841,16 +841,23 @@ int main( int argc, char** argv )
                 observed_step = tstate.last_completed_step;
             }
             tstate.current_step = observed_step;
+            std::cerr << "DEBUG 844: tstate.current_step, last_completed_step " << tstate.current_step << ", " << tstate.last_completed_step << '\n';
 
             // Move the model result files to the task folder in the project directory
             // GC. Why do this every timestep? This check only needs to be done at same frequency as NFRPOS.
             if ( observed_step != tstate.last_completed_step ) {
 
                 //  Run the model's tasks on a step (e.g. external diagnostics executable; pruning restarts etc)
+                // TODO: check the return code.
                 const bool step_tasks_ran = model_ctrl->do_step_tasks( observed_step, bconfig.slot_path );
 
                 // Start work on managing the model output files.
                 auto output_files = model_ctrl->get_output_filenames( observed_step );
+
+                std::cerr << "DEBUG 855:  returned " << output_files.size() << " output filenames\n";
+                for ( const auto& output_file : output_files ) {
+                    std::cerr << "DEBUG:   " << output_file << '\n';
+                }
 
                 for ( const auto& result : output_files ) {
                     retval = move_result_file( bconfig.slot_path, upload_dir, result );

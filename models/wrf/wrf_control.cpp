@@ -923,8 +923,9 @@ bool WRFControl::setup( const fs::path& slot_path ) const
 
 
 /**
- * @brief Periodically prune older WRF restart-file sets in the slot directory.
- *
+ * @brief Controls the execution of tasks at each model step.
+ * 
+ * Task 1: Periodically prune older WRF restart-file sets in the slot directory.
  * WRF writes one restart file per domain for each restart timestamp. To limit disk
  * growth during longer runs, keep only the two most recent non-empty timestamp sets
  * and delete older ones. This is opportunistic housekeeping only: warnings are logged

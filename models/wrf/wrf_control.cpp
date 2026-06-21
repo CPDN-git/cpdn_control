@@ -236,7 +236,7 @@ bool WRFControl::check_model_success() const
 {
     bool success = false;
     fs::path stderr_out = "stderr.txt";
-    constexpr std::string_view success_marker = "SUCCESS COMPLETE WRF";
+    constexpr std::string_view success_marker = "wrf: SUCCESS COMPLETE WRF";
 
     // Check for 'success' string in WRF output.
     // Output is normally written to stdout when running standalone but the control
@@ -261,9 +261,9 @@ bool WRFControl::check_model_success() const
         stderr_stream.close();
 
         if ( success ) {
-            std::cerr << "'SUCCESS COMPLETE WRF' found in model log. Model succeeded." << '\n';
+            std::cerr << "Found: " << success_marker << ", in model log. Model succeeded." << '\n';
         } else {
-            std::cerr << "Did not find 'SUCCESS COMPLETE WRF' in model log. Model failed." << '\n';
+            std::cerr << "Didn't find: " << success_marker << ", in model log. Model failed." << '\n';
         }
     } else {
         std::cerr << "Warning! Could not find model log : " << stderr_out << '\n';

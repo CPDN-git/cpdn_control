@@ -22,7 +22,6 @@ ParseResult parse_args( int argc, char** argv )
     cpdn->add_option( "--batch", result.batch, "CPDN batch ID" )->capture_default_str();
     cpdn->add_option( "--workunit", result.workunit, "CPDN workunit ID" )->capture_default_str();
     cpdn->add_option( "--memberid", result.memberid, "CPDN unique member ID" )->capture_default_str();
-    cpdn->add_option( "--app_name", result.app_name, "CPDN application name" )->capture_default_str();
     cpdn->add_option( "--filename_startdate", result.filename_startdate, "Start-date token embedded in CPDN download filenames." )
         ->capture_default_str();
     cpdn->add_option( "--filename_fclen", result.filename_fclen, "Forecast-length token embedded in CPDN download filenames." )

@@ -316,14 +316,14 @@ ModelInputManifest WRFControl::get_input_manifest( const std::string& workunit_i
     // each archive unpacks.
     // NOTE!! These filenames are preliminary and assume the WRF input files are packed as:
     //    ic_ancil  : wrfinput_d*, wrfbdy_d01
-    //    run_ancil : what WRF doc calls the 'run' files; essentially climatologies:
+    //    rundata : what WRF doc calls the 'run' files; essentially climatologies:
     //                CAMtr_volume_mixing_ratio*, *.TBL, ozone*, RRTMG_LW/SW_DATA
     //    Both these unpack into the slot directory, no subdirs used.
     //
     //    The namelist.input and accompanying iofields_d*.txt files are packed in the wu zip.
     return {
         { "ic_ancil_" + workunit_id + ".zip", fs::path( "." ) },
-        { "run_ancil_" + workunit_id + ".zip", fs::path( "." ) },
+        { "rundata_" + workunit_id + ".zip", fs::path( "." ) },
     };
 }
 

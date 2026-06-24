@@ -61,9 +61,14 @@ fi
 
 if [[ "${ctest_mode}" == "functional" ]]; then
     echo "[test_with_vcpkg] Running functional tests from ${build_dir}"
-    ctest --test-dir "${build_dir}" --output-on-failure -V -L functional
+    (
+        cd "${build_dir}"
+        ctest --output-on-failure -V -L functional
+    )
 else
     echo "[test_with_vcpkg] Running unit/non-functional tests from ${build_dir}"
-    ctest --test-dir "${build_dir}" --output-on-failure -V -LE functional
+    (
+        cd "${build_dir}"
+        ctest --output-on-failure -V -LE functional
+    )
 fi
-

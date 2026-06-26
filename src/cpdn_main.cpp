@@ -48,7 +48,7 @@ namespace fs = std::filesystem;
 
 // Constants
 constexpr std::string_view MODEL_CONFIG_FILE = "model_config.xml";    // not in use (yet?)
-constexpr int LOOP_DELAY_DEFAULT = 7;
+constexpr int LOOP_DELAY_DEFAULT = 10;                                // secs
 constexpr int LOOP_DELAY_FAST = 1;
 
 

@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <filesystem>
 #include <string>
 #include <utility>
@@ -28,6 +30,17 @@ struct TimedProcessResult {
     TimedProcessStatus status = TimedProcessStatus::spawn_failed;
     int exit_code = -1;
     bool output_updated = false;
+};
+
+/**
+ * @brief Rolling window of recent observed model step deltas used to tune main-loop polling.
+ */
+struct StepDeltaAverageWindow {
+    static constexpr std::size_t window_size = 5;
+
+    std::array<int, window_size> values{};
+    std::size_t count = 0;
+    std::size_t next_index = 0;
 };
 
 bool set_env_var( const std::string&, const std::string& );
@@ -66,3 +79,23 @@ TimedProcessResult run_process_with_timeout( const std::string& executable, cons
  *        Used for controller diagnostics and error reporting.
  */
 const char* timed_process_status_to_string( TimedProcessStatus status );
+
+/**
+ * @brief Add a positive observed step delta to the rolling window.
+ */
+void record_step_delta( StepDeltaAverageWindow& window, int step_delta );
+
+/**
+ * @brief Return the average of the recorded positive step deltas, or 0.0 when empty.
+ */
+double average_step_delta( const StepDeltaAverageWindow& window );
+
+/**
+ * @brief Report whether the current observed step delta exceeds the existing rolling average.
+ */
+bool step_delta_exceeds_average( const StepDeltaAverageWindow& window, int step_delta );
+
+/**
+ * @brief Decrease a loop delay by a fixed amount without dropping below a minimum.
+ */
+double reduce_loop_delay_seconds( double current_delay_seconds, double decrement_seconds, double minimum_delay_seconds );

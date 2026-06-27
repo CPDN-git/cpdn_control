@@ -225,6 +225,27 @@ Comparison against the original baseline:
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `src/cpdn_main.cpp::main()` | 120 | 68 | -52 (`-43.3%`) | 516 | 313 | -203 (`-39.3%`) |
 
+## After reusing the generic upload-directory scan for intermediate uploads
+
+Measured on 2026-06-27 after replacing the per-step intermediate upload file enumeration with the same upload-directory scan used by the final upload path, and renaming `add_upload_files(...)` to `collect_upload_output_files(...)` for clarity.
+
+| File | Function | `pmccabe` | `lizard` CCN | `lizard` NLOC | Notes |
+| --- | --- | ---: | ---: | ---: | --- |
+| `src/cpdn_main.cpp` | `main()` | 66 | 66 | 307 | Main shrank again after removing the nested per-step/per-file upload collection loop |
+| `src/cpdn_main.cpp` | `collect_upload_output_files()` | 6 | 6 | 23 | Existing final-upload helper now owns all upload-directory scanning for model output files |
+
+Comparison against the previous upload-progress refactor point:
+
+| Function | Prior `pmccabe` | Current `pmccabe` | Change | Prior `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src/cpdn_main.cpp::main()` | 68 | 66 | -2 (`-2.9%`) | 313 | 307 | -6 (`-1.9%`) |
+
+Comparison against the original baseline:
+
+| Function | Baseline `pmccabe` | Current `pmccabe` | Change | Baseline `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src/cpdn_main.cpp::main()` | 120 | 66 | -54 (`-45.0%`) | 516 | 307 | -209 (`-40.5%`) |
+
 ## After moving model environment setup behind `ModelControl::get_env_vars()`
 
 Measured on 2026-06-12 after replacing the OpenIFS-specific `oifs_get_model_env_vars(...)` path with model-owned `get_env_vars(...)` overrides and switching child env storage to `KEY=VALUE` strings.

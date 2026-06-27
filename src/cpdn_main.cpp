@@ -445,11 +445,11 @@ static std::string get_result_base_name( const BoincConfig& bconfig, const TaskC
 
 
 /**
- * @brief Append upload files that match the expected output filename pattern.
+ * @brief Collect upload files that match the expected model output filename pattern.
  *
  * @returns zero on success, otherwise error code value.
  */
-static int add_upload_files( const fs::path& dir, std::vector<fs::path>& out, const ModelControl& model_ctrl )
+static int collect_upload_output_files( const fs::path& dir, std::vector<fs::path>& out, const ModelControl& model_ctrl )
 {
     std::error_code ec;
 
@@ -892,19 +892,10 @@ int main( int argc, char** argv )
                 // *****  Critical section start  *****
                 boinc_begin_critical_section();
 
-                // Cycle through all the completed steps from the last upload point up to the current interval boundary.
-                // TODO: no need to do this. just look for file with a matching model output filepattern.
-                for ( int step_to_zip = tstate.last_upload_step; step_to_zip < observed_step; ++step_to_zip ) {
-
-                    // Add model result files to zip to be uploaded
-                    for ( const auto& result : model_ctrl->get_output_filenames( step_to_zip ) ) {
-                        fs::path fpath = upload_dir;
-                        fpath /= result;
-                        if ( fs::exists( fpath ) ) {
-                            std::cerr << "Adding to the zip: " << fpath << '\n';
-                            zfl.push_back( fpath );
-                        }
-                    }
+                retval = collect_upload_output_files( upload_dir, zfl, *model_ctrl );
+                if ( retval ) {
+                    std::cerr << "Adding model output files to the upload zip failed!\n";
+                    return finish_task( tstate, retval );
                 }
 
                 // todo: in the new way of doing it, if we are at an upload point and there are no files present,
@@ -1043,7 +1034,7 @@ int main( int argc, char** argv )
 
         // Read the remaining list of files from the temp upload directory and
         // add the matching files to the upload zip
-        retval = add_upload_files( upload_dir, zfl, *model_ctrl );
+        retval = collect_upload_output_files( upload_dir, zfl, *model_ctrl );
         if ( retval ) {
             std::cerr << "Adding model output files to the upload zip failed!\n";
         }

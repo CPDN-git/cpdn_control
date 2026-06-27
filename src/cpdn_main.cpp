@@ -834,11 +834,10 @@ int main( int argc, char** argv )
         refresh_current_cpu_time( tstate );
 
         //  Update our knowledge of what time step the model has got to
-        int observed_step = tstate.current_step;
-        if ( !model_ctrl->get_current_step( observed_step, total_steps ) ) {
-            observed_step = tstate.last_completed_step;
+        int observed_step = tstate.last_completed_step;
+        if ( model_ctrl->get_current_step( observed_step, total_steps ) ) {
+            tstate.current_step = observed_step;
         }
-        tstate.current_step = observed_step;
         std::cerr << "DEBUG 852: tstate.current_step, last_completed_step " << tstate.current_step << ", " << tstate.last_completed_step << '\n';
 
         // If the model step has updated, proceed with actions

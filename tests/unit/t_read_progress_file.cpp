@@ -38,7 +38,7 @@ int t_read_progress_file()
     task.current_cpu_time = 76828.5;
     task.upload_file_number = 3;
     task.last_completed_step = 1055;
-    task.last_upload_time = 1036800.0;
+    task.last_upload_step = 288;
     task.model_completed = 0;
 
     // Generate test progress file content
@@ -101,39 +101,39 @@ int t_read_progress_file()
         return EXIT_FAILURE;
     }
     if ( taskin.last_completed_step != 1055 || taskin.prior_acc_cpu_time != 76828.5 || taskin.upload_file_number != 3 ||
-         taskin.last_upload_time != 1036800.0 || taskin.model_completed != 0 ) {
+         taskin.last_upload_step != 288 || taskin.model_completed != 0 ) {
         TEST_FAIL;
         std::cout << "last_completed_step = " << taskin.last_completed_step << ", prior_acc_cpu_time = " << taskin.prior_acc_cpu_time
-                  << ", upload_number = " << taskin.upload_file_number << ", last_upload_time = " << taskin.last_upload_time
+                  << ", upload_number = " << taskin.upload_file_number << ", last_upload_step = " << taskin.last_upload_step
                   << ", completed = " << taskin.model_completed << "\n";
         return EXIT_FAILURE;
     }
 
-    std::cout << "Subtest: read legacy progress file keys\n";
-    const std::string legacy_content = "! CPDN controller progress file & fortran namelist\n"
-                                       "&CPDN\n"
-                                       "control_pid=123\n"
-                                       "prior_acc_cpu_time=76828.5\n"
-                                       "upload_file_number=3\n"
-                                       "last_step=1055\n"
-                                       "last_upload=1036800\n"
-                                       "model_completed=0\n"
-                                       "/\n";
-    if ( !write_text_file( progress_file.path(), legacy_content ) ) {
+    std::cout << "Subtest: read progress file with step-based upload state\n";
+    const std::string step_based_content = "! CPDN controller progress file & fortran namelist\n"
+                                           "&CPDN\n"
+                                           "control_pid=123\n"
+                                           "prior_acc_cpu_time=76828.5\n"
+                                           "upload_file_number=3\n"
+                                           "last_completed_step=1055\n"
+                                           "last_upload_step=288\n"
+                                           "model_completed=0\n"
+                                           "/\n";
+    if ( !write_text_file( progress_file.path(), step_based_content ) ) {
         TEST_FAIL;
-        std::cout << "Unable to write legacy progress file\n";
+        std::cout << "Unable to write step-based progress file\n";
         return EXIT_FAILURE;
     }
     if ( !progress_file.read( taskin, err_msg ) ) {
         TEST_FAIL;
-        std::cout << "Failed to read legacy progress file: " << err_msg << "\n";
+        std::cout << "Failed to read step-based progress file: " << err_msg << "\n";
         return EXIT_FAILURE;
     }
     if ( taskin.last_completed_step != 1055 || taskin.prior_acc_cpu_time != 76828.5 || taskin.upload_file_number != 3 ||
-         taskin.last_upload_time != 1036800.0 || taskin.model_completed != 0 ) {
+         taskin.last_upload_step != 288 || taskin.model_completed != 0 ) {
         TEST_FAIL;
         std::cout << "last_completed_step = " << taskin.last_completed_step << ", prior_acc_cpu_time = " << taskin.prior_acc_cpu_time
-                  << ", upload_number = " << taskin.upload_file_number << ", last_upload_time = " << taskin.last_upload_time
+                  << ", upload_number = " << taskin.upload_file_number << ", last_upload_step = " << taskin.last_upload_step
                   << ", completed = " << taskin.model_completed << "\n";
         return EXIT_FAILURE;
     }
@@ -177,8 +177,8 @@ int t_read_progress_file()
                                         "control_pid=123\n"
                                         "prior_acc_cpu_time=foo\n"
                                         "upload_file_number=3\n"
-                                        "last_step=1055\n"
-                                        "last_upload=1036800\n"
+                                        "last_completed_step=1055\n"
+                                        "last_upload_step=288\n"
                                         "model_completed=0\n"
                                         "/\n";
     if ( !write_text_file( tmp_handler.path(), invalid_content ) ) {

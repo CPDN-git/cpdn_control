@@ -30,7 +30,7 @@ struct TaskState {
     double prior_acc_cpu_time = 0.0;     // Accumulated CPU time saved from earlier model runs before current child started
     int upload_file_number = 0;          // Sequential counter for upload files
     int last_completed_step = 0;         // Last completed model step count
-    double last_upload_time = 0.0;       // Elapsed model time at the last upload, in seconds
+    int last_upload_step = 0;            // Last model step included in an upload interval
     int model_completed = 0;             // Model completion state: 0=started/running, 1=completed; does NOT imply it worked!
     bool model_success = false;          // Model run success flag: false=failed, true=successful
     int current_step = 0;                // Current model step count

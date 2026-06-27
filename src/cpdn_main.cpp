@@ -7,10 +7,9 @@
 // AI assistance from : GPT-5.3, GPT-5.4 and GPT-5.5.
 //
 
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
-#include <cmath>
-#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <iomanip>
@@ -194,12 +193,6 @@ static bool parse_double_arg( const std::string& text, double& value, std::strin
     }
     return true;
 }
-
-
-/**
- * @brief Convert a model step count to elapsed model time in seconds based on the timestep interval.
- */
-static double step_to_model_time( int step, int timestep_seconds ) { return static_cast<double>( step ) * static_cast<double>( timestep_seconds ); }
 
 
 /**
@@ -715,12 +708,10 @@ int main( int argc, char** argv )
     }
 
     const int timestep_seconds = control_input.timestep_seconds;
-    const int output_interval = control_input.output_interval;
     int restart_interval_steps = control_input.restart_interval;
 
     const int total_steps = control_input.total_steps;
     const int trickle_freq = TrickleHandler::get_trickle_frequency( timestep_seconds, total_steps );
-    const double total_length_of_simulation_time = control_input.forecast_length_time;
 
     std::cerr << "Trickle frequency is every : " << trickle_freq << " model steps, "
               << ( static_cast<double>( trickle_freq ) * static_cast<double>( timestep_seconds ) ) / 86400.0 << " days.\n";
@@ -764,8 +755,6 @@ int main( int argc, char** argv )
     if ( tconfig.upload_interval == 0 ) {
         std::cerr << "Result uploads disabled (--upload_interval=0). Trickle messages remain enabled.\n";
     }
-
-    std::cerr << "Total_length_of_simulation_time: " << total_length_of_simulation_time << '\n';
 
     // Get result_base_name to construct upload file names for both standalone and under BOINC.
 
@@ -819,7 +808,14 @@ int main( int argc, char** argv )
 
     //---------------- Main loop ------------------------------
 
-    // Periodically check the process status and the BOINC client status
+    // The main loop carries out the following tasks:
+    // - Periodically check the process status and the BOINC client status
+    // - BOINC housekeeping; updating fraction done
+    // - Get latest model timestep from model log
+    // - If timestep has changed, carry out tasks:
+    //    - run the model's own step related tasks
+    //    - if required, move the latest model output to the project dir
+    //    - if required, prepare and commit an upload
 
     std::vector<fs::path> zfl;
     BoincRuntime bruntime;
@@ -837,16 +833,19 @@ int main( int argc, char** argv )
         next_delay_seconds = loop_delay_seconds;
         refresh_current_cpu_time( tstate );
 
+        //  Update our knowledge of what time step the model has got to
         int observed_step = tstate.current_step;
         if ( !model_ctrl->get_current_step( observed_step, total_steps ) ) {
             observed_step = tstate.last_completed_step;
         }
         tstate.current_step = observed_step;
-        std::cerr << "DEBUG 844: tstate.current_step, last_completed_step " << tstate.current_step << ", " << tstate.last_completed_step << '\n';
+        std::cerr << "DEBUG 852: tstate.current_step, last_completed_step " << tstate.current_step << ", " << tstate.last_completed_step << '\n';
 
-        // Move the model result files to the task folder in the project directory
-        // GC. Why do this every timestep? This check only needs to be done at same frequency as NFRPOS.
+        // If the model step has updated, proceed with actions
         if ( observed_step != tstate.last_completed_step ) {
+
+            //  Adjust the main loop delay dynamically based on measured average time between model steps
+            //  We aim to catch each model step.
             const int step_delta = observed_step - tstate.last_completed_step;
 
             if ( step_delta_exceeds_average( step_delta_window, step_delta ) ) {
@@ -854,17 +853,23 @@ int main( int argc, char** argv )
             }
             record_step_delta( step_delta_window, step_delta );
 
+            //  Action 1:  Ask the model to do its own tasks on a step change.
+            //  This can involve running a separate external diagnostics executable to create trickle data, or,
+            //  some cleanup of restarts for example.
+
             const auto step_tasks_start = chrono::steady_clock::now();
             (void)model_ctrl->do_step_tasks( observed_step, bconfig.slot_path );
             const double step_tasks_elapsed = chrono::duration<double>( chrono::steady_clock::now() - step_tasks_start ).count();
             next_delay_seconds = std::max( LOOP_DELAY_MINIMUM, loop_delay_seconds - step_tasks_elapsed );
 
-            // Start work on managing the model output files.
+
+            //  Action 2:  Determine whether a new model output file is ready to be moved to the temp dir in the project dir
+
             auto output_files = model_ctrl->get_output_filenames( observed_step );
 
-            std::cerr << "DEBUG 855:  returned " << output_files.size() << " output filenames\n";
+            std::cerr << "DEBUG 878:  returned " << output_files.size() << " output filenames\n";
             for ( const auto& output_file : output_files ) {
-                std::cerr << "DEBUG:   " << output_file << '\n';
+                std::cerr << "DEBUG:880   " << output_file << '\n';
             }
 
             for ( const auto& result : output_files ) {
@@ -875,26 +880,20 @@ int main( int argc, char** argv )
                 }
             }
 
-            const double current_step_time = step_to_model_time( observed_step, timestep_seconds );
-
             // upload_interval == 0 disables result uploads, but trickles still run below.
-            // GC. TODO. Why not combine adding to the zip file with moving the result files above?
             if ( tconfig.upload_interval > 0 &&
-                 ( ( current_step_time - tstate.last_upload_time ) >= ( static_cast<double>( tconfig.upload_interval ) * timestep_seconds ) ) &&
-                 ( current_step_time < total_length_of_simulation_time ) ) {
+                 ( ( observed_step - tstate.last_upload_step ) >= tconfig.upload_interval ) && ( observed_step < total_steps ) ) {
                 // Create an intermediate results zip file
                 zfl.clear();
 
-                std::cerr << "End of upload interval reached, starting a new upload process" << std::endl;
+                std::cerr << "Model result upload step reached. Starting a new upload process..." << std::endl;
 
                 // *****  Critical section start  *****
                 boinc_begin_critical_section();
 
-                const int last_upload_step =
-                    static_cast<int>( std::llround( tstate.last_upload_time / static_cast<double>( timestep_seconds ) ) );
-
                 // Cycle through all the completed steps from the last upload point up to the current interval boundary.
-                for ( int step_to_zip = last_upload_step; step_to_zip < observed_step; ++step_to_zip ) {
+                // TODO: no need to do this. just look for file with a matching model output filepattern.
+                for ( int step_to_zip = tstate.last_upload_step; step_to_zip < observed_step; ++step_to_zip ) {
 
                     // Add model result files to zip to be uploaded
                     for ( const auto& result : model_ctrl->get_output_filenames( step_to_zip ) ) {
@@ -907,21 +906,23 @@ int main( int argc, char** argv )
                     }
                 }
 
+                // in the new way of doing it, if we are at an upload point and there are no files present,
+                // create a small text file to zip and send; probably indicates an error but better not to fail.
                 if ( !zfl.empty() ) {
                     std::string upload_file_name = "upload_file_" + std::to_string( tstate.upload_file_number ) + ".zip";
-                    std::cerr << "Uploading the intermediate file: " << upload_file_name << '\n';
+                    std::cerr << "Uploading the results file: " << upload_file_name << '\n';
 
                     auto upload_result = zip_and_send_upload( bconfig, bruntime, tstate, result_base_name, tstate.upload_file_number, zfl );
                     if ( !upload_result.ok ) {
-                        report_upload_send_failure( "intermediate upload", upload_result );
+                        report_upload_send_failure( "result upload", upload_result );
                         return finish_task( tstate, upload_result.finish_code );
                     }
                     if ( upload_result.upload_attempted ) {
-                        std::cerr << "Finished the upload of the intermediate file: " << upload_file_name << '\n';
+                        std::cerr << "Finished the upload of : " << upload_file_name << '\n';
                     }
-                    tstate.last_upload_time = current_step_time;
+                    tstate.last_upload_step = observed_step;
                 }
-                tstate.last_upload_time = current_step_time;
+                tstate.last_upload_step = observed_step;
 
                 // *****  Normal end of critical section  *****
                 boinc_end_critical_section();

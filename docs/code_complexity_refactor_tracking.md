@@ -203,6 +203,28 @@ Comparison against the original baseline:
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `src/cpdn_main.cpp::main()` | 120 | 67 | -53 (`-44.2%`) | 516 | 342 | -174 (`-33.7%`) |
 
+## After converting upload progress tracking from time to step counts
+
+Measured on 2026-06-27 after removing the `current_step_time` upload bookkeeping from `src/cpdn_main.cpp`, renaming `TaskState::last_upload_time` to `last_upload_step`, and switching the controller progress-file schema to record upload progress directly in model steps.
+
+| File | Function | `pmccabe` | `lizard` CCN | `lizard` NLOC | Notes |
+| --- | --- | ---: | ---: | ---: | --- |
+| `src/cpdn_main.cpp` | `main()` | 68 | 68 | 313 | Main is slightly shorter after dropping the step/time conversion round-trip, but upload control flow is still the dominant hotspot |
+| `src/control_start.cpp` | `initialize_task_state_from_restart()` | 19 | 19 | 62 | Restart/bootstrap seam unchanged by the schema rename |
+| `api/progressfile_handler.cpp` | `ProgressFileHandler::read()` | 26 | 26 | 78 | Progress-file parsing remains straightforward but is still the main complexity hotspot in this file |
+
+Comparison against the previous `main()` refactor point:
+
+| Function | Prior `pmccabe` | Current `pmccabe` | Change | Prior `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src/cpdn_main.cpp::main()` | 67 | 68 | +1 (`+1.5%`) | 318 | 313 | -5 (`-1.6%`) |
+
+Comparison against the original baseline:
+
+| Function | Baseline `pmccabe` | Current `pmccabe` | Change | Baseline `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src/cpdn_main.cpp::main()` | 120 | 68 | -52 (`-43.3%`) | 516 | 313 | -203 (`-39.3%`) |
+
 ## After moving model environment setup behind `ModelControl::get_env_vars()`
 
 Measured on 2026-06-12 after replacing the OpenIFS-specific `oifs_get_model_env_vars(...)` path with model-owned `get_env_vars(...)` overrides and switching child env storage to `KEY=VALUE` strings.

@@ -63,7 +63,7 @@ bool write_empty_file( const fs::path& path )
 }
 
 
-bool write_progress_file( const fs::path& dir, int last_completed_step, int upload_file_number = 1, double last_upload_time = 0.0 )
+bool write_progress_file( const fs::path& dir, int last_completed_step, int upload_file_number = 1, int last_upload_step = 0 )
 {
     ProgressFileHandler progress_file( dir.string() );
     TaskState task;
@@ -71,7 +71,7 @@ bool write_progress_file( const fs::path& dir, int last_completed_step, int uplo
     task.prior_acc_cpu_time = 5.0;
     task.upload_file_number = upload_file_number;
     task.last_completed_step = last_completed_step;
-    task.last_upload_time = last_upload_time;
+    task.last_upload_step = last_upload_step;
     task.model_completed = 0;
     std::string err_msg;
     return progress_file.write( task, err_msg );

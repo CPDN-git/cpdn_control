@@ -207,10 +207,8 @@ Notes:
 
 - Treat model step counts and elapsed model time as different concepts with different names.
 - `TaskState::current_step`, `TaskState::last_completed_step`, and `TaskState::last_trickle_step` are integer model step counts.
-- `TaskState::last_upload_time` is elapsed model time in seconds.
-- Derive elapsed model time from `step * timestep_seconds` when possible rather than carrying parallel string/int representations of the same step through `main()`.
-- The progress file now writes `last_completed_step` and `last_upload_time`.
-- `ProgressFileHandler` still accepts legacy `last_step` and `last_upload` keys when reading older progress files.
+- `TaskState::last_upload_step` is the last model step already covered by an upload interval.
+- The progress file now writes `last_completed_step` and `last_upload_step`.
 
 ## CPDN Filename Metadata
 

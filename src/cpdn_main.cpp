@@ -852,7 +852,7 @@ int main( int argc, char** argv )
             }
             record_step_delta( step_delta_window, step_delta );
 
-            //  Action 1:  Ask the model to do its own tasks on a step change.
+            //  1:  Ask the model to do its own tasks on a step change.
             //  This can involve running a separate external diagnostics executable to create trickle data, or,
             //  some cleanup of restarts for example.
 
@@ -862,7 +862,7 @@ int main( int argc, char** argv )
             next_delay_seconds = std::max( LOOP_DELAY_MINIMUM, loop_delay_seconds - step_tasks_elapsed );
 
 
-            //  Action 2:  Determine whether a new model output file is ready to be moved to the temp dir in the project dir
+            //  2:  Determine whether a new model output file is ready to be moved to the temp dir in the project dir
 
             auto output_files = model_ctrl->get_output_filenames( observed_step );
 
@@ -879,13 +879,15 @@ int main( int argc, char** argv )
                 }
             }
 
-            // upload_interval == 0 disables result uploads, but trickles still run below.
-            if ( tconfig.upload_interval > 0 &&
-                 ( ( observed_step - tstate.last_upload_step ) >= tconfig.upload_interval ) && ( observed_step < total_steps ) ) {
+            //  3:  Process upload if required.
+
+            // command arg: upload_interval == 0 disables result uploads, but trickles are still made below.
+            if ( tconfig.upload_interval > 0 && ( ( observed_step - tstate.last_upload_step ) >= tconfig.upload_interval ) &&
+                 ( observed_step < total_steps ) ) {
                 // Create an intermediate results zip file
                 zfl.clear();
 
-                std::cerr << "Model result upload step reached. Starting a new upload process..." << std::endl;
+                std::cerr << "Model result upload step reached. Starting a new upload ..." << std::endl;
 
                 // *****  Critical section start  *****
                 boinc_begin_critical_section();
@@ -905,7 +907,7 @@ int main( int argc, char** argv )
                     }
                 }
 
-                // in the new way of doing it, if we are at an upload point and there are no files present,
+                // todo: in the new way of doing it, if we are at an upload point and there are no files present,
                 // create a small text file to zip and send; probably indicates an error but better not to fail.
                 if ( !zfl.empty() ) {
                     std::string upload_file_name = "upload_file_" + std::to_string( tstate.upload_file_number ) + ".zip";
@@ -930,7 +932,7 @@ int main( int argc, char** argv )
 
             }    // end of upload new output file block.
 
-            // Trickle every required fraction of the model run
+            //  4:  Trickle every required fraction of the model run
             if ( trickle_freq > 0 && ( observed_step % trickle_freq ) == 0 ) {
                 std::cerr << "Sending progress trickle message to CPDN at step: " << observed_step << '\n';
                 trickler.process_trickle( tstate.current_cpu_time, observed_step );
@@ -940,11 +942,13 @@ int main( int argc, char** argv )
             tstate.last_completed_step = observed_step;
         }
 
-        // Update progress file with current values
+        //  5: Update progress file with current values
         if ( !progress_file.write( tstate, err_msg ) ) {
             std::cerr << "..Failed to write progress file: " << err_msg << '\n';
             return finish_task( tstate, 1 );
         }
+
+        //  6:  BOINC client housekeeping tasks
 
         // Calculate the fraction done
         tstate.fraction_done = model_frac_done( static_cast<double>( tstate.current_step ), static_cast<double>( total_steps ), bconfig.ncpus );

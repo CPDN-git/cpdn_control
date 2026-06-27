@@ -78,6 +78,7 @@ class WRFControl : public ModelControl {
     // Timestep in seconds
     // Used to contruct time period differences
     mutable int timestep_seconds = 0;
+    mutable int output_interval = 0;    // Cached model output cadence in steps for model-owned copyability logic.
 
     // Start date and time for the run read from namelist.input.
     // Needed to construct time periods for output and restart files.

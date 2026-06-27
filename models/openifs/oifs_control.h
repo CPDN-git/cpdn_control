@@ -85,6 +85,7 @@ class OpenIFSControl : public ModelControl {
     // mutable so can change in parse_control_input() which is a const method as it does not
     // change the returned state of ModelControlInputData, but held internally in this class only.
     mutable std::string experiment_id;
+    mutable int output_interval = 0;    // Cached model output cadence in steps for model-owned copyability logic.
 
     // External diagnostics executable name, if present.
     mutable std::string diag_exe_name{ "diagnostics.exe" };

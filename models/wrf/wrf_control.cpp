@@ -497,7 +497,7 @@ bool WRFControl::get_current_step( int& step, const int total_steps ) const
  * 
  * This is not the ideal way for WRF to work. Rather than convert from date-time to steps
  * it would be more natural for the model instance to use an internal date-time diff rather
- * than keep converting. TODO.
+ * than keep converting. TO DO.
  */
 std::vector<std::string> WRFControl::get_output_filenames( int step ) const
 {
@@ -741,6 +741,7 @@ ModelControlInputData WRFControl::parse_control_input() const
         return make_parse_error( control_input_file, "parse", "frames_per_outfile", err_msg );
     }
     parsed.output_interval = ( domain_history_interval * domain_frames_per_outfile * 60 ) / parsed.timestep_seconds;
+    output_interval = parsed.output_interval;
     parsed.restart_interval = ( restart_interval_minutes * 60 ) / parsed.timestep_seconds;
 
     // Compute remaining time related variables

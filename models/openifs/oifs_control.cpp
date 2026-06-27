@@ -254,6 +254,7 @@ ModelControlInputData OpenIFSControl::parse_control_input() const
     if ( parsed.output_interval < 0 ) {
         parsed.output_interval = abs( parsed.output_interval ) * 3600 / parsed.timestep_seconds;
     }
+    output_interval = parsed.output_interval;
     parsed.forecast_length_time = static_cast<double>( parsed.total_steps ) * static_cast<double>( parsed.timestep_seconds );
 
     std::cerr << "OpenIFS namelist (fort.4) parsed successfully: \n"

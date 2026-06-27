@@ -318,9 +318,23 @@ std::vector<std::string> OpenIFSControl::get_output_filenames( int step ) const
 
 std::vector<std::string> OpenIFSControl::get_copyable_output_filenames( int current_step ) const
 {
-    // OpenIFS currently emits one output set per output step, so the files safe to copy
-    // at the current timestep are the nominal files for that step.
-    return get_output_filenames( current_step );
+    std::vector<std::string> output_files;
+    if ( current_step < 0 || output_interval <= 0 ) {
+        return output_files;
+    }
+
+    // OpenIFS writes an initial state at step 0, then additional output sets at each
+    // output_interval boundary. The controller-facing contract here is to return every
+    // output filename that should exist and be safe to copy as of the current timestep.
+    const int output_count = ( current_step / output_interval ) + 1;
+    output_files.reserve( static_cast<std::size_t>( output_count ) * 3 );
+
+    for ( int output_step = 0; output_step <= current_step; output_step += output_interval ) {
+        auto step_files = get_output_filenames( output_step );
+        output_files.insert( output_files.end(), step_files.begin(), step_files.end() );
+    }
+
+    return output_files;
 }
 
 bool OpenIFSControl::is_output_filename( std::string_view filename ) const { return parse_oifs_output_filename( filename ); }

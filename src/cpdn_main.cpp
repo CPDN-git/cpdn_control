@@ -862,16 +862,19 @@ int main( int argc, char** argv )
             next_delay_seconds = std::max( LOOP_DELAY_MINIMUM, loop_delay_seconds - step_tasks_elapsed );
 
 
-            //  2:  Determine whether a new model output file is ready to be moved to the temp dir in the project dir
+            //  2:  Ask the model which output files are currently safe to copy out of the slot directory.
+            //      This controller seam intentionally asks for all files safe to copy as of the current timestep.
+            //      main() must not infer readiness from a step->filename mapping because models differ in how
+            //      many timesteps contribute to a file and when a file becomes complete.
 
-            auto output_files = model_ctrl->get_output_filenames( observed_step );
+            auto copyable_output_files = model_ctrl->get_copyable_output_filenames( observed_step );
 
-            std::cerr << "DEBUG 878:  returned " << output_files.size() << " output filenames\n";
-            for ( const auto& output_file : output_files ) {
+            std::cerr << "DEBUG 878:  returned " << copyable_output_files.size() << " copyable output filenames\n";
+            for ( const auto& output_file : copyable_output_files ) {
                 std::cerr << "DEBUG:880   " << output_file << '\n';
             }
 
-            for ( const auto& result : output_files ) {
+            for ( const auto& result : copyable_output_files ) {
                 retval = move_result_file( bconfig.slot_path, upload_dir, result );
                 if ( retval ) {
                     std::cerr << ".. Moving " << result << " result file to the temp folder in the projects directory failed" << "\n";
@@ -1010,9 +1013,9 @@ int main( int argc, char** argv )
 
     boinc_begin_critical_section();
 
-    // Move the final model result files ready for upload
-    auto output_files = model_ctrl->get_output_filenames( tstate.last_completed_step );
-    for ( const auto& result : output_files ) {
+    // Move any model result files that are currently safe to copy at the final observed step.
+    auto copyable_output_files = model_ctrl->get_copyable_output_filenames( tstate.last_completed_step );
+    for ( const auto& result : copyable_output_files ) {
         retval = move_result_file( bconfig.slot_path, upload_dir, result );
         if ( retval ) {
             std::cerr << ".. Copying " << result << " model output file to the temp upload folder in projects directory failed" << "\n";

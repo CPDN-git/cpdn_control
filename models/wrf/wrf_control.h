@@ -40,6 +40,7 @@ class WRFControl : public ModelControl {
     std::vector<std::string> get_env_vars( const std::string& slot_path, const std::string& nthreads, std::string& err_msg ) const override;
     bool get_current_step( int& step, const int total_steps ) const override;
     std::vector<std::string> get_output_filenames( int step ) const override;
+    std::vector<std::string> get_copyable_output_filenames( int current_step ) const override;
     bool is_output_filename( std::string_view filename ) const override;
     bool is_restart_filename( std::string_view filename ) const override;
     std::vector<std::string> get_log_filenames() const override;

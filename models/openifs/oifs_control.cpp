@@ -315,6 +315,13 @@ std::vector<std::string> OpenIFSControl::get_output_filenames( int step ) const
     return { "ICMGG" + suffix, "ICMSH" + suffix, "ICMUA" + suffix };
 }
 
+std::vector<std::string> OpenIFSControl::get_copyable_output_filenames( int current_step ) const
+{
+    // OpenIFS currently emits one output set per output step, so the files safe to copy
+    // at the current timestep are the nominal files for that step.
+    return get_output_filenames( current_step );
+}
+
 bool OpenIFSControl::is_output_filename( std::string_view filename ) const { return parse_oifs_output_filename( filename ); }
 
 bool OpenIFSControl::is_restart_filename( std::string_view filename ) const { return filename == OIFS_RCF_FILENAME; }

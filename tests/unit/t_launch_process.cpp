@@ -51,6 +51,7 @@ class LaunchProcessModelControl : public ModelControl {
     ModelControlInputData parse_control_input() const override { return {}; }
     bool get_current_step( int&, const int ) const override { return false; }
     std::vector<std::string> get_output_filenames( int ) const override { return {}; }
+    std::vector<std::string> get_copyable_output_filenames( int ) const override { return {}; }
     bool is_output_filename( std::string_view ) const override { return false; }
     bool is_restart_filename( std::string_view ) const override { return false; }
     bool setup_directories( const fs::path& ) const override { return true; }

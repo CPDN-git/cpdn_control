@@ -122,8 +122,16 @@ class ModelControl {
     // Determine the current model step count; return true if successful, false otherwise.
     virtual bool get_current_step( int& current_step, const int total_steps ) const = 0;
 
-    // Provide a list of model output filenames for uploading to server at a particular step count.
+    // Provide the nominal model output filenames associated with a particular model step.
+    // This is useful for model-internal step-based filename generation, but controller code
+    // should not assume these files are necessarily complete or safe to copy yet.
     virtual std::vector<std::string> get_output_filenames( int step ) const = 0;
+
+    // Provide all model output filenames that are currently safe for the controller to copy
+    // out of the slot directory as of the current model step.
+    // This is the controller-facing seam for output collection; it is model-owned because
+    // readiness and file granularity differ between models (e.g. one step per file vs many).
+    virtual std::vector<std::string> get_copyable_output_filenames( int current_step ) const = 0;
 
     // Check whether a filename is a model output file that should be considered for upload packaging.
     virtual bool is_output_filename( std::string_view filename ) const = 0;

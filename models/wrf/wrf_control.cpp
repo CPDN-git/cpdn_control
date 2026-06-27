@@ -533,6 +533,14 @@ std::vector<std::string> WRFControl::get_output_filenames( int step ) const
     return output_filenames;
 }
 
+std::vector<std::string> WRFControl::get_copyable_output_filenames( int current_step ) const
+{
+    // Stub controller seam for now: return the model output files considered safe to copy
+    // as of the current timestep. WRF will later use its namelist-driven output cadence and
+    // frames-per-file settings to decide how many complete files are ready.
+    return get_output_filenames( current_step );
+}
+
 
 bool WRFControl::is_output_filename( std::string_view filename ) const
 {

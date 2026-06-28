@@ -995,12 +995,9 @@ int main( int argc, char** argv )
 
     // Do NOT execute a return until the final upload is done after the boinc_end_critical_section() below.
 
-    // GC. I probably don't need this; use the child_status variable and model_success instead in main loop?
     tstate.model_completed = 1;
-
     if ( !progress_file.write( tstate, err_msg ) ) {
-        std::cerr << "..Failed to write final progress file: " << err_msg << '\n';
-        return finish_task( tstate, 1 );
+        std::cerr << "..Warning. Failed to write final progress file: " << err_msg << '\n';    // not a critical error.
     }
 
     // Time delay to ensure model files are all flushed to disk

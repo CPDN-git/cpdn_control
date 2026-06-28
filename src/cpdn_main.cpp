@@ -851,6 +851,10 @@ int main( int argc, char** argv )
         next_delay_seconds = loop_delay_seconds;
         refresh_current_cpu_time( tstate );
 
+        // Refresh child status before reading the latest model step so a final completed
+        // step logged just before process exit can still be handled in this iteration.
+        tstate.child_status = check_child_status( tstate.child_process, tstate.child_status, tstate.exit_code );
+
         //  Update our knowledge of what time step the model has got to
         int observed_step = tstate.last_completed_step;
         if ( model_ctrl->get_current_step( observed_step, total_steps ) ) {
@@ -974,10 +978,8 @@ int main( int argc, char** argv )
             boinc_fraction_done( tstate.fraction_done );
 
             boinc_get_status( &bruntime.client_status );
-            (void)handle_boinc_client_status( tstate.child_process, bruntime );    // Child status is refreshed immediately below.
+            (void)handle_boinc_client_status( tstate.child_process, bruntime );
         }
-
-        tstate.child_status = check_child_status( tstate.child_process, tstate.child_status, tstate.exit_code );
     }
 
     //--------- End of main loop ---------
@@ -995,6 +997,11 @@ int main( int argc, char** argv )
 
     // GC. I probably don't need this; use the child_status variable and model_success instead in main loop?
     tstate.model_completed = 1;
+
+    if ( !progress_file.write( tstate, err_msg ) ) {
+        std::cerr << "..Failed to write final progress file: " << err_msg << '\n';
+        return finish_task( tstate, 1 );
+    }
 
     // Time delay to ensure model files are all flushed to disk
     std::cerr << "Waiting for file operations to complete...(60 secs)" << std::endl;

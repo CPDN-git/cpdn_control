@@ -326,6 +326,23 @@ Comparison against the prior WRF refactor point:
 | `models/wrf/wrf_control.cpp::get_current_step()` | 11 | 11 | `0` | 40 | 39 | -1 (`-2.5%`) |
 | `models/wrf/wrf_control.cpp::get_output_filenames()` | 7 | 7 | `0` | 25 | 23 | -2 (`-8.0%`) |
 
+## After moving child-status refresh ahead of per-step polling
+
+Measured on 2026-06-28 after:
+
+- moving `check_child_status(...)` to the top of the main loop so the controller can observe a final completed model step in the same iteration that notices child exit
+- writing the progress file once more in the tail immediately after setting `model_completed=1`
+
+| File | Function | `pmccabe` | `lizard` CCN | `lizard` NLOC | Notes |
+| --- | --- | ---: | ---: | ---: | --- |
+| `src/cpdn_main.cpp` | `main()` | 66 | 66 | 307 | Shutdown ordering is safer, but top-level orchestration complexity is unchanged |
+
+Comparison against the previous `main()` refactor point:
+
+| Function | Prior `pmccabe` | Current `pmccabe` | Change | Prior `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src/cpdn_main.cpp::main()` | 66 | 66 | `0` | 307 | 307 | `0` |
+
 ## Current observations
 
 - `main()` is still the dominant complexity hotspot, but it is materially smaller than the original baseline.

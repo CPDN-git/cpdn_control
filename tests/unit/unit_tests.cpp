@@ -41,6 +41,7 @@ int main( int argc, char* argv[] )
         { "Logging Utils", t_logging_utils },
         { "Get Env Vars", t_get_env_vars },
         { "Model Filename Match", t_model_filename_match },
+        { "OpenIFS Current Step", t_oifs_current_step },
         { "WRF Datetime", t_wrf_datetime },
         { "WRF Current Step", t_wrf_current_step },
         { "WRF Check Model Success", t_wrf_check_model_success },

@@ -290,12 +290,14 @@ bool OpenIFSControl::get_current_step( int& current_step, const int total_steps 
 
     if ( fread_last_line( ifs_stat.string(), lastline ) ) {           // only returns true if lastline is read and changed.
         if ( oifs_parse_stat( lastline, current_step_text, 4 ) ) {    // iter updates
-            if ( !parse_int( current_step_text, current_step, err_msg ) ) {
+            int parsed_step = current_step;
+            if ( !parse_int( current_step_text, parsed_step, err_msg ) ) {
                 return false;
             }
-            if ( current_step < 0 || current_step > total_steps ) {
+            if ( parsed_step < 0 || parsed_step > total_steps ) {
                 return false;
             }
+            current_step = parsed_step;
             return true;
         }
     }

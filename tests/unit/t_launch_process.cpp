@@ -256,6 +256,28 @@ int t_launch_process()
         }
     }
 
+    // finish_task-style termination helper case.
+    set_test_env( kSleepEnv, "5000" );
+    test_count++;
+    child_process = launch_process( model_ctrl, project_path, slot_path, cmd, nthreads );
+    if ( !child_process_is_valid( child_process ) ) {
+        std::cerr << "  launch_process failed to start helper process (finish_task termination case)\n";
+    } else {
+        bool termination_requested = false;
+        std::string err_msg;
+        if ( terminate_child_process_if_active( child_process, 0, termination_requested, err_msg ) && termination_requested ) {
+            bool saw_running = false;
+            int exit_code = 0;
+            if ( wait_for_status( child_process, 3, 10, saw_running, exit_code ) && exit_code == -1 ) {
+                test_passed++;
+            } else {
+                std::cerr << "  finish_task termination helper did not reach terminated state (exit_code=" << exit_code << ")\n";
+            }
+        } else {
+            std::cerr << "  terminate_child_process_if_active failed or did not request termination: " << err_msg << "\n";
+        }
+    }
+
     // Suspend and resume case through the platform process-control seam.
     set_test_env( kSleepEnv, "5000" );
     test_count++;

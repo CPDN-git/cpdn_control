@@ -329,6 +329,39 @@ bool handle_boinc_client_status( ChildProcessHandle& child_process, BoincRuntime
 }
 
 
+bool terminate_child_process_if_active( ChildProcessHandle& child_process, int child_status, bool& termination_requested, std::string& err_msg )
+{
+    termination_requested = false;
+    err_msg.clear();
+
+    if ( !child_process_is_valid( child_process ) ) {
+        return true;
+    }
+
+    int exit_code = 0;
+    ChildProcessState process_state = poll_child_process( child_process, exit_code, err_msg );
+    if ( process_state == ChildProcessState::exited || process_state == ChildProcessState::terminated ) {
+        err_msg.clear();
+        return true;
+    }
+
+    const bool child_was_expected_active = ( child_status == 0 || child_status == 4 );
+    if ( process_state != ChildProcessState::running && process_state != ChildProcessState::suspended &&
+         !( process_state == ChildProcessState::unavailable && child_was_expected_active ) ) {
+        return true;
+    }
+
+    err_msg.clear();
+    if ( !terminate_child_process( child_process, err_msg ) ) {
+        return false;
+    }
+
+    termination_requested = true;
+    err_msg.clear();
+    return true;
+}
+
+
 /**
  * @brief Launches a child process to run the model executable.
  * 

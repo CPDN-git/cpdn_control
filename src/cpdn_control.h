@@ -107,6 +107,7 @@ int stage_and_unzip_app_file( const std::string&, const std::string&, const std:
 int check_child_status( ChildProcessHandle&, int, int& );
 bool handle_boinc_client_status( ChildProcessHandle&, BoincRuntime& );
 ChildProcessHandle launch_process( const ModelControl&, const std::string&, const std::string&, const std::string&, const std::string& );
+bool terminate_child_process_if_active( ChildProcessHandle&, int, bool&, std::string& );
 double model_frac_done( double, double, int );
 int move_result_file( const std::filesystem::path&, const std::filesystem::path&, const std::string& );
 int zip_and_delete( const std::string&, const std::vector<std::filesystem::path>& );

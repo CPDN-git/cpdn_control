@@ -499,6 +499,14 @@ static void banner( const BoincConfig& bc, const std::string& code_version )
  */
 static int finish_task( TaskState& tstate, int exit_code )
 {
+    bool child_termination_requested = false;
+    std::string child_cleanup_err;
+    if ( !terminate_child_process_if_active( tstate.child_process, tstate.child_status, child_termination_requested, child_cleanup_err ) ) {
+        std::cerr << "..Failed to terminate active child process during task shutdown: " << child_cleanup_err << '\n';
+    } else if ( child_termination_requested ) {
+        std::cerr << "..Task shutdown requested while child process is still active; terminating child process before boinc_finish()\n";
+    }
+
     close_child_process_handle( tstate.child_process );
     boinc_end_critical_section();    // in case we abort while in critical section (boinc api handles case if not in critical section).
     boinc_finish( exit_code );       // boinc_finish exits, no further code executed after this call (unless a dummy library is used).

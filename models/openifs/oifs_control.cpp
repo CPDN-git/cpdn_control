@@ -327,7 +327,8 @@ std::vector<std::string> OpenIFSControl::get_copyable_output_filenames( int curr
     // output_interval boundary. The controller-facing contract here is to return every
     // output filename that should exist and be safe to copy as of the current timestep.
     const int output_count = ( current_step / output_interval ) + 1;
-    output_files.reserve( static_cast<std::size_t>( output_count ) * 3 );
+    static const std::size_t file_count = get_output_filenames( 0 ).size();    // make static to only get size once
+    output_files.reserve( static_cast<std::size_t>( output_count ) * file_count );
 
     for ( int output_step = 0; output_step <= current_step; output_step += output_interval ) {
         auto step_files = get_output_filenames( output_step );

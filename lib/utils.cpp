@@ -698,45 +698,6 @@ void sleep_seconds( double seconds )
 }
 
 
-void record_step_delta( StepDeltaAverageWindow& window, int step_delta )
-{
-    if ( step_delta <= 0 ) {
-        return;
-    }
-
-    window.values[window.next_index] = step_delta;
-    window.next_index = ( window.next_index + 1 ) % StepDeltaAverageWindow::window_size;
-    if ( window.count < StepDeltaAverageWindow::window_size ) {
-        window.count++;
-    }
-}
-
-
-double average_step_delta( const StepDeltaAverageWindow& window )
-{
-    if ( window.count == 0 ) {
-        return 0.0;
-    }
-
-    int total = 0;
-    for ( std::size_t idx = 0; idx < window.count; ++idx ) {
-        total += window.values[idx];
-    }
-
-    return static_cast<double>( total ) / static_cast<double>( window.count );
-}
-
-
-bool step_delta_exceeds_average( const StepDeltaAverageWindow& window, int step_delta )
-{
-    if ( step_delta <= 0 || window.count < StepDeltaAverageWindow::window_size ) {
-        return false;
-    }
-
-    return static_cast<double>( step_delta ) > average_step_delta( window );
-}
-
-
 double reduce_loop_delay_seconds( double current_delay_seconds, double decrement_seconds, double minimum_delay_seconds )
 {
     if ( decrement_seconds <= 0.0 ) {

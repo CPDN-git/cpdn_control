@@ -34,7 +34,6 @@ add_executable(unit_tests unit_tests.cpp
                         t_logging_utils.cpp
                         t_get_env_vars.cpp
                         t_model_filename_match.cpp
-                        t_loop_delay_tuning.cpp
                         t_wrf_datetime.cpp
                         t_wrf_current_step.cpp
                         t_wrf_check_model_success.cpp
@@ -77,7 +76,6 @@ add_test( NAME ControlStartTest COMMAND unit_tests "Control Start" )
 add_test( NAME LoggingUtilsTest COMMAND unit_tests "Logging Utils" )
 add_test( NAME GetEnvVarsTest COMMAND unit_tests "Get Env Vars" )
 add_test( NAME ModelFilenameMatchTest COMMAND unit_tests "Model Filename Match" )
-add_test( NAME LoopDelayTuningTest COMMAND unit_tests "Loop Delay Tuning" )
 add_test( NAME WRFDatetimeTest COMMAND unit_tests "WRF Datetime" )
 add_test( NAME WRFCurrentStepTest COMMAND unit_tests "WRF Current Step" )
 add_test( NAME WRFCheckModelSuccessTest COMMAND unit_tests "WRF Check Model Success" )

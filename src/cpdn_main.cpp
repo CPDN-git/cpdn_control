@@ -57,9 +57,7 @@ void log_boinc_api_error( const char* api_name, int retval )
 
 // Constants
 constexpr std::string_view MODEL_CONFIG_FILE = "model_config.xml";    // not in use (yet?)
-constexpr int LOOP_DELAY_DEFAULT = 8;                                 // secs
-constexpr double LOOP_DELAY_MINIMUM = 0.5;                            // secs
-constexpr double LOOP_DELAY_DECREMENT = 0.1;                          // secs
+constexpr int LOOP_DELAY_DEFAULT = 5;                                 // secs
 
 
 // Data structures for capturing rich context for error reporting.
@@ -839,11 +837,12 @@ int main( int argc, char** argv )
     std::vector<fs::path> zfl;
     BoincRuntime bruntime;
 
-    StepDeltaAverageWindow step_delta_window;
     double loop_delay_seconds = static_cast<double>( LOOP_DELAY_DEFAULT );
     double next_delay_seconds = loop_delay_seconds;
 
     while ( tstate.child_status == 0 && tstate.model_completed == 0 ) {
+
+        // Wait for short period to avoid excessive filesystem activity.
         if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, next_delay_seconds ) &&
              !handle_boinc_client_status( tstate.child_process, bruntime ) ) {
             return finish_task( tstate, get_task_finish_code( tstate, bruntime ) );
@@ -859,26 +858,17 @@ int main( int argc, char** argv )
         }
         std::cerr << "DEBUG 852: tstate.current_step, last_completed_step " << tstate.current_step << ", " << tstate.last_completed_step << '\n';
 
-        // If the model step has updated, proceed with actions
+        // If the model step has updated, carry out various tasks.
         if ( observed_step != tstate.last_completed_step ) {
-
-            //  Adjust the main loop delay dynamically based on measured average time between model steps
-            //  We aim to catch each model step.
-            const int step_delta = observed_step - tstate.last_completed_step;
-
-            if ( step_delta_exceeds_average( step_delta_window, step_delta ) ) {
-                loop_delay_seconds = reduce_loop_delay_seconds( loop_delay_seconds, LOOP_DELAY_DECREMENT, LOOP_DELAY_MINIMUM );
-            }
-            record_step_delta( step_delta_window, step_delta );
 
             //  1:  Ask the model to do its own tasks on a step change.
             //  This can involve running a separate external diagnostics executable to create trickle data, or,
-            //  some cleanup of restarts for example.
+            //  some cleanup of restarts for example. Time it as it might be a significant delay.
 
-            const auto step_tasks_start = chrono::steady_clock::now();
+            const auto step_start = chrono::steady_clock::now();
             (void)model_ctrl->do_step_tasks( observed_step, bconfig.slot_path );
-            const double step_tasks_elapsed = chrono::duration<double>( chrono::steady_clock::now() - step_tasks_start ).count();
-            next_delay_seconds = std::max( LOOP_DELAY_MINIMUM, loop_delay_seconds - step_tasks_elapsed );
+            const double step_elapsed = chrono::duration<double>( chrono::steady_clock::now() - step_start ).count();
+            next_delay_seconds = std::max( 0.0, loop_delay_seconds - step_elapsed );
 
 
             //  2:  Ask the model which output files are currently safe to copy out of the slot directory.

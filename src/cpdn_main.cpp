@@ -57,9 +57,9 @@ void log_boinc_api_error( const char* api_name, int retval )
 
 // Constants
 constexpr std::string_view MODEL_CONFIG_FILE = "model_config.xml";    // not in use (yet?)
-constexpr int LOOP_DELAY_DEFAULT = 10;                                // secs
-constexpr double LOOP_DELAY_MINIMUM = 0.2;                            // secs
-constexpr double LOOP_DELAY_DECREMENT = 0.2;                          // secs
+constexpr int LOOP_DELAY_DEFAULT = 8;                                 // secs
+constexpr double LOOP_DELAY_MINIMUM = 0.5;                            // secs
+constexpr double LOOP_DELAY_DECREMENT = 0.1;                          // secs
 
 
 // Data structures for capturing rich context for error reporting.
@@ -909,7 +909,9 @@ int main( int argc, char** argv )
                 // Create an intermediate results zip file
                 zfl.clear();
 
-                std::cerr << "Model result upload step reached. Starting a new upload ..." << std::endl;
+                std::cerr << "Model result upload step reached. Starting a new upload: " << " obs_step: " << observed_step
+                          << ", last_upload_step: " << tstate.last_upload_step << ", upload_interval: " << tconfig.upload_interval
+                          << ", total_steps: " << total_steps << std::endl;
 
                 // *****  Critical section start  *****
                 boinc_begin_critical_section();
@@ -953,7 +955,8 @@ int main( int argc, char** argv )
             }
 
             tstate.last_completed_step = observed_step;
-        }
+
+        }    // end of if observed step changed
 
         //  5: Update progress file with current values
         if ( !progress_file.write( tstate, err_msg ) ) {

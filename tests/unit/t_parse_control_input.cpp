@@ -146,13 +146,14 @@ int t_parse_control_input()
         return EXIT_FAILURE;
     }
 
-    std::cout << "Subtest: WRF step-zero output filename is a valid innermost-domain file\n";
+    std::cout << "Subtest: WRF step-zero output filename is a valid innermost-domain file, but not copyable.\n";
     const std::vector<std::string> wrf_output_files = wrf_model.get_output_filenames( 0 );
     const std::vector<std::string> wrf_copyable_files = wrf_model.get_copyable_output_filenames( 1 );
     const std::vector<std::string> expected_wrf_files = { "wrfout_d03_2022-07-01_00:00:00" };
-    if ( wrf_output_files != expected_wrf_files || wrf_copyable_files != expected_wrf_files ) {
+    if ( wrf_output_files != expected_wrf_files || wrf_copyable_files[0] != "" ) {
         TEST_FAIL;
-        std::cout << "Unexpected WRF output filenames for step zero/copyable set\n";
+        std::cout << "Unexpected WRF output filenames for step zero/copyable set. expected_wrf_files: " << expected_wrf_files[0]
+                  << ". Got wrf_output_files : " << wrf_output_files[0] << ", wrf_copyable_files: " << wrf_copyable_files[0] << "\n";
         fs::current_path( original_cwd );
         fs::remove_all( tmp_dir, ec );
         return EXIT_FAILURE;

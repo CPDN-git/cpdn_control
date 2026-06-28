@@ -41,7 +41,7 @@
 
 namespace fs = std::filesystem;
 
-// Anonymous namespacw to give file-local internal linkage to helper functions: get_file_mtime, file_was_updated, and
+// Anonymous namespace to give file-local internal linkage to helper functions: get_file_mtime, file_was_updated, and
 // terminate_child_process in lib/utils.cpp. Without it, those functions would have external linkage by default,
 // meaning they would be visible outside that translation unit and could collide with similarly named helpers
 // elsewhere.The anonymous namespace makes it explicit that they are private implementation details of utils.cpp.

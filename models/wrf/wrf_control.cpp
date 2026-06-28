@@ -549,7 +549,7 @@ std::vector<std::string> WRFControl::get_output_filenames( int step ) const
 std::vector<std::string> WRFControl::get_copyable_output_filenames( int current_step ) const
 {
     std::vector<std::string> output_files;
-    if ( current_step <= 0 || output_interval <= 0 ) {
+    if ( current_step < 0 || output_interval <= 0 ) {
         return output_files;
     }
 

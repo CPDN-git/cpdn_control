@@ -636,6 +636,11 @@ int move_result_file( const fs::path& slot_path, const fs::path& temp_path, cons
 {
     int retval = 0;
 
+    if ( result.empty() || result.find( '\0' ) != std::string::npos ) {
+        std::cerr << "..move_result_file(). Invalid result filename from model control seam\n";
+        return 1;
+    }
+
     // Move result file to the temporary folder in the project directory
     fs::path result_file = slot_path / result;
     fs::path temp_file = temp_path / result;

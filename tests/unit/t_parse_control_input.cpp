@@ -112,6 +112,12 @@ int t_parse_control_input()
                                     " run_hours = 1,\n"
                                     " run_minutes = 0,\n"
                                     " run_seconds = 0,\n"
+                                    " start_year = 2022,\n"
+                                    " start_month = 7,\n"
+                                    " start_day = 1,\n"
+                                    " start_hour = 0,\n"
+                                    " start_minute = 0,\n"
+                                    " start_second = 0,\n"
                                     " history_interval = 9999, 9999, 60,\n"
                                     " frames_per_outfile = 1, 1, 24,\n"
                                     " restart_interval = 180,\n"
@@ -135,6 +141,18 @@ int t_parse_control_input()
         std::cout << "Unexpected WRF parse result:" << " ok=" << parsed.ok << ", timestep_seconds=" << parsed.timestep_seconds
                   << ", output_interval=" << parsed.output_interval << ", restart_interval=" << parsed.restart_interval
                   << ", total_steps=" << parsed.total_steps << ", forecast_length_time=" << parsed.forecast_length_time << "\n";
+        fs::current_path( original_cwd );
+        fs::remove_all( tmp_dir, ec );
+        return EXIT_FAILURE;
+    }
+
+    std::cout << "Subtest: WRF step-zero output filename is a valid innermost-domain file\n";
+    const std::vector<std::string> wrf_output_files = wrf_model.get_output_filenames( 0 );
+    const std::vector<std::string> wrf_copyable_files = wrf_model.get_copyable_output_filenames( 1 );
+    const std::vector<std::string> expected_wrf_files = { "wrfout_d03_2022-07-01_00:00:00" };
+    if ( wrf_output_files != expected_wrf_files || wrf_copyable_files != expected_wrf_files ) {
+        TEST_FAIL;
+        std::cout << "Unexpected WRF output filenames for step zero/copyable set\n";
         fs::current_path( original_cwd );
         fs::remove_all( tmp_dir, ec );
         return EXIT_FAILURE;

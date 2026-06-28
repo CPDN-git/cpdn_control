@@ -522,12 +522,25 @@ std::vector<std::string> WRFControl::get_output_filenames( int step ) const
 
     std::string timestamp( timestamp_buffer.data(), static_cast<std::size_t>( timestamp_len ) );
 
-    // Emit one output filename per WRF domain for the computed timestamp.
+    // Emit either all or one output filename per WRF domain for the computed timestamp.
+    auto all_domains = false;    // change to 'true' to emit all domains
+
     std::vector<std::string> output_filenames;
-    const int domain_count = max_domains;
-    output_filenames.reserve( static_cast<std::size_t>( domain_count ) );
-    for ( int i = 0; i < domain_count; ++i ) {
-        output_filenames.emplace_back( output_prefixes[static_cast<std::size_t>( i )] + timestamp );
+
+    if ( all_domains ) {
+        const int domain_count = max_domains;
+        output_filenames.reserve( static_cast<std::size_t>( domain_count ) );
+        for ( int i = 0; i < domain_count; ++i ) {
+            output_filenames.emplace_back( output_prefixes[static_cast<std::size_t>( i )] + timestamp );
+        }
+    } else {
+        // Output innermost domain only: WRF domains are numbered from 1, but the
+        // cached prefixes vector is zero-based.
+        const std::size_t domain_index = static_cast<std::size_t>( max_domains - 1 );
+        if ( domain_index >= output_prefixes.size() ) {
+            return {};
+        }
+        output_filenames.emplace_back( output_prefixes[domain_index] + timestamp );
     }
 
     return output_filenames;
@@ -535,10 +548,27 @@ std::vector<std::string> WRFControl::get_output_filenames( int step ) const
 
 std::vector<std::string> WRFControl::get_copyable_output_filenames( int current_step ) const
 {
-    // Stub controller seam for now: return the model output files considered safe to copy
-    // as of the current timestep. WRF will later use its namelist-driven output cadence and
-    // frames-per-file settings to decide how many complete files are ready.
-    return get_output_filenames( current_step );
+    std::vector<std::string> output_files;
+    if ( current_step < 0 || output_interval <= 0 ) {
+        return output_files;
+    }
+
+    // Return the model output files considered safe to copy as of the current timestep.
+    // Cached output_interval includes the 'frames_per_outfile', so this is the time
+    // an output file is complete.
+    const int output_count = ( current_step / output_interval ) + 1;
+    static const std::size_t file_count = get_output_filenames( 0 ).size();    // make static to only get size once
+    output_files.reserve( static_cast<std::size_t>( output_count ) * file_count );
+
+    for ( int output_step = 0; output_step <= current_step; output_step += output_interval ) {
+        auto step_files = get_output_filenames( output_step );
+        if ( step_files.empty() ) {
+            continue;
+        }
+        output_files.insert( output_files.end(), step_files.begin(), step_files.end() );
+    }
+
+    return output_files;
 }
 
 

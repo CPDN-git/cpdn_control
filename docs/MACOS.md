@@ -6,8 +6,9 @@ Current scope:
 - target Apple Silicon only
 - use the repo-local `vcpkg` BOINC dependency path first
 - keep `BOINC_DIR` as the manual fallback
-- add a manual GitHub Actions build first
-- do not run unit or functional tests in CI yet
+- keep the manual GitHub Actions build as the first-line validation path
+- run unit tests in CI
+- keep functional tests disabled in CI for now
 
 ## Current Status
 
@@ -18,9 +19,13 @@ Already in place:
 - `cmake/BoincConfig.cmake` already prefers `find_package(boinc CONFIG)` and allows shared BOINC libraries on Apple
 - `lib/cpdn_cpu_time.cpp` already has a macOS implementation using `proc_pid_rusage`
 - `tests/functional/CMakeLists.txt` already injects `DYLD_LIBRARY_PATH` when BOINC runtime libraries exist
-- the repo already has pinned `vcpkg` manifest metadata and repo-owned triplets for Linux and Windows
+- the repo already has pinned `vcpkg` manifest metadata and repo-owned triplets for Linux, Windows, and macOS
+- the repo now has the Apple Silicon `arm64-osx-cpdn` triplet checked in under `vcpkg/triplets/`
+- the repo now has a manual macOS GitHub Actions workflow at `.github/workflows/macos_build.yml`
+- that workflow bootstraps pinned `vcpkg`, installs BOINC through the repo-local manifest, builds `cpdn_zip`, configures the controller with `CPDN_REQUIRE_STATIC_BOINC=OFF`, builds `unit_tests`, and runs the full macOS unit test suite
+- the workflow uploads both logs and the built Apple controller artifact on success
 
-This means the first macOS porting step is mainly build and dependency validation rather than controller logic changes.
+This means the first macOS porting phase has moved beyond planning and into build/test validation with the current repo-owned workflow.
 
 ## Apple Platform Naming
 
@@ -85,22 +90,23 @@ Areas still needing real build validation:
   - the root [README.md](/home/glenn/github/cpdn_control/README.md) still says macOS is not yet ported
   - update that after the first successful Apple build
 
-## GitHub Actions Plan
+## GitHub Actions Status
 
-Add a separate manual-only workflow for the Apple Silicon port:
+The repo now has a separate manual-only Apple Silicon workflow:
 - `workflow_dispatch` only
-- arm64 macOS runner
-- bootstrap pinned `vcpkg`
-- install BOINC with the repo's `arm64-osx-cpdn` triplet
-- build `cpdn_zip`
-- configure and build `cpdn_control`
-- skip all tests for now
+- Apple Silicon GitHub-hosted runner input (`macos-14`, `macos-15`, or `macos-latest`)
+- bootstraps pinned `vcpkg`
+- installs BOINC with the repo's `arm64-osx-cpdn` triplet
+- builds `cpdn_zip`
+- configures and builds `cpdn_control`
+- runs the full unit test suite
+- keeps functional tests disabled for now
 
 Runner note:
 - the current workflow uses the standard GitHub-hosted Apple Silicon runner labels such as `macos-14`
 - if those labels are unavailable to the repository, use a self-hosted Apple Silicon runner instead
 
-## Proposed Apple Build Settings
+## Apple Build Settings
 
 Use these settings for the first Apple Silicon port attempt:
 
@@ -110,9 +116,16 @@ Use these settings for the first Apple Silicon port attempt:
 - `CPDN_BUILD_UNIT_TESTS=OFF`
 - `CPDN_BUILD_FUNCTIONAL_TESTS=OFF`
 
+Current workflow settings differ slightly from the original first-attempt plan:
+
+- `CPDN_BUILD_UNIT_TESTS=ON`
+- `CPDN_BUILD_FUNCTIONAL_TESTS=OFF`
+- `CPDN_REQUIRE_STATIC_BOINC=OFF`
+- `-DVCPKG_INSTALLED_DIR=<repo>/vcpkg_installed`
+
 ## Next Steps
 
-1. Add the repo-owned `arm64-osx-cpdn` overlay triplet.
-2. Add a manual-only GitHub Actions workflow for Apple Silicon.
-3. Run the workflow and inspect the BOINC package layout and CMake package export if the build fails.
-4. If the controller builds, update the root README to replace "Not yet ported" with the actual Apple build status.
+1. Keep the manual macOS workflow passing as BOINC, `vcpkg`, and runner images change.
+2. Decide when macOS functional tests are practical, especially around BOINC runtime library setup and test fixture expectations.
+3. Update the root README where it still undersells the current macOS build/test status.
+4. Decide whether the macOS workflow should remain manual-only or become a broader CI signal later.

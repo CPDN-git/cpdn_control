@@ -15,6 +15,8 @@ This repository builds the **CPDN controller** executable used to run/manage cli
   - Uses vendored CLI11 headers under `third_party/CLI11/`.
 - `src/cpdn_control.cpp`, `src/cpdn_control.h`
   - Core controller logic used by the release/debug executables and unit tests.
+  - BOINC API call sites in controller helpers now log the failing BOINC function name, numeric return code, and `boincerror(...)` string locally before returning control to the caller.
+  - Includes the child-process cleanup helper used by `finish_task(...)` to terminate an active model child before calling `boinc_finish(...)`.
 - `api/model_input_manifest.h`
   - Shared manifest/context types for model-declared BOINC input archives.
 - `api/model_control.h`
@@ -26,6 +28,7 @@ This repository builds the **CPDN controller** executable used to run/manage cli
   - Model-specific helpers/implementations.
   - `models/test/` contains the `test_model` and controller glue used by functional tests.
   - `models/openifs/` contains OpenIFS helper utilities.
+  - `models/wrf/` contains WRF control, timestamp/step parsing, restart pruning, and WRF output filename generation.
   - Built as an **object library** (`cpdn_models`) and folded into the main `cpdn_control` library (see `models/CMakeLists.txt`).
 - `lib/`
   - Shared utilities (filesystem helpers, CPU-time helpers, etc).
@@ -210,6 +213,13 @@ Notes:
 - `TaskState::last_upload_step` is the last model step already covered by an upload interval.
 - The progress file now writes `last_completed_step` and `last_upload_step`.
 
+## WRF Output Filename Semantics
+
+- `WRFControl::get_output_filenames(step)` currently emits the innermost-domain output file only, not all WRF domains.
+- The innermost domain is the highest configured WRF domain number (`max_dom`), but the cached prefix vector is zero-based. Preserve that distinction when editing filename generation.
+- `WRFControl::get_copyable_output_filenames(current_step)` returns every WRF output filename considered safe to copy as of the observed model step, including the initial step-0 output set when applicable.
+- Defensive filtering of empty per-step filename lists is acceptable at the controller seam, but the model controller remains responsible for generating valid output filenames.
+
 ## CPDN Filename Metadata
 
 - The controller still needs CPDN task metadata on the command line to resolve downloaded filenames before the model input is parsed.
@@ -229,16 +239,27 @@ Notes:
 - Do not overload `child_status` with BOINC meanings such as quit, abort, suspend, or no-heartbeat.
 - `sleep_with_boinc_poll(...)` in `src/cpdn_main.cpp` is intended to poll BOINC state only. It should not directly stop, resume, or kill the child process.
 - `handle_boinc_client_status(...)` in `src/cpdn_control.cpp` is the side-effecting BOINC handler. It may stop, resume, or kill the child based on `BoincRuntime::client_status`.
+- `finish_task(...)` in `src/cpdn_main.cpp` now performs child-process cleanup as well: if the model child is still active, it should log that fact, terminate the child, then call `boinc_finish(...)`.
+- Do not assume a non-BOINC controller error implies the child is already gone. If the controller is exiting after launch, preserve the invariant that the model child must not be left running.
 - In `main()`, prefer the explicit sequence:
   - call `boinc_get_status(&bruntime.client_status)`
   - inspect or poll for a BOINC state change
   - call `handle_boinc_client_status(...)` if action is required
-  - derive the controller exit via `task_finish(...)`, which calls `boinc_finish(...)`
+  - derive the controller exit via `finish_task(...)`, which terminates any active child then calls `boinc_finish(...)`
 - If this area is refactored further, preserve the separation of responsibilities:
   - polling BOINC state
   - applying BOINC-driven process control
   - tracking child exit state
   - deciding the final controller exit code
+
+## BOINC API Error Reporting
+
+- When a `boinc_*` API call returns a non-zero error code, prefer logging the failure immediately at that call site with:
+  - the BOINC function name
+  - the numeric return code
+  - the `boincerror(...)` string
+- Keep that low-level BOINC error logging local to the helper making the call. Higher-level code may still add context or decide the task outcome, but should not be forced to reconstruct the BOINC error text itself.
+- This convention currently applies to controller BOINC setup, BOINC filename resolution, upload submission/status, result-file copying, and trickle submission.
 
 ## Repo conventions for AI-assisted changes
 

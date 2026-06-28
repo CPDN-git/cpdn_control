@@ -2,7 +2,7 @@
 
 Target: Windows 10+, x86_64, MSVC/Visual Studio.
 
-This note tracks the current state of the Windows port after the recent controller refactors. The repo now has a usable Windows build workflow and a platform-specific child-process seam, but it is still not ready for a full Windows BOINC runtime.
+This note tracks the current state of the Windows port after the recent controller refactors. The repo now has a usable Windows build-and-unit-test workflow, a platform-specific child-process seam, and a real `vcpkg` BOINC dependency path, but it is still not yet validated as a full Windows BOINC runtime end-to-end.
 
 ## Current status
 
@@ -27,7 +27,7 @@ Already in place:
 
 ## Windows BOINC Provisioning
 
-The current Windows workflow is still not a full runtime-validation job, but it now uses a real BOINC dependency path and is configured to run the Windows unit tests.
+The current Windows workflow is still not a full runtime-validation job, but it now uses a real BOINC dependency path and runs the Windows unit tests.
 
 Current Windows dependency path:
 
@@ -82,12 +82,11 @@ The obsolete `process_env_overrides()` testing path has been removed. Model envi
 
 ## Remaining Windows Blockers
 
-### 1. Full Windows runtime has not yet been validated with real BOINC libraries
+### 1. Full Windows runtime has not yet been validated end-to-end under a real BOINC task environment
 
 The current workflow now compiles and runs unit tests against a real BOINC package, but it still does not prove:
 
-- link/runtime behavior against real Windows BOINC headers/libs
-- BOINC DLL discovery and execution environment
+- BOINC DLL discovery and execution environment in a real deployed task layout
 - end-to-end controller behavior under a Windows BOINC-style task layout
 - runtime behavior of the new Job Object suspend/resume and tree-termination logic under real model workloads
 
@@ -98,25 +97,25 @@ To move beyond the current build-only validation:
 
 ### 2. Some test coverage is still not Windows-ready
 
-The launch/status unit test has been refactored to use the new cross-platform process-control seam, but broader Windows test support is still incomplete.
+The launch/status unit test has been refactored to use the new cross-platform process-control seam, and the workflow now runs the Windows unit suite, but broader Windows test support is still incomplete.
 
 Known follow-up areas:
 
-- the full Windows unit-test run now needs GitHub Actions validation after re-enabling `RunProcessWithTimeoutTest`
+- keep watching the full Windows unit-test run in GitHub Actions for regressions
 - several tests still use Unix-centric assumptions or helpers directly
 - the Windows workflow still disables functional tests
 - the threaded suspend/resume and descendant-process termination paths need Windows-specific runtime coverage, not just compile success
 
 ## Next practical milestones
 
-The current Windows workflow is still useful as a development build/test path:
+The current Windows workflow is useful as a development build/test path:
 
 - trigger it manually
 - inspect the uploaded build logs
 - fix the next MSVC compile error
 - repeat
 
-Do not promote it to required CI yet.
+Do not promote it to required CI yet unless the Windows runtime story becomes materially stronger.
 
 Recommended near-term order:
 

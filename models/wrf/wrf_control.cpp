@@ -523,7 +523,7 @@ std::vector<std::string> WRFControl::get_output_filenames( int step ) const
     std::string timestamp( timestamp_buffer.data(), static_cast<std::size_t>( timestamp_len ) );
 
     // Emit either all or one output filename per WRF domain for the computed timestamp.
-    auto all_domains = false;    // change to 'true' to emit all domains
+    auto all_domains = false;    // CHANGE to 'true' to emit all domains
 
     std::vector<std::string> output_filenames;
 
@@ -549,7 +549,7 @@ std::vector<std::string> WRFControl::get_output_filenames( int step ) const
 std::vector<std::string> WRFControl::get_copyable_output_filenames( int current_step ) const
 {
     std::vector<std::string> output_files;
-    if ( current_step < 0 || output_interval <= 0 ) {
+    if ( current_step <= 0 || output_interval <= 0 ) {
         return output_files;
     }
 
@@ -560,7 +560,12 @@ std::vector<std::string> WRFControl::get_copyable_output_filenames( int current_
     static const std::size_t file_count = get_output_filenames( 0 ).size();    // make static to only get size once
     output_files.reserve( static_cast<std::size_t>( output_count ) * file_count );
 
-    for ( int output_step = 0; output_step <= current_step; output_step += output_interval ) {
+    // WRF will write multiple steps, defined by frames_per_outfile, into a single netcdf domain specific file.
+    // Each output is every 'history_interval' (in mins).  The code in parse_control_input sets
+    // output_interval to be the number of steps before a new output file is started.
+    // Note that WRF does not create a separate file for step 0 (initial fields). Step 0 is written into
+    // the first netcdf file.
+    for ( int output_step = output_interval; output_step <= current_step; output_step += output_interval ) {
         auto step_files = get_output_filenames( output_step );
         if ( step_files.empty() ) {
             continue;

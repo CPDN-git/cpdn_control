@@ -5,6 +5,7 @@
 
 #include "trickle_handler.h"
 #include "boinc/boinc_api.h"
+#include "boinc/error_numbers.h"
 #include <cctype>
 #include <chrono>
 #include <fmt/format.h>
@@ -12,6 +13,15 @@
 #include <iostream>
 #include <thread>
 #include <vector>
+
+namespace {
+
+void log_boinc_api_error( const char* api_name, int retval )
+{
+    std::cerr << ".." << api_name << " failed (" << retval << "): " << boincerror( retval ) << '\n';
+}
+
+}    // namespace
 
 
 TrickleHandler::TrickleHandler( const std::string& wu, const std::string& result_base, const std::string& slot )
@@ -130,7 +140,7 @@ int TrickleHandler::process_trickle( double current_cpu_time, int current_step )
     std::this_thread::sleep_for( std::chrono::milliseconds( 10 ) );
 
     if ( retval != 0 ) {
-        std::cerr << "Error sending trickle, boinc_send_trickle_up returned: " << retval << "\n";
+        log_boinc_api_error( "boinc_send_trickle_up", retval );
     }
     return retval;
 }

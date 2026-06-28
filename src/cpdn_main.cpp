@@ -39,6 +39,15 @@
 namespace chrono = std::chrono;
 namespace fs = std::filesystem;
 
+namespace {
+
+void log_boinc_api_error( const char* api_name, int retval )
+{
+    std::cerr << ".." << api_name << " failed (" << retval << "): " << boincerror( retval ) << '\n';
+}
+
+}    // namespace
+
 
 // Define the code version if not defined at compile time with -D option.
 #ifndef CODE_VERSION
@@ -321,6 +330,7 @@ static UploadSendResult zip_and_send_upload( const BoincConfig& bconfig, BoincRu
     std::string upload_name = result.logical_upload_name;
     int upload_ret = boinc_upload_file( upload_name );
     if ( upload_ret != 0 ) {
+        log_boinc_api_error( "boinc_upload_file", upload_ret );
         result.ok = false;
         result.error_step = "boinc_upload_file";
         result.error_code = upload_ret;
@@ -330,6 +340,7 @@ static UploadSendResult zip_and_send_upload( const BoincConfig& bconfig, BoincRu
 
     int upload_status_ret = boinc_upload_status( upload_name );
     if ( upload_status_ret != 0 ) {
+        log_boinc_api_error( "boinc_upload_status", upload_status_ret );
         result.ok = false;
         result.error_step = "boinc_upload_status";
         result.error_code = upload_status_ret;
@@ -425,7 +436,7 @@ static std::string get_result_base_name( const BoincConfig& bconfig, const TaskC
         std::string resolved_name;
         int retval = boinc_resolve_filename_s( "upload_file_0.zip", resolved_name );
         if ( retval ) {
-            std::cerr << "..boinc_resolve_filename failed" << std::endl;
+            log_boinc_api_error( "boinc_resolve_filename_s", retval );
             return base_name;
         }
 

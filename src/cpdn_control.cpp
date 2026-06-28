@@ -26,6 +26,7 @@
 
 #include "boinc/boinc_api.h"
 #include "boinc/diagnostics.h"
+#include "boinc/error_numbers.h"
 #include "boinc/md5_file.h"
 #include "boinc/util.h"
 
@@ -40,6 +41,11 @@ namespace fs = std::filesystem;
 #ifndef CPDN_PLATFORM
 #define CPDN_PLATFORM "unknown-platform"
 #endif
+
+static void log_boinc_api_error( const char* api_name, int retval )
+{
+    std::cerr << ".." << api_name << " failed (" << retval << "): " << boincerror( retval ) << '\n';
+}
 
 static std::string lowercase_copy( std::string value )
 {
@@ -104,10 +110,20 @@ static int child_status_from_process_state( ChildProcessState process_state, int
  */
 int init_boinc( BoincConfig& config )
 {
+    int retval = 0;
 
     //boinc_init_diagnostics(BOINC_DIAG_DEFAULTS);
-    boinc_init();
-    boinc_parse_init_data_file();
+    retval = boinc_init();
+    if ( retval ) {
+        log_boinc_api_error( "boinc_init", retval );
+        return retval;
+    }
+
+    retval = boinc_parse_init_data_file();
+    if ( retval ) {
+        log_boinc_api_error( "boinc_parse_init_data_file", retval );
+        return retval;
+    }
 
     // Get BOINC task and app data
     // For more info on this structure see boinc/lib/app_ipc.h
@@ -165,7 +181,11 @@ int init_boinc( BoincConfig& config )
     options.send_status_msgs = false;         // If set, the program will report its CPU time and fraction done to the client.
                                               // Set in worker programs.
 
-    return boinc_init_options( &options );
+    retval = boinc_init_options( &options );
+    if ( retval ) {
+        log_boinc_api_error( "boinc_init_options", retval );
+    }
+    return retval;
 }
 
 
@@ -417,6 +437,7 @@ bool resolve_boinc_input_file( const fs::path& logical_file, fs::path& physical_
     std::string resolved = logical_file.string();
     int retval = boinc_resolve_filename_s( logical_file.string().c_str(), resolved );
     if ( retval ) {
+        log_boinc_api_error( "boinc_resolve_filename_s", retval );
         if ( error_msg ) {
             *error_msg = "boinc_resolve_filename_s() failed: " + std::string( boincerror( retval ) );
         }
@@ -681,6 +702,9 @@ int move_result_file( const fs::path& slot_path, const fs::path& temp_path, cons
     if ( fs::exists( result_file ) ) {
         std::cerr << "Moving result file: " << result_file.filename() << " to projects directory.\n";
         retval = boinc_copy( result_file.string().c_str(), temp_file.string().c_str() );
+        if ( retval ) {
+            log_boinc_api_error( "boinc_copy", retval );
+        }
 
         // If result file has been successfully copied over, remove it from slots directory
         if ( !retval ) {

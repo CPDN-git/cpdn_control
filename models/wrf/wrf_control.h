@@ -69,6 +69,11 @@ class WRFControl : public ModelControl {
     //  We support a maximum of max_dom_allowed nests; in practise 3 is usually the max.
     static constexpr int max_dom_allowed = 3;
 
+    struct RestartSet {
+        std::string datetime;
+        std::vector<bool> domains_present;
+    };
+
     // Private helper variables
 
     // WRF control namelist file
@@ -88,9 +93,17 @@ class WRFControl : public ModelControl {
     mutable int max_domains = 0;
     mutable std::vector<std::string> output_prefixes;
     mutable std::vector<std::string> restart_prefixes;
+    mutable std::vector<RestartSet> restart_sets;
+    mutable bool restart_scan_cached = false;
+    mutable bool cached_restart_exists = false;
+    mutable fs::path cached_restart_scan_dir;
+    mutable int cached_restart_scan_max_domains = 0;
 
     // Private class helper functions
     bool read_validated_max_domains( int& parsed_max_domains, std::string& err_msg ) const;
     bool ensure_domain_prefixes_initialized() const;
     void set_domain_prefixes( int domain_count ) const;
+    void invalidate_restart_scan_cache() const;
+    const RestartSet* find_latest_valid_restart_set() const;
+    bool ensure_restart_flag_enabled() const;
 };

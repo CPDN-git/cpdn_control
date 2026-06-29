@@ -343,6 +343,27 @@ Comparison against the previous `main()` refactor point:
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `src/cpdn_main.cpp::main()` | 66 | 66 | `0` | 307 | 307 | `0` |
 
+## After moving WRF restart-state ownership into setup/cache helpers
+
+Measured on 2026-06-29 after:
+
+- moving WRF restart scan state out of `restart_exists()` locals and onto the `WRFControl` instance
+- making `setup()` own `namelist.input` restart-flag updates
+- implementing read-only `parse_restart()` against cached restart scan state
+
+| File | Function | `pmccabe` | `lizard` CCN | `lizard` NLOC | Notes |
+| --- | --- | ---: | ---: | ---: | --- |
+| `models/wrf/wrf_control.cpp` | `WRFControl::restart_exists()` | 17 | 17 | 55 | Slightly reduced after moving persistent restart state into the model instance |
+| `models/wrf/wrf_control.cpp` | `WRFControl::ensure_restart_flag_enabled()` | 17 | 17 | 73 | New helper now owns all WRF namelist restart-flag mutation |
+| `models/wrf/wrf_control.cpp` | `WRFControl::parse_restart()` | 8 | 8 | 41 | Read-only cached restart timestamp to step conversion |
+| `models/wrf/wrf_control.cpp` | `WRFControl::setup()` | 3 | 3 | 14 | Reduced to restart-state orchestration plus helper delegation |
+
+Comparison against the previous WRF restart point:
+
+| Function | Prior `pmccabe` | Current `pmccabe` | Change | Prior `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `models/wrf/wrf_control.cpp::restart_exists()` | 18 | 17 | -1 (`-5.6%`) | 61 | 55 | -6 (`-9.8%`) |
+
 ## Current observations
 
 - `main()` is still the dominant complexity hotspot, but it is materially smaller than the original baseline.

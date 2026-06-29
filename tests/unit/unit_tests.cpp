@@ -44,6 +44,7 @@ int main( int argc, char* argv[] )
         { "OpenIFS Current Step", t_oifs_current_step },
         { "WRF Datetime", t_wrf_datetime },
         { "WRF Current Step", t_wrf_current_step },
+        { "WRF Parse Restart", t_wrf_parse_restart },
         { "WRF Check Model Success", t_wrf_check_model_success },
         { "WRF Restart Pruning", t_wrf_restart_pruning },
         // Add new test functions here! Remember previous trailing comma!

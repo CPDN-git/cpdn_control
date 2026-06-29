@@ -1094,8 +1094,8 @@ int main( int argc, char** argv )
     boinc_end_critical_section();
 
     // Delay to ensure all files are flushed to disk before exiting
-    std::cerr << "Waiting for file operations to complete...(90 secs)" << std::endl;
-    if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 90 ) ) {
+    std::cerr << "Waiting for file operations to complete...(60 secs)" << std::endl;
+    if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 60 ) ) {
         if ( !handle_boinc_client_status( tstate.child_process, bruntime ) ) {
             return finish_task( tstate, get_task_finish_code( tstate, bruntime ) );
         }

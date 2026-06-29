@@ -57,9 +57,8 @@ class WRFControl : public ModelControl {
 
     ModelControlInputData parse_control_input() const override;
 
-    // TODO: check how WRF handles restarts.
     bool restart_exists() const override;
-    bool parse_restart( std::string& step, std::string& time ) const override;
+    bool parse_restart( std::string& step ) const override;
 
     // Delete copy constructor and assignment operator
     WRFControl( const WRFControl& ) = delete;

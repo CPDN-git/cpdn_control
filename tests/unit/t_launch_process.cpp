@@ -41,10 +41,9 @@ class LaunchProcessModelControl : public ModelControl {
     void print_logs( const int ) const override {}
     bool check_model_success() const override { return true; }
     bool restart_exists() const override { return false; }
-    bool parse_restart( std::string& step, std::string& time ) const override
+    bool parse_restart( std::string& step ) const override
     {
         step.clear();
-        time.clear();
         return false;
     }
     ModelInputManifest get_input_manifest( const std::string& ) const override { return {}; }

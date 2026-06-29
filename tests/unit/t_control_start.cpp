@@ -24,7 +24,7 @@ class FakeModelControl : public ModelControl {
     void print_logs( const int ) const override {}
     bool check_model_success() const override { return true; }
     bool restart_exists() const override { return restart_file_exists; }
-    bool restart_ctl_read( std::string& step, std::string& time ) const override
+    bool parse_restart( std::string& step, std::string& time ) const override
     {
         step = restart_step;
         time = restart_time;

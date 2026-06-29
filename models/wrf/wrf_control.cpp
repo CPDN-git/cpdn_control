@@ -882,10 +882,10 @@ bool WRFControl::restart_exists() const
 
 
 /**
- * @brief  WRF doesn't have a separate namelist file for restart control.
+ * @brief  WRF does not expose separate restart metadata for the controller to parse.
  *         TODO. See cpdn_main for what's needed here.
  */
-bool WRFControl::restart_ctl_read( std::string& step, std::string& time ) const
+bool WRFControl::parse_restart( std::string& step, std::string& time ) const
 {
     step.clear();
     time.clear();

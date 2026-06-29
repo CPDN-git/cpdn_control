@@ -49,7 +49,7 @@ At a minimum this means implementing:
 - `is_restart_filename(...)`
 - `get_log_filenames()`
 - `restart_exists()`
-- `restart_ctl_read(...)`
+- `parse_restart(...)`
 
 The new class will also need the necessary private member variables, for example:
 
@@ -125,14 +125,14 @@ For a model similar to OpenIFS, this will usually populate:
 The controller startup and run loop currently depend on model hooks for:
 
 - restart file existence
-- restart control file parsing
+- restart metadata parsing
 - current step polling
 - per-step output filename generation
 
 So `NewModel` must provide behaviour for:
 
 - `restart_exists()`
-- `restart_ctl_read(...)`
+- `parse_restart(...)`
 - `get_current_step(...)`
 - `get_output_filenames(...)`
 

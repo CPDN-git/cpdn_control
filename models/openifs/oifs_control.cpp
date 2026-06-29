@@ -357,9 +357,9 @@ bool OpenIFSControl::restart_exists() const { return fs::exists( rcf ); }
 
 
 /**
- * @brief Reads the OpenIFs restart control namelist file "rcf"
+ * @brief Parse restart metadata from the OpenIFS restart namelist file "rcf"
  */
-bool OpenIFSControl::restart_ctl_read( std::string& step, std::string& time ) const
+bool OpenIFSControl::parse_restart( std::string& step, std::string& time ) const
 {
     std::ifstream rcf_stream;
     bool ok = false;

@@ -83,9 +83,9 @@ class ModelControl {
     // Returns true if a valid model restart file exists.
     virtual bool restart_exists() const = 0;
 
-    // Allows for a restart 'control' file (possibly a namelist) to be read.
-    // TODO. It might be possible to eliminate this entirely; make it openifs specific only.
-    virtual bool restart_ctl_read( std::string& step, std::string& time ) const = 0;
+    // Parse model restart metadata, if the model exposes it separately.
+    // TODO. It might be possible to eliminate this entirely; make it OpenIFS specific only.
+    virtual bool parse_restart( std::string& step, std::string& time ) const = 0;
 
 
     // Virtual functions with default implementations. Overrides may be provided in derived classes, but are not required.

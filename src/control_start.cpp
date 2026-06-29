@@ -21,8 +21,8 @@ TaskStartupStateResult initialize_task_state_from_restart( ModelControl& model_c
     if ( progress_file_exists && !progress_file_is_empty && restart_exists ) {
         std::string restart_step;
         std::string restart_time;
-        if ( !model_ctrl.restart_ctl_read( restart_step, restart_time ) ) {
-            err_msg = "Reading the model restart control file failed";
+        if ( !model_ctrl.parse_restart( restart_step, restart_time ) ) {
+            err_msg = "Parsing model restart metadata failed";
             return { false, TaskStartupMode::invalid, "", true };
         }
 

@@ -36,7 +36,7 @@ Measured on 2026-04-09.
 | `src/cpdn_main.cpp` | `process_args()` | 10 | 10 | 49 | Secondary helper, moderate complexity |
 | `src/cpdn_control.cpp` | `resolve_boinc_input_file()` | 10 | 10 | 33 | Highest complexity in controller helpers |
 | `src/cpdn_control.cpp` | `handle_boinc_client_status()` | 9 | 9 | 42 | Moderate complexity |
-| `models/openifs/oifs_control.cpp` | `restart_ctl_read()` | 5 | 5 | 19 | Low complexity in model layer |
+| `models/openifs/oifs_control.cpp` | `parse_restart()` | 5 | 5 | 19 | Low complexity in model layer |
 
 ## After namelist parser extraction
 

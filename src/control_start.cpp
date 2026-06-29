@@ -81,3 +81,13 @@ TaskStartupStateResult initialize_task_state_from_restart( ModelControl& model_c
     err_msg = "Unexpected restart/progress-file state";
     return { false, TaskStartupMode::invalid, "", false };
 }
+
+
+void prepare_task_state_for_controller_run( TaskState& tstate )
+{
+    // The progress file may come from a previously completed controller process.
+    // Clear transient controller-run state before launching a new child so the main-loop gate is valid.
+    tstate.model_completed = 0;
+    tstate.current_step = tstate.last_completed_step;
+    tstate.current_cpu_time = tstate.prior_acc_cpu_time;
+}

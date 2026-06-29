@@ -17,3 +17,4 @@ struct TaskStartupStateResult {
 
 TaskStartupStateResult initialize_task_state_from_restart( ModelControl& model_ctrl, const ProgressFileHandler& progress_file,
                                                            int restart_interval_steps, TaskState& tstate, std::string& err_msg );
+void prepare_task_state_for_controller_run( TaskState& tstate );

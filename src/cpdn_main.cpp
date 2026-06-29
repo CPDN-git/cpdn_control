@@ -754,8 +754,10 @@ int main( int argc, char** argv )
         std::cerr << startup_state.log_message;
     }
 
-    tstate.current_step = tstate.last_completed_step;
-    tstate.current_cpu_time = tstate.prior_acc_cpu_time;
+    if ( tstate.model_completed != 0 ) {
+        std::cerr << "Resetting stale model_completed state from progress file before relaunch: " << tstate.model_completed << '\n';
+    }
+    prepare_task_state_for_controller_run( tstate );
 
     // Update progress file with current values
     if ( !progress_file.write( tstate, err_msg ) ) {
@@ -839,6 +841,9 @@ int main( int argc, char** argv )
 
     double loop_delay_seconds = static_cast<double>( LOOP_DELAY_DEFAULT );
     double next_delay_seconds = loop_delay_seconds;
+
+    std::cerr << "Entering main loop with child_status=" << tstate.child_status << ", model_completed=" << tstate.model_completed
+              << ", current_step=" << tstate.current_step << ", last_completed_step=" << tstate.last_completed_step << '\n';
 
     while ( tstate.child_status == 0 && tstate.model_completed == 0 ) {
 

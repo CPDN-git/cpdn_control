@@ -77,6 +77,22 @@ bool write_progress_file( const fs::path& dir, int last_completed_step, int uplo
     return progress_file.write( task, err_msg );
 }
 
+
+bool write_progress_file_with_completion_state( const fs::path& dir, int last_completed_step, int model_completed, double current_cpu_time = 10.0,
+                                                double prior_acc_cpu_time = 5.0 )
+{
+    ProgressFileHandler progress_file( dir.string() );
+    TaskState task;
+    task.current_cpu_time = current_cpu_time;
+    task.prior_acc_cpu_time = prior_acc_cpu_time;
+    task.upload_file_number = 1;
+    task.last_completed_step = last_completed_step;
+    task.last_upload_step = 0;
+    task.model_completed = model_completed;
+    std::string err_msg;
+    return progress_file.write( task, err_msg );
+}
+
 }    // namespace
 
 
@@ -239,6 +255,39 @@ int t_control_start()
             std::cout << "Unexpected missing-progress result: " << err_msg << "\n";
             return EXIT_FAILURE;
         }
+        std::error_code ec;
+        fs::remove_all( dir, ec );
+    }
+
+    std::cout << "Subtest: prepare_task_state_for_controller_run clears stale completion state from restart progress\n";
+    {
+        const fs::path dir = make_temp_dir();
+        FakeModelControl model_ctrl;
+        model_ctrl.restart_file_exists = true;
+        model_ctrl.restart_step = "13";
+        ProgressFileHandler progress_file( dir.string() );
+        TaskState tstate;
+
+        if ( !write_progress_file_with_completion_state( dir, 13, 1, 17.5, 17.5 ) ) {
+            TEST_FAIL;
+            std::cout << "Unable to write completed progress file\n";
+            return EXIT_FAILURE;
+        }
+
+        auto result = initialize_task_state_from_restart( model_ctrl, progress_file, restart_interval_steps, tstate, err_msg );
+        if ( !result.ok || tstate.model_completed != 1 ) {
+            TEST_FAIL;
+            std::cout << "Unexpected restart bootstrap result when loading completed progress state\n";
+            return EXIT_FAILURE;
+        }
+
+        prepare_task_state_for_controller_run( tstate );
+        if ( tstate.model_completed != 0 || tstate.current_step != tstate.last_completed_step || tstate.current_cpu_time != tstate.prior_acc_cpu_time ) {
+            TEST_FAIL;
+            std::cout << "Transient controller state was not reset correctly after restart bootstrap\n";
+            return EXIT_FAILURE;
+        }
+
         std::error_code ec;
         fs::remove_all( dir, ec );
     }

@@ -10,7 +10,9 @@
 #include <cctype>
 #include <cstdio>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <set>
 #include <string>
 
@@ -247,6 +249,44 @@ bool extract_wrf_restart_timestamp( std::string_view filename, const std::vector
     return false;
 }
 
+
+std::string build_repeated_wrf_start_value_list( int value, int width, int domain_count )
+{
+    std::ostringstream rhs_stream;
+
+    for ( int domain_index = 0; domain_index < domain_count; ++domain_index ) {
+        if ( domain_index > 0 ) {
+            rhs_stream << ", ";
+        }
+        rhs_stream << std::setw( width ) << std::setfill( '0' ) << value;
+    }
+    rhs_stream << ',';
+
+    return rhs_stream.str();
+}
+
+
+std::string replace_namelist_rhs_preserving_comment( const std::string& line, const std::string& rhs )
+{
+    const auto equals_pos = line.find( '=' );
+    if ( equals_pos == std::string::npos ) {
+        return line;
+    }
+
+    const auto comment_pos = line.find( '!', equals_pos + 1 );
+    const std::string comment_suffix = comment_pos == std::string::npos ? std::string() : line.substr( comment_pos );
+
+    std::string updated_line = line.substr( 0, equals_pos + 1 );
+    updated_line += ' ';
+    updated_line += rhs;
+    if ( !comment_suffix.empty() ) {
+        updated_line += ' ';
+        updated_line += comment_suffix;
+    }
+
+    return updated_line;
+}
+
 }    // namespace
 
 
@@ -409,6 +449,8 @@ void WRFControl::invalidate_restart_scan_cache() const
     cached_restart_exists = false;
     cached_restart_scan_dir.clear();
     cached_restart_scan_max_domains = 0;
+    restart_reference_start_datetime = {};
+    restart_reference_start_valid = false;
 }
 
 
@@ -462,8 +504,16 @@ const WRFControl::RestartSet* WRFControl::find_latest_valid_restart_set() const
 }
 
 
-bool WRFControl::ensure_restart_flag_enabled() const
+bool WRFControl::sync_restart_namelist( const RestartSet& restart_set ) const
 {
+    DateTime restart_datetime{};
+    if ( !parse_wrf_timestamp( restart_set.datetime, restart_datetime ) ) {
+        std::cerr << "Failed to parse cached WRF restart timestamp while updating namelist.input: " << restart_set.datetime << '\n';
+        return false;
+    }
+    DateTime original_start_datetime{};
+    int original_start_fields_parsed = 0;
+
     std::ifstream input_stream( control_input_file );
     if ( !input_stream.is_open() ) {
         std::cerr << "Failed to open WRF control file for restart update: " << control_input_file << '\n';
@@ -473,8 +523,9 @@ bool WRFControl::ensure_restart_flag_enabled() const
     std::vector<std::string> lines;
     std::string line;
     bool restart_key_found = false;
-    bool restart_changed = false;
+    bool file_changed = false;
     std::size_t time_control_line_index = std::string::npos;
+    int start_keys_updated = 0;
 
     while ( std::getline( input_stream, line ) ) {
         std::string updated_line = line;
@@ -500,11 +551,60 @@ bool WRFControl::ensure_restart_flag_enabled() const
                 const auto false_pos = updated_line.find( ".false." );
                 if ( false_pos != std::string::npos ) {
                     updated_line.replace( false_pos, 7, ".true." );
-                    restart_changed = true;
+                    file_changed = true;
+                    std::cerr << "Updating WRF restart flag to .true. in " << control_input_file << '\n';
                 } else if ( updated_line.find( ".true." ) == std::string::npos ) {
                     std::cerr << "WRF restart key found in " << control_input_file
                               << " but value is neither .false. nor .true.; refusing to modify it.\n";
                     return false;
+                }
+            } else {
+                int field_value = 0;
+                int field_width = 0;
+                int* original_field = get_wrf_start_datetime_field( original_start_datetime, lhs );
+
+                if ( lhs == "start_year" ) {
+                    field_value = restart_datetime.year;
+                    field_width = 4;
+                } else if ( lhs == "start_month" ) {
+                    field_value = restart_datetime.month;
+                    field_width = 2;
+                } else if ( lhs == "start_day" ) {
+                    field_value = restart_datetime.day;
+                    field_width = 2;
+                } else if ( lhs == "start_hour" ) {
+                    field_value = restart_datetime.hour;
+                    field_width = 2;
+                } else if ( lhs == "start_minute" ) {
+                    field_value = restart_datetime.minute;
+                    field_width = 2;
+                } else if ( lhs == "start_second" ) {
+                    field_value = restart_datetime.second;
+                    field_width = 2;
+                }
+
+                if ( field_width > 0 ) {
+                    if ( original_field != nullptr ) {
+                        std::string rhs_text;
+                        std::string err_msg;
+                        int parsed_original_value = 0;
+                        if ( extract_namelist_rhs_preserving_list( line, rhs_text ) &&
+                             parse_wrf_domain_list_value( rhs_text, 1, parsed_original_value, err_msg ) ) {
+                            *original_field = parsed_original_value;
+                            ++original_start_fields_parsed;
+                        } else {
+                            std::cerr << "Failed to parse original WRF " << lhs << " value before restart rewrite: "
+                                      << ( err_msg.empty() ? "unknown error" : err_msg ) << '\n';
+                        }
+                    }
+
+                    const std::string rhs = build_repeated_wrf_start_value_list( field_value, field_width, max_domains );
+                    const std::string rewritten_line = replace_namelist_rhs_preserving_comment( line, rhs );
+                    if ( rewritten_line != line ) {
+                        updated_line = rewritten_line;
+                        file_changed = true;
+                    }
+                    ++start_keys_updated;
                 }
             }
         }
@@ -520,14 +620,38 @@ bool WRFControl::ensure_restart_flag_enabled() const
         }
 
         lines.insert( lines.begin() + static_cast<std::ptrdiff_t>( time_control_line_index + 1 ), " restart = .true.," );
-        restart_changed = true;
+        file_changed = true;
         std::cerr << "Inserted missing WRF restart setting after &time_control in " << control_input_file << '\n';
     }
 
-    if ( !restart_changed ) {
-        std::cerr << "WRF restart setting already enabled in " << control_input_file << '\n';
+    if ( original_start_fields_parsed == 6 && datetime_duration_seconds( original_start_datetime, original_start_datetime ) == 0 ) {
+        restart_reference_start_datetime = original_start_datetime;
+        restart_reference_start_valid = true;
+        std::cerr << "Cached original WRF start datetime before restart rewrite for step recovery.\n";
+    } else {
+        restart_reference_start_valid = false;
+        std::cerr << "Failed to cache original WRF start datetime before restart rewrite; parsed " << original_start_fields_parsed
+                  << " start_* fields.\n";
+        return false;
+    }
+
+    std::cerr << "Prepared WRF restart namelist update for timestamp " << restart_set.datetime << "; updated " << start_keys_updated
+              << " start_* keys across " << max_domains << " domains.\n";
+
+    if ( !file_changed ) {
+        std::cerr << "WRF restart namelist already matches cached restart timestamp " << restart_set.datetime << " in " << control_input_file << '\n';
         return true;
     }
+
+    fs::path backup_path = control_input_file;
+    backup_path += ".bak";
+    std::error_code copy_ec;
+    fs::copy_file( control_input_file, backup_path, fs::copy_options::overwrite_existing, copy_ec );
+    if ( copy_ec ) {
+        std::cerr << "Failed to create WRF namelist backup " << backup_path << " before restart rewrite: " << copy_ec.message() << '\n';
+        return false;
+    }
+    std::cerr << "Created WRF namelist backup: " << backup_path << '\n';
 
     std::ofstream output_stream( control_input_file, std::ios::trunc );
     if ( !output_stream.is_open() ) {
@@ -544,10 +668,18 @@ bool WRFControl::ensure_restart_flag_enabled() const
 
     if ( !output_stream.good() ) {
         std::cerr << "Failed while writing updated WRF control file: " << control_input_file << '\n';
+        output_stream.close();
+        std::error_code restore_ec;
+        fs::copy_file( backup_path, control_input_file, fs::copy_options::overwrite_existing, restore_ec );
+        if ( restore_ec ) {
+            std::cerr << "Failed to restore WRF namelist from backup " << backup_path << ": " << restore_ec.message() << '\n';
+        } else {
+            std::cerr << "Restored WRF namelist from backup after write failure: " << backup_path << '\n';
+        }
         return false;
     }
 
-    std::cerr << "Enabled WRF restart setting in " << control_input_file << '\n';
+    std::cerr << "Updated WRF restart namelist for cached restart timestamp " << restart_set.datetime << " in " << control_input_file << '\n';
     return true;
 }
 
@@ -1012,6 +1144,10 @@ bool WRFControl::parse_restart( std::string& step ) const
         std::cerr << "WRF parse_restart() called without cached restart scan data. Restart scanning takes place in setup().\n";
         return false;
     }
+    if ( !restart_reference_start_valid ) {
+        std::cerr << "WRF parse_restart() cannot recover restart step because the pre-rewrite WRF start datetime was not cached in setup().\n";
+        return false;
+    }
     if ( timestep_seconds <= 0 ) {
         std::cerr << "WRF parse_restart() cannot convert restart timestamp because timestep_seconds is invalid: " << timestep_seconds << '\n';
         return false;
@@ -1029,9 +1165,9 @@ bool WRFControl::parse_restart( std::string& step ) const
         return false;
     }
 
-    const long long elapsed_seconds = datetime_duration_seconds( start_datetime, restart_datetime );
+    const long long elapsed_seconds = datetime_duration_seconds( restart_reference_start_datetime, restart_datetime );
     if ( elapsed_seconds < 0 ) {
-        std::cerr << "WRF parse_restart() computed a negative elapsed time from start datetime to restart timestamp "
+        std::cerr << "WRF parse_restart() computed a negative elapsed time from cached pre-rewrite start datetime to restart timestamp "
                   << latest_restart_set->datetime << '\n';
         return false;
     }
@@ -1074,8 +1210,8 @@ bool WRFControl::setup( const fs::path& slot_path ) const
         return false;
     }
 
-    std::cerr << "WRF setup() enabling restart mode using cached restart set at " << latest_restart_set->datetime << '\n';
-    return ensure_restart_flag_enabled();
+    std::cerr << "WRF setup() syncing restart namelist using cached restart set at " << latest_restart_set->datetime << '\n';
+    return sync_restart_namelist( *latest_restart_set );
 }
 
 

@@ -61,6 +61,18 @@ bool remove_files( const fs::path& dir, const std::vector<std::string>& filename
     return true;
 }
 
+
+bool namelist_contains_restart_start_time( const std::string& content, const std::string& expected_restart_line, const std::string& expected_year_line,
+                                           const std::string& expected_month_line, const std::string& expected_day_line,
+                                           const std::string& expected_hour_line, const std::string& expected_minute_line,
+                                           const std::string& expected_second_line )
+{
+    return content.find( expected_restart_line ) != std::string::npos && content.find( expected_year_line ) != std::string::npos &&
+           content.find( expected_month_line ) != std::string::npos && content.find( expected_day_line ) != std::string::npos &&
+           content.find( expected_hour_line ) != std::string::npos && content.find( expected_minute_line ) != std::string::npos &&
+           content.find( expected_second_line ) != std::string::npos;
+}
+
 }    // namespace
 
 int t_wrf_parse_restart()
@@ -177,10 +189,13 @@ int t_wrf_parse_restart()
         test_count++;
         std::string namelist_content;
         if ( wrf_model.setup( tmp_dir ) && read_text_file( tmp_dir / "namelist.input", namelist_content ) &&
-             namelist_content.find( "restart = .true." ) != std::string::npos ) {
+             namelist_contains_restart_start_time( namelist_content, "restart = .true.", "start_year = 2022, 2022, 2022,",
+                                                   "start_month = 07, 07, 07,", "start_day = 01, 01, 01,", "start_hour = 00, 00, 00,",
+                                                   "start_minute = 15, 15, 15,", "start_second = 00, 00, 00," ) &&
+             fs::exists( tmp_dir / "namelist.input.bak" ) ) {
             test_passed++;
         } else {
-            std::cout << "Expected setup() to enable restart in namelist.input\n";
+            std::cout << "Expected setup() to enable restart, rewrite start_* keys, and create a namelist backup\n";
         }
 
         const auto parsed = wrf_model.parse_control_input();
@@ -244,10 +259,14 @@ int t_wrf_parse_restart()
         test_count++;
         std::string namelist_content;
         if ( wrf_model.setup( tmp_dir ) && read_text_file( tmp_dir / "namelist.input", namelist_content ) &&
-             namelist_content.find( "&time_control\n restart = .true.," ) != std::string::npos ) {
+             namelist_content.find( "&time_control\n restart = .true.," ) != std::string::npos &&
+             namelist_contains_restart_start_time( namelist_content, "restart = .true.", "start_year = 2022, 2022, 2022,",
+                                                   "start_month = 07, 07, 07,", "start_day = 01, 01, 01,", "start_hour = 00, 00, 00,",
+                                                   "start_minute = 10, 10, 10,", "start_second = 00, 00, 00," ) &&
+             fs::exists( tmp_dir / "namelist.input.bak" ) ) {
             test_passed++;
         } else {
-            std::cout << "Expected setup() to insert restart = .true. directly after &time_control\n";
+            std::cout << "Expected setup() to insert restart = .true., rewrite start_* keys, and create a namelist backup\n";
         }
 
         const auto parsed = wrf_model.parse_control_input();
@@ -309,10 +328,11 @@ int t_wrf_parse_restart()
         test_count++;
         std::string namelist_content;
         if ( wrf_model.setup( tmp_dir ) && read_text_file( tmp_dir / "namelist.input", namelist_content ) &&
-             namelist_content.find( "restart = .false." ) != std::string::npos && namelist_content.find( "restart = .true." ) == std::string::npos ) {
+             namelist_content.find( "restart = .false." ) != std::string::npos && namelist_content.find( "restart = .true." ) == std::string::npos &&
+             namelist_content.find( "start_minute = 0, 0, 0," ) != std::string::npos && !fs::exists( tmp_dir / "namelist.input.bak" ) ) {
             test_passed++;
         } else {
-            std::cout << "Expected incomplete restart set to leave namelist.input unchanged\n";
+            std::cout << "Expected incomplete restart set to leave namelist.input unchanged and skip backup creation\n";
         }
 
         const auto parsed = wrf_model.parse_control_input();

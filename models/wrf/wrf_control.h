@@ -87,6 +87,8 @@ class WRFControl : public ModelControl {
     // Start date and time for the run read from namelist.input.
     // Needed to construct time periods for output and restart files.
     mutable DateTime start_datetime{};
+    mutable DateTime restart_reference_start_datetime{};
+    mutable bool restart_reference_start_valid = false;
 
     // Number of domains this WRF configuration is set up to run.
     // This is used to determine how many output and restart files to expect.
@@ -105,5 +107,5 @@ class WRFControl : public ModelControl {
     void set_domain_prefixes( int domain_count ) const;
     void invalidate_restart_scan_cache() const;
     const RestartSet* find_latest_valid_restart_set() const;
-    bool ensure_restart_flag_enabled() const;
+    bool sync_restart_namelist( const RestartSet& restart_set ) const;
 };

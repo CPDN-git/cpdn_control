@@ -364,6 +364,28 @@ Comparison against the previous WRF restart point:
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `models/wrf/wrf_control.cpp::restart_exists()` | 18 | 17 | -1 (`-5.6%`) | 61 | 55 | -6 (`-9.8%`) |
 
+## After extending WRF restart namelist sync to rewrite `start_*`
+
+Measured on 2026-06-29 after:
+
+- extending the WRF restart namelist helper to rewrite `start_year` / `start_month` / `start_day` / `start_hour` / `start_minute` / `start_second`
+- creating a `.bak` copy of `namelist.input` before rewrite and restoring from it on write failure
+- caching the pre-rewrite start datetime so `parse_restart()` can still recover the original step count
+
+| File | Function | `pmccabe` | `lizard` CCN | `lizard` NLOC | Notes |
+| --- | --- | ---: | ---: | ---: | --- |
+| `models/wrf/wrf_control.cpp` | `WRFControl::sync_restart_namelist()` | 34 | 34 | 156 | Restart namelist sync is now the dominant WRF hotspot after adding start-time rewrite and backup/restore handling |
+| `models/wrf/wrf_control.cpp` | `WRFControl::restart_exists()` | 17 | 17 | 54 | Essentially unchanged from the cached-scan refactor |
+| `models/wrf/wrf_control.cpp` | `WRFControl::parse_restart()` | 9 | 9 | 45 | Slightly larger because it now uses the cached pre-rewrite start datetime |
+| `models/wrf/wrf_control.cpp` | `WRFControl::setup()` | 3 | 3 | 14 | Still a thin orchestrator over cached restart state and model-owned namelist sync |
+
+Comparison against the previous WRF restart-sync point:
+
+| Function | Prior `pmccabe` | Current `pmccabe` | Change | Prior `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `models/wrf/wrf_control.cpp::restart_exists()` | 17 | 17 | `0` | 55 | 54 | -1 (`-1.8%`) |
+| `models/wrf/wrf_control.cpp::parse_restart()` | 8 | 9 | +1 (`+12.5%`) | 41 | 45 | +4 (`+9.8%`) |
+
 ## Current observations
 
 - `main()` is still the dominant complexity hotspot, but it is materially smaller than the original baseline.

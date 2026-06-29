@@ -995,7 +995,7 @@ int main( int argc, char** argv )
 
     // Do NOT execute a return until the final upload is done after the boinc_end_critical_section() below.
 
-    tstate.model_completed = 1;
+    tstate.model_completed = 1;    // completed does not mean it ran ok!
     if ( !progress_file.write( tstate, err_msg ) ) {
         std::cerr << "..Warning. Failed to write final progress file: " << err_msg << '\n';    // not a critical error.
     }
@@ -1003,7 +1003,7 @@ int main( int argc, char** argv )
     // Time delay to ensure model files are all flushed to disk
     std::cerr << "Waiting for file operations to complete...(60 secs)" << std::endl;
     if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 60 ) && !handle_boinc_client_status( tstate.child_process, bruntime ) ) {
-        return finish_task( tstate, get_task_finish_code( tstate, bruntime ) );
+        return finish_task( tstate, get_task_finish_code( tstate, bruntime ) );    // boinc asked us to die; should we delay??
     }
 
     tstate.model_success = model_ctrl->check_model_success();

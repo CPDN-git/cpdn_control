@@ -12,8 +12,8 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <sstream>
 #include <set>
+#include <sstream>
 #include <string>
 
 
@@ -299,30 +299,30 @@ std::string replace_namelist_rhs_preserving_comment( const std::string& line, co
 bool WRFControl::check_model_success() const
 {
     bool success = false;
-    fs::path stderr_out = "stderr.txt";
+    fs::path stdout_log = "stdout.txt";
     constexpr std::string_view success_marker = "wrf: SUCCESS COMPLETE WRF";
 
     // Check for 'success' string in WRF output.
-    // Output is normally written to stdout when running standalone but the control
-    // process will merge stdout onto stderr and the boinc init call redirects stderr
-    // to stderr.txt. Scan the full file because the success line may not be last.
+    // WRF writes this success marker to stdout. The controller redirects the model
+    // child stdout to stdout.txt in the slot directory. Scan the full file because
+    // the success line may not be last.
 
-    if ( fs::exists( stderr_out ) ) {
-        std::ifstream stderr_stream( stderr_out );
-        if ( !stderr_stream.is_open() ) {
-            std::cerr << "Warning! Could not open model log : " << stderr_out << '\n';
+    if ( fs::exists( stdout_log ) ) {
+        std::ifstream stdout_stream( stdout_log );
+        if ( !stdout_stream.is_open() ) {
+            std::cerr << "Warning! Could not open model log : " << stdout_log << '\n';
             return false;
         }
 
         std::string line{};
-        while ( std::getline( stderr_stream, line ) ) {
+        while ( std::getline( stdout_stream, line ) ) {
             if ( line.rfind( success_marker, 0 ) == 0 ) {
                 success = true;
                 break;
             }
         }
 
-        stderr_stream.close();
+        stdout_stream.close();
 
         if ( success ) {
             std::cerr << "Found: " << success_marker << ", in model log. Model succeeded." << '\n';
@@ -330,7 +330,7 @@ bool WRFControl::check_model_success() const
             std::cerr << "Didn't find: " << success_marker << ", in model log. Model failed." << '\n';
         }
     } else {
-        std::cerr << "Warning! Could not find model log : " << stderr_out << '\n';
+        std::cerr << "Warning! Could not find model log : " << stdout_log << '\n';
     }
 
     return success;
@@ -338,7 +338,7 @@ bool WRFControl::check_model_success() const
 
 
 /**
- * @brief WRF does not have any additional log files other than stdout & stderr.
+ * @brief WRF does not have any additional controller-managed log files to print here.
  */
 void WRFControl::print_logs( const int nlines ) const { (void)nlines; }
 
@@ -593,8 +593,8 @@ bool WRFControl::sync_restart_namelist( const RestartSet& restart_set ) const
                             *original_field = parsed_original_value;
                             ++original_start_fields_parsed;
                         } else {
-                            std::cerr << "Failed to parse original WRF " << lhs << " value before restart rewrite: "
-                                      << ( err_msg.empty() ? "unknown error" : err_msg ) << '\n';
+                            std::cerr << "Failed to parse original WRF " << lhs
+                                      << " value before restart rewrite: " << ( err_msg.empty() ? "unknown error" : err_msg ) << '\n';
                         }
                     }
 
@@ -687,7 +687,7 @@ bool WRFControl::sync_restart_namelist( const RestartSet& restart_set ) const
 /**
  * @brief Read the WRF log and return the latest completed model step.
  *
- * WRF writes progress messages into `stderr.txt`. We only care about lines that
+ * WRF writes progress messages into `stdout.txt`. We only care about lines that
  * begin with `Timing for main`, and from those we only use the records for
  * domain 1, which is the outermost grid and the one the controller tracks for
  * overall task progress.
@@ -705,8 +705,8 @@ bool WRFControl::get_current_step( int& step, const int total_steps ) const
         return false;
     }
 
-    // WRF writes its progress timing lines to stderr.txt in the slot directory.
-    std::ifstream log_stream( "stderr.txt" );
+    // WRF writes its progress timing lines to stdout.txt in the slot directory.
+    std::ifstream log_stream( "stdout.txt" );
     if ( !log_stream.is_open() ) {
         return false;
     }
@@ -857,8 +857,8 @@ bool WRFControl::is_restart_filename( std::string_view filename ) const
 }
 
 
-// No additional log files. WRF writes to stdout & stderr which the controller merge to stderr.txt
-std::vector<std::string> WRFControl::get_log_filenames() const { return {}; }
+// Upload WRF stdout.txt as the model runtime log; BOINC/controller stderr remains separate.
+std::vector<std::string> WRFControl::get_log_filenames() const { return { "stdout.txt" }; }
 
 
 // WRF doesn't need any separate subdirectories.

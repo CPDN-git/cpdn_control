@@ -3,6 +3,7 @@
 #include "process_control.h"
 
 #include <cerrno>
+#include <cstdio>
 #include <cstring>
 #include <map>
 #include <string>
@@ -86,7 +87,7 @@ bool child_process_is_valid( const ChildProcessHandle& child_process ) { return 
 
 
 ChildProcessHandle start_child_process( const std::string& executable, const std::string& working_dir, const ChildEnvironment& env_vars,
-                                       std::string& err_msg )
+                                        std::string& err_msg )
 {
     err_msg.clear();
     ChildProcessHandle child_process;
@@ -127,11 +128,14 @@ ChildProcessHandle start_child_process( const std::string& executable, const std
             _exit( 126 );
         }
 
-        // Fold child stdout into the inherited stderr stream so model output
-        // follows the BOINC stderr redirection path (for example stderr.txt).
-        if ( dup2( STDERR_FILENO, STDOUT_FILENO ) == -1 ) {
+        // Redirect only the model child stdout into stdout.txt in the slot directory.
+        // The inherited stderr stream remains unchanged so controller and BOINC stderr
+        // handling still apply there.
+        FILE* stdout_file = freopen( "stdout.txt", "a", stdout );
+        if ( stdout_file == nullptr ) {
             _exit( 122 );
         }
+        setvbuf( stdout_file, nullptr, _IOLBF, BUFSIZ );
 
         struct rlimit core_limits;
         core_limits.rlim_cur = core_limits.rlim_max = 0;

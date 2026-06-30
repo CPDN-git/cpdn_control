@@ -1,4 +1,4 @@
-// Unit tests for WRF success-marker detection in stderr output.
+// Unit tests for WRF success-marker detection in stdout output.
 //
 //  Glenn Carver, CPDN, 2026
 
@@ -55,7 +55,7 @@ int t_wrf_check_model_success()
     const std::string success_not_last_content = "Starting WRF run\n"
                                                  "wrf: SUCCESS COMPLETE WRF\n"
                                                  "Post-processing summary line\n";
-    if ( write_text_file( tmp_dir / "stderr.txt", success_not_last_content ) && wrf_model.check_model_success() ) {
+    if ( write_text_file( tmp_dir / "stdout.txt", success_not_last_content ) && wrf_model.check_model_success() ) {
         test_passed++;
     } else {
         std::cout << "Expected success when success marker is present before the final line\n";
@@ -65,7 +65,7 @@ int t_wrf_check_model_success()
     const std::string missing_success_content = "Starting WRF run\n"
                                                 "Intermediate output\n"
                                                 "Post-processing summary line\n";
-    if ( write_text_file( tmp_dir / "stderr.txt", missing_success_content ) && !wrf_model.check_model_success() ) {
+    if ( write_text_file( tmp_dir / "stdout.txt", missing_success_content ) && !wrf_model.check_model_success() ) {
         test_passed++;
     } else {
         std::cout << "Expected failure when success marker is absent\n";

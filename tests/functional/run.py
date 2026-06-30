@@ -99,21 +99,20 @@ def maybe_symlink(target: Path, link_path: Path):
         print(f"[run] Linked {link_path.name} -> {target.name}")
 
 
-def dump_slot_stderr(slot0_dir: Path) -> None:
-    stderr_path = slot0_dir / "stderr.txt"
-    print(f"[run] --- Begin {stderr_path} ---")
-    if not stderr_path.exists():
-        print("[run] (stderr.txt not found)")
-        print(f"[run] --- End {stderr_path} ---")
+def dump_slot_log(log_path: Path) -> None:
+    print(f"[run] --- Begin {log_path} ---")
+    if not log_path.exists():
+        print(f"[run] ({log_path.name} not found)")
+        print(f"[run] --- End {log_path} ---")
         return
     try:
-        content = stderr_path.read_text(encoding="utf-8", errors="replace")
+        content = log_path.read_text(encoding="utf-8", errors="replace")
         sys.stdout.write(content)
         if content and not content.endswith("\n"):
             sys.stdout.write("\n")
     except OSError as exc:
-        print(f"[run] Failed to read {stderr_path}: {exc}", file=sys.stderr)
-    print(f"[run] --- End {stderr_path} ---")
+        print(f"[run] Failed to read {log_path}: {exc}", file=sys.stderr)
+    print(f"[run] --- End {log_path} ---")
 
 
 def ensure_not_repo_root(workdir: Path) -> None:
@@ -209,11 +208,13 @@ def main():
     try:
         result = subprocess.run(controller_cmd, cwd=slot0_dir, env=env)
     except OSError as exc:
-        dump_slot_stderr(slot0_dir)
+        dump_slot_log(slot0_dir / "stderr.txt")
+        dump_slot_log(slot0_dir / "stdout.txt")
         print(f"[run] Failed to launch controller: {exc}", file=sys.stderr)
         raise SystemExit(127)
     else:
-        dump_slot_stderr(slot0_dir)
+        dump_slot_log(slot0_dir / "stderr.txt")
+        dump_slot_log(slot0_dir / "stdout.txt")
 
     if result.returncode != 0:
         print(f"[run] Controller failed with exit code {result.returncode}", file=sys.stderr)

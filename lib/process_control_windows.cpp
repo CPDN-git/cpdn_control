@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cwctype>
+#include <filesystem>
 #include <map>
 #include <set>
 #include <string>
@@ -17,17 +18,18 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include <Windows.h>
 #include <TlHelp32.h>
+#include <Windows.h>
 
 namespace {
+
+namespace fs = std::filesystem;
 
 struct WideCaseInsensitiveLess {
     bool operator()( const std::wstring& lhs, const std::wstring& rhs ) const
     {
-        return std::lexicographical_compare( lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), []( wchar_t left, wchar_t right ) {
-            return std::towlower( left ) < std::towlower( right );
-        } );
+        return std::lexicographical_compare( lhs.begin(), lhs.end(), rhs.begin(), rhs.end(),
+                                             []( wchar_t left, wchar_t right ) { return std::towlower( left ) < std::towlower( right ); } );
     }
 };
 
@@ -64,16 +66,10 @@ bool parse_env_entry( const std::string& env_entry, std::string& name, std::stri
 }
 
 
-bool is_valid_env_name( const std::string& name )
-{
-    return !name.empty() && name.find( '=' ) == std::string::npos && !contains_embedded_nul( name );
-}
+bool is_valid_env_name( const std::string& name ) { return !name.empty() && name.find( '=' ) == std::string::npos && !contains_embedded_nul( name ); }
 
 
-std::string get_windows_error_message( DWORD error_code )
-{
-    return std::system_category().message( static_cast<int>( error_code ) );
-}
+std::string get_windows_error_message( DWORD error_code ) { return std::system_category().message( static_cast<int>( error_code ) ); }
 
 
 bool build_environment_block( const ChildEnvironment& env_vars, std::vector<wchar_t>& env_block, std::string& err_msg )
@@ -170,6 +166,32 @@ HANDLE duplicate_inheritable_handle( HANDLE source_handle, std::string& err_msg 
     }
 
     return duplicated_handle;
+}
+
+
+HANDLE open_inheritable_stdout_file( const std::wstring& working_dir, std::string& err_msg )
+{
+    err_msg.clear();
+
+    fs::path stdout_path;
+    if ( working_dir.empty() ) {
+        stdout_path = fs::path( L"stdout.txt" );
+    } else {
+        stdout_path = fs::path( working_dir ) / L"stdout.txt";
+    }
+
+    SECURITY_ATTRIBUTES security_attributes{};
+    security_attributes.nLength = sizeof( security_attributes );
+    security_attributes.bInheritHandle = TRUE;
+
+    HANDLE stdout_handle = CreateFileW( stdout_path.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                        &security_attributes, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr );
+    if ( stdout_handle == INVALID_HANDLE_VALUE ) {
+        err_msg = get_windows_error_message( GetLastError() );
+        return nullptr;
+    }
+
+    return stdout_handle;
 }
 
 
@@ -322,7 +344,7 @@ bool child_process_is_valid( const ChildProcessHandle& child_process )
 
 
 ChildProcessHandle start_child_process( const std::string& executable, const std::string& working_dir, const ChildEnvironment& env_vars,
-                                       std::string& err_msg )
+                                        std::string& err_msg )
 {
     err_msg.clear();
     ChildProcessHandle child_process;
@@ -356,35 +378,41 @@ ChildProcessHandle start_child_process( const std::string& executable, const std
     STARTUPINFOW startup_info{};
     startup_info.cb = sizeof( startup_info );
     BOOL inherit_handles = FALSE;
+    HANDLE child_stdout_handle = open_inheritable_stdout_file( working_dir_w, err_msg );
+    if ( child_stdout_handle == nullptr ) {
+        CloseHandle( job_handle );
+        return child_process;
+    }
+
     HANDLE child_stderr_handle = nullptr;
     HANDLE parent_stderr_handle = GetStdHandle( STD_ERROR_HANDLE );
     if ( parent_stderr_handle != nullptr && parent_stderr_handle != INVALID_HANDLE_VALUE ) {
         child_stderr_handle = duplicate_inheritable_handle( parent_stderr_handle, err_msg );
         if ( child_stderr_handle == nullptr ) {
+            CloseHandle( child_stdout_handle );
             CloseHandle( job_handle );
             return child_process;
         }
-
-        startup_info.dwFlags |= STARTF_USESTDHANDLES;
-        startup_info.hStdInput = GetStdHandle( STD_INPUT_HANDLE );
-        startup_info.hStdOutput = child_stderr_handle;
-        startup_info.hStdError = child_stderr_handle;
-        inherit_handles = TRUE;
+    } else {
+        CloseHandle( child_stdout_handle );
+        CloseHandle( job_handle );
+        err_msg = "standard handle is not available";
+        return child_process;
     }
+
+    startup_info.dwFlags |= STARTF_USESTDHANDLES;
+    startup_info.hStdInput = GetStdHandle( STD_INPUT_HANDLE );
+    startup_info.hStdOutput = child_stdout_handle;
+    startup_info.hStdError = child_stderr_handle;
+    inherit_handles = TRUE;
 
     PROCESS_INFORMATION process_info{};
 
-    if ( !CreateProcessW( executable_w.c_str(),
-                          command_line_buffer.data(),
-                          nullptr,
-                          nullptr,
-                          inherit_handles,
-                          CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED,
-                          env_block.data(),
-                          working_dir_w.empty() ? nullptr : working_dir_w.c_str(),
-                          &startup_info,
-                          &process_info ) ) {
+    if ( !CreateProcessW( executable_w.c_str(), command_line_buffer.data(), nullptr, nullptr, inherit_handles,
+                          CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED, env_block.data(), working_dir_w.empty() ? nullptr : working_dir_w.c_str(),
+                          &startup_info, &process_info ) ) {
         err_msg = get_windows_error_message( GetLastError() );
+        CloseHandle( child_stdout_handle );
         if ( child_stderr_handle != nullptr ) {
             CloseHandle( child_stderr_handle );
         }
@@ -392,6 +420,7 @@ ChildProcessHandle start_child_process( const std::string& executable, const std
         return child_process;
     }
 
+    CloseHandle( child_stdout_handle );
     if ( child_stderr_handle != nullptr ) {
         CloseHandle( child_stderr_handle );
     }

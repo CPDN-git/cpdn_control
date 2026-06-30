@@ -97,6 +97,12 @@ bool wait_for_status( ChildProcessHandle& child_process, int expected_status, in
     return false;
 }
 
+std::string read_text_file( const fs::path& path )
+{
+    std::ifstream in( path );
+    return std::string( std::istreambuf_iterator<char>( in ), std::istreambuf_iterator<char>() );
+}
+
 #ifndef _WIN32
 bool redirect_stderr_to_file( const fs::path& path, int& saved_stderr_fd, std::string& err_msg )
 {
@@ -189,16 +195,21 @@ int t_launch_process()
     }
 
 #ifndef _WIN32
-    // Child stdout should be redirected into the inherited stderr stream.
+    // Child stdout should be redirected to stdout.txt while child stderr stays
+    // on the inherited stderr stream for controller/BOINC logging.
     set_test_env( kSleepEnv, "0" );
     set_test_env( kStdoutEnv, "helper stdout line" );
     set_test_env( kStderrEnv, "helper stderr line" );
     test_count++;
     {
         fs::path stderr_capture = tmp_dir / "launch_process_stderr_capture.txt";
+        fs::path stdout_capture = tmp_dir / "stdout.txt";
         int saved_stderr_fd = -1;
         std::string err_msg;
-        std::string captured_output;
+        std::string captured_stderr;
+        std::string captured_stdout;
+        fs::remove( stderr_capture, ec );
+        fs::remove( stdout_capture, ec );
 
         if ( redirect_stderr_to_file( stderr_capture, saved_stderr_fd, err_msg ) ) {
             child_process = launch_process( model_ctrl, project_path, slot_path, cmd, nthreads );
@@ -211,13 +222,15 @@ int t_launch_process()
                 bool saw_running = false;
                 int exit_code = 0;
                 if ( wait_for_status( child_process, 1, 10, saw_running, exit_code ) ) {
-                    std::ifstream capture_in( stderr_capture );
-                    captured_output.assign( std::istreambuf_iterator<char>( capture_in ), std::istreambuf_iterator<char>() );
-                    if ( captured_output.find( "helper stdout line" ) != std::string::npos &&
-                         captured_output.find( "helper stderr line" ) != std::string::npos ) {
+                    captured_stderr = read_text_file( stderr_capture );
+                    captured_stdout = read_text_file( stdout_capture );
+                    if ( captured_stdout.find( "helper stdout line" ) != std::string::npos &&
+                         captured_stderr.find( "helper stderr line" ) != std::string::npos &&
+                         captured_stderr.find( "helper stdout line" ) == std::string::npos ) {
                         test_passed++;
                     } else {
-                        std::cerr << "  Expected helper stdout/stderr in captured stderr output, got: " << captured_output << "\n";
+                        std::cerr << "  Expected helper stdout in stdout.txt and helper stderr in captured stderr output, got stdout="
+                                  << captured_stdout << ", stderr=" << captured_stderr << "\n";
                     }
                 } else {
                     std::cerr << "  Captured-output launch case did not exit normally\n";

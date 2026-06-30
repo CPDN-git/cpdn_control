@@ -223,6 +223,9 @@ Notes:
 - The innermost domain is the highest configured WRF domain number (`max_dom`), but the cached prefix vector is zero-based. Preserve that distinction when editing filename generation.
 - `WRFControl::get_copyable_output_filenames(current_step)` returns every WRF output filename considered safe to copy as of the observed model step, including the initial step-0 output set when applicable.
 - Defensive filtering of empty per-step filename lists is acceptable at the controller seam, but the model controller remains responsible for generating valid output filenames.
+- WRF progress timing lines and success markers are read from `stdout.txt`, not `stderr.txt`.
+- The controller redirects only the model child stdout to `stdout.txt`; model child stderr continues to follow the normal BOINC/controller stderr path.
+- `WRFControl::get_log_filenames()` should include `stdout.txt` so the final upload preserves the model runtime log.
 
 ## BOINC Result Upload Semantics
 

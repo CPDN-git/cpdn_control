@@ -9,6 +9,7 @@ set -x
 /bin/rm rcf
 /bin/rm progress_file*
 /bin/rm stderr.txt
+/bin/rm stdout.txt
 /bin/rm -rf ifsdata
 /bin/rm ICM*+*
 set +x

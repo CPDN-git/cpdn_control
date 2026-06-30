@@ -386,13 +386,44 @@ Comparison against the previous WRF restart-sync point:
 | `models/wrf/wrf_control.cpp::restart_exists()` | 17 | 17 | `0` | 55 | 54 | -1 (`-1.8%`) |
 | `models/wrf/wrf_control.cpp::parse_restart()` | 8 | 9 | +1 (`+12.5%`) | 41 | 45 | +4 (`+9.8%`) |
 
+## After extracting upload workflow into `UploadManager`
+
+Measured on 2026-06-30 after:
+
+- introducing `src/upload_manager.cpp` / `src/upload_manager.h` to own output staging, scheduled uploads, final backfill uploads, placeholder creation, and final log-file attachments
+- routing controller-error shutdowns through a higher-level shutdown helper so runtime terminal exits can finalize remaining uploads without moving that logic into `finish_task()`
+- moving the shared BOINC polling and finish-code helpers into `src/cpdn_control.cpp` so both `main()` and the upload manager can reuse them
+
+| File | Function | `pmccabe` | `lizard` CCN | `lizard` NLOC | Notes |
+| --- | --- | ---: | ---: | ---: | --- |
+| `src/cpdn_main.cpp` | `main()` | 50 | 50 | 247 | Upload orchestration is materially shorter after extracting the upload state machine and shutdown-finalization path |
+| `src/cpdn_main.cpp` | `shutdown_task()` | 9 | 9 | 21 | Small controller-owned shutdown policy helper; BOINC client shutdowns still bypass upload finalization |
+| `src/upload_manager.cpp` | `UploadManager::zip_and_send_upload()` | 13 | 13 | 69 | Upload send/poll/status handling is now isolated behind the upload seam |
+| `src/upload_manager.cpp` | `UploadManager::finalize_remaining_uploads()` | 11 | 11 | 46 | Final upload, placeholder backfill, and final attachments are now owned in one place |
+| `src/upload_manager.cpp` | `UploadManager::process_scheduled_upload()` | 8 | 8 | 38 | Scheduled upload cadence handling is now separate from `main()` orchestration |
+| `src/control_start.cpp` | `initialize_task_state_from_restart()` | 19 | 19 | 61 | Startup/restart seam unchanged by the upload refactor |
+| `src/cpdn_control.cpp` | `handle_boinc_client_status()` | 17 | 17 | 61 | BOINC-driven suspend/abort/quit policy remains the main non-model controller hotspot |
+| `models/openifs/oifs_control.cpp` | `OpenIFSControl::parse_control_input()` | 28 | 28 | 103 | Largest remaining non-`main()` hotspot in the model layer |
+
+Comparison against the previous `main()` refactor point:
+
+| Function | Prior `pmccabe` | Current `pmccabe` | Change | Prior `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src/cpdn_main.cpp::main()` | 66 | 50 | -16 (`-24.2%`) | 307 | 247 | -60 (`-19.5%`) |
+
+Comparison against the original baseline:
+
+| Function | Baseline `pmccabe` | Current `pmccabe` | Change | Baseline `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src/cpdn_main.cpp::main()` | 120 | 50 | -70 (`-58.3%`) | 516 | 247 | -269 (`-52.1%`) |
+
 ## Current observations
 
 - `main()` is still the dominant complexity hotspot, but it is materially smaller than the original baseline.
 - Complexity has been moved to more coherent ownership boundaries:
   - `OpenIFSControl::parse_control_input()` for model-specific control-file parsing
   - `initialize_task_state_from_restart()` in `src/control_start.cpp` for controller restart/progress bootstrap
-  - `zip_and_send_upload()` removes duplicated upload-send mechanics, but the overall `main()` metric did not improve further because the caller-side branching and file collection still remain in `main()`.
+  - `UploadManager` now owns the upload state machine, including scheduled uploads, final backfill uploads, placeholder creation, and final log-file attachments
 - The process-control refactor improved platform separation more than raw complexity numbers:
   - low-level POSIX child-process mechanics now live in `lib/process_control_posix.cpp`
   - a matching Windows implementation path exists in `lib/process_control_windows.cpp`
@@ -412,7 +443,7 @@ Comparison against the previous WRF restart-sync point:
 - `process_args(...)` was a good cohesion move as well as a useful reduction in `main()` complexity; the parsing/validation split now lives together in `src/parse_args.cpp`.
 - The timestamped logging refactor improved operability but, as expected, did not materially change control-flow complexity.
 - The `control_start` extraction is valuable mainly because it creates a direct unit-test seam for a high-risk state machine, even though it does not reduce the `main()` metric further.
-- The next likely low-hanging fruit is now more clearly the upload/trickle portion of the per-step block inside `main()` rather than the OpenIFS-specific diagnostics dispatch.
+- The upload/shutdown refactor delivered both a clearer ownership boundary and a meaningful `main()` reduction, which is closer to the practical target range recorded at the top of this document.
 
 ## After hardening process-control launch and containment
 

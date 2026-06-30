@@ -22,6 +22,8 @@ add_executable(unit_tests unit_tests.cpp
                         t_path_exists.cpp
                         t_file_is_empty.cpp
                         t_zip_and_delete.cpp
+                        t_upload_placeholders.cpp
+                        t_upload_manager.cpp
                         t_set_env_var.cpp
                         t_get_out_files.cpp
                         t_launch_process.cpp
@@ -66,6 +68,8 @@ add_test( NAME ModelFracDoneTest COMMAND unit_tests "Model Frac Done" )
 add_test( NAME PathExistsTest COMMAND unit_tests "Path Exists" )
 add_test( NAME FileIsEmptyTest COMMAND unit_tests "File Is Empty" )
 add_test( NAME ZipAndDeleteTest COMMAND unit_tests "Zip And Delete" )
+add_test( NAME UploadPlaceholdersTest COMMAND unit_tests "Upload Placeholders" )
+add_test( NAME UploadManagerTest COMMAND unit_tests "Upload Manager" )
 add_test( NAME SetEnvVarTest COMMAND unit_tests "Set Env Var" )
 add_test( NAME GetOutFilesTest COMMAND unit_tests "Get Out Files" )
 add_test( NAME LaunchProcessTest COMMAND unit_tests "Launch Process" )

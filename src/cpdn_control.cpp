@@ -683,6 +683,50 @@ double model_frac_done( double step, double total_steps, int nthreads )
 }
 
 
+int get_task_finish_code( const TaskState& tstate, const BoincRuntime& runtime )
+{
+    if ( runtime.client_status.quit_request ) {
+        return 0;
+    }
+    if ( runtime.client_status.abort_request || runtime.client_status.no_heartbeat ) {
+        return 1;
+    }
+    if ( tstate.child_status == 1 ) {
+        return 0;
+    }
+    return 1;
+}
+
+
+bool sleep_with_boinc_poll( BoincRuntime& runtime, const bool standalone, const double total_seconds )
+{
+    if ( total_seconds <= 0.0 ) {
+        return true;
+    }
+
+    auto deadline = chrono::steady_clock::now() + chrono::duration<double>( total_seconds );
+    constexpr auto poll_interval = chrono::duration<double>( 5.0 );
+
+    while ( chrono::steady_clock::now() < deadline ) {
+        auto remaining = chrono::duration<double>( deadline - chrono::steady_clock::now() );
+        auto sleep_chunk = std::min( poll_interval, remaining );
+        sleep_seconds( sleep_chunk.count() );
+
+        if ( standalone ) {
+            continue;
+        }
+
+        boinc_get_status( &runtime.client_status );
+        if ( runtime.client_status.suspended || runtime.client_status.quit_request || runtime.client_status.abort_request ||
+             runtime.client_status.no_heartbeat ) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
 /**
  * @brief Moves the result file from the slot directory to the temporary project directory.
  */
@@ -716,6 +760,54 @@ int move_result_file( const fs::path& slot_path, const fs::path& temp_path, cons
         }
     }
     return retval;
+}
+
+
+int expected_upload_file_count( const int total_steps, const int upload_interval )
+{
+    if ( total_steps <= 0 || upload_interval <= 0 ) {
+        return 0;
+    }
+
+    return ( total_steps + upload_interval - 1 ) / upload_interval;
+}
+
+
+bool create_upload_placeholder_file( const fs::path& upload_dir, const int upload_file_number, const int current_step, const int total_steps,
+                                     const std::string_view reason, fs::path& placeholder_path, std::string* error_msg )
+{
+    std::string mkdir_error;
+    if ( !ensure_directory( upload_dir, &mkdir_error ) ) {
+        if ( error_msg ) {
+            *error_msg = "failed to create upload placeholder directory: " + mkdir_error;
+        }
+        return false;
+    }
+
+    placeholder_path = upload_dir / ( "cpdn_upload_placeholder_" + std::to_string( upload_file_number ) + ".txt" );
+
+    std::ofstream placeholder( placeholder_path );
+    if ( !placeholder ) {
+        if ( error_msg ) {
+            *error_msg = "failed to open placeholder file " + placeholder_path.string();
+        }
+        return false;
+    }
+
+    placeholder << "CPDN controller upload placeholder\n"
+                << "upload_file_number=" << upload_file_number << '\n'
+                << "current_step=" << current_step << '\n'
+                << "total_steps=" << total_steps << '\n'
+                << "reason=" << reason << '\n';
+
+    if ( !placeholder ) {
+        if ( error_msg ) {
+            *error_msg = "failed to write placeholder file " + placeholder_path.string();
+        }
+        return false;
+    }
+
+    return true;
 }
 
 /**

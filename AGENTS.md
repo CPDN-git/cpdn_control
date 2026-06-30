@@ -17,6 +17,9 @@ This repository builds the **CPDN controller** executable used to run/manage cli
   - Core controller logic used by the release/debug executables and unit tests.
   - BOINC API call sites in controller helpers now log the failing BOINC function name, numeric return code, and `boincerror(...)` string locally before returning control to the caller.
   - Includes the child-process cleanup helper used by `finish_task(...)` to terminate an active model child before calling `boinc_finish(...)`.
+- `src/upload_manager.h`, `src/upload_manager.cpp`
+  - Upload/finalization helper used by `main()` and `shutdown_task(...)` to stage copyable model outputs, create placeholder payloads for missing scheduled uploads, zip result archives, and submit BOINC uploads.
+  - `UploadManager::move_copyable_output_files(...)` is intentionally best-effort: it should attempt to copy every eligible model output file, log individual failures, and continue so remote logs retain as much evidence as possible.
 - `api/model_input_manifest.h`
   - Shared manifest/context types for model-declared BOINC input archives.
 - `api/model_control.h`
@@ -40,6 +43,7 @@ This repository builds the **CPDN controller** executable used to run/manage cli
   - CTest-driven unit tests (single `unit_tests` executable invoked with different arguments).
   - Includes `t_run_process_with_timeout.cpp` plus `timed_process_helper.cpp` for exercising timed external-process execution.
   - Includes staging/checksum coverage for BOINC project archives such as `t_verify_project_zip_md5.cpp` and `t_stage_model_input_archive.cpp`.
+  - Includes upload-finalization coverage such as `t_upload_manager.cpp` and `t_upload_placeholders.cpp`.
 - `tests/functional/`
   - End-to-end/“workunit style” tests driven by Python scripts:
   - `setup_test.py` creates a fake BOINC directory layout (`projects/climateprediction.net/`, `slots/0/`, input zips, `init_data.xml`, etc).
@@ -219,6 +223,17 @@ Notes:
 - The innermost domain is the highest configured WRF domain number (`max_dom`), but the cached prefix vector is zero-based. Preserve that distinction when editing filename generation.
 - `WRFControl::get_copyable_output_filenames(current_step)` returns every WRF output filename considered safe to copy as of the observed model step, including the initial step-0 output set when applicable.
 - Defensive filtering of empty per-step filename lists is acceptable at the controller seam, but the model controller remains responsible for generating valid output filenames.
+
+## BOINC Result Upload Semantics
+
+- Treat copying model outputs out of the slot directory as best-effort staging, not as a fatal controller decision point by itself.
+- `UploadManager::move_copyable_output_files(...)` should attempt every copyable file returned by the model, log each failed copy with the filename, and continue with the remaining files.
+- Do not silently discard copy failures. The remote stderr/stdout log is part of the debugging surface for volunteer hosts.
+- Final upload handling must still preserve the BOINC upload contract:
+  - include any successfully staged model outputs
+  - add final model log files when requested
+  - add placeholder files for any required upload slots that would otherwise be empty
+- BOINC client driven shutdowns are not task completion. Do not finalize uploads for ordinary BOINC shutdown/restart conditions where the task is expected to resume later.
 
 ## CPDN Filename Metadata
 

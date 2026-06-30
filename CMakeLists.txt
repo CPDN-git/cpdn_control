@@ -162,6 +162,7 @@ add_library(cpdn_control
         ./src/cpdn_control.cpp
         ./src/control_start.cpp
         ./src/parse_args.cpp
+        ./src/upload_manager.cpp
         ${CPDN_PROCESS_CONTROL_SOURCE}
         ./lib/logging_utils.cpp
         ./lib/utils.cpp

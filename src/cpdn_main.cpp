@@ -23,11 +23,11 @@
 
 #include "control_start.h"
 #include "cpdn_control.h"
-#include "cpdn_zip.h"
 #include "lib/cpdn_cpu_time.h"
 #include "lib/logging_utils.h"
 #include "lib/utils.h"
 #include "parse_args.h"
+#include "upload_manager.h"
 
 #include "api/model_control.h"
 #include "api/progressfile_handler.h"
@@ -58,20 +58,6 @@ void log_boinc_api_error( const char* api_name, int retval )
 // Constants
 constexpr std::string_view MODEL_CONFIG_FILE = "model_config.xml";    // not in use (yet?)
 constexpr int LOOP_DELAY_DEFAULT = 5;                                 // secs
-
-
-// Data structures for capturing rich context for error reporting.
-struct UploadSendResult {
-    bool ok = true;
-    bool archive_created = false;
-    bool upload_attempted = false;
-    fs::path archive_path;
-    std::string logical_upload_name;
-    std::string error_step;
-    int error_code = 0;
-    int finish_code = 1;
-    std::string error_message;
-};
 
 
 // ------------------------------------------
@@ -203,154 +189,6 @@ static bool parse_double_arg( const std::string& text, double& value, std::strin
 
 
 /**
- * @brief Report failure to zip and send an upload archive with as much context as possible.
- */
-static void report_upload_send_failure( std::string_view context, const UploadSendResult& result )
-{
-    std::cerr << "..Failed to send " << context;
-    if ( !result.archive_path.empty() ) {
-        std::cerr << " archive '" << result.archive_path << "'";
-    }
-    if ( !result.logical_upload_name.empty() ) {
-        std::cerr << " as logical file '" << result.logical_upload_name << "'";
-    }
-    if ( !result.error_step.empty() ) {
-        std::cerr << " at step '" << result.error_step << "'";
-    }
-    if ( result.error_code != 0 ) {
-        std::cerr << " (code " << result.error_code << ")";
-    }
-    if ( !result.error_message.empty() ) {
-        std::cerr << ": " << result.error_message;
-    }
-    std::cerr << '\n';
-}
-
-
-/**
- * @brief Determine the appropriate exit code for the task based on the child process status and BOINC runtime status.
- *       Returns 0 for normal completion or if a quit request was made, 
- *       and 1 for abort/no heartbeat or if the child process did not exit normally.
- */
-static int get_task_finish_code( const TaskState& tstate, const BoincRuntime& bruntime )
-{
-    if ( bruntime.client_status.quit_request ) {
-        return 0;
-    }
-    if ( bruntime.client_status.abort_request || bruntime.client_status.no_heartbeat ) {
-        return 1;
-    }
-    if ( tstate.child_status == 1 ) {
-        return 0;
-    }
-    return 1;
-}
-
-
-/**
- * @brief Sleep in short chunks and poll BOINC state between chunks.
- *        Returns false if BOINC status changed and the caller should handle it.
- *
- * @note This function only polls BOINC. It does not stop, resume, or kill the child.
- */
-static bool sleep_with_boinc_poll( BoincRuntime& bruntime, const bool standalone, const double total_seconds )
-{
-    if ( total_seconds <= 0.0 ) {
-        return true;
-    }
-
-    auto deadline = chrono::steady_clock::now() + chrono::duration<double>( total_seconds );
-    constexpr auto poll_interval = chrono::duration<double>( 5.0 );
-
-    while ( chrono::steady_clock::now() < deadline ) {
-        auto remaining = chrono::duration<double>( deadline - chrono::steady_clock::now() );
-        auto sleep_chunk = std::min( poll_interval, remaining );
-        sleep_seconds( sleep_chunk.count() );
-
-        if ( standalone ) {
-            continue;
-        }
-
-        boinc_get_status( &bruntime.client_status );
-        if ( bruntime.client_status.suspended || bruntime.client_status.quit_request || bruntime.client_status.abort_request ||
-             bruntime.client_status.no_heartbeat ) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-
-/**
- * @brief Zip a prepared upload file set and, when running under BOINC, submit the logical upload file.
- */
-static UploadSendResult zip_and_send_upload( const BoincConfig& bconfig, BoincRuntime& bruntime, TaskState& tstate,
-                                             const std::string& result_base_name, const int upload_file_number,
-                                             const std::vector<fs::path>& files_to_zip )
-{
-    UploadSendResult result;
-    result.archive_path = fs::path( bconfig.project_dir ) / ( result_base_name + "_" + std::to_string( upload_file_number ) + ".zip" );
-    result.logical_upload_name = "upload_file_" + std::to_string( upload_file_number ) + ".zip";
-
-    if ( files_to_zip.empty() ) {
-        return result;
-    }
-
-    std::cerr << "Compressing upload file: " << result.archive_path << '\n';
-    int zip_ret = zip_and_delete( result.archive_path.string(), files_to_zip );
-    if ( zip_ret != 0 ) {
-        result.ok = false;
-        result.error_step = "zip";
-        result.error_code = zip_ret;
-        result.error_message = "failed to create upload archive";
-        return result;
-    }
-    result.archive_created = true;
-
-    if ( bconfig.standalone ) {
-        return result;
-    }
-
-    result.upload_attempted = true;
-
-    std::cerr << "Waiting for file operations to complete...(20 secs)" << std::endl;
-    if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 20 ) ) {
-        if ( !handle_boinc_client_status( tstate.child_process, bruntime ) ) {
-            result.ok = false;
-            result.error_step = "boinc_poll";
-            result.error_message = "BOINC status changed before upload could be submitted";
-            result.finish_code = get_task_finish_code( tstate, bruntime );
-            return result;
-        }
-    }
-
-    std::string upload_name = result.logical_upload_name;
-    int upload_ret = boinc_upload_file( upload_name );
-    if ( upload_ret != 0 ) {
-        log_boinc_api_error( "boinc_upload_file", upload_ret );
-        result.ok = false;
-        result.error_step = "boinc_upload_file";
-        result.error_code = upload_ret;
-        result.error_message = boincerror( upload_ret );
-        return result;
-    }
-
-    int upload_status_ret = boinc_upload_status( upload_name );
-    if ( upload_status_ret != 0 ) {
-        log_boinc_api_error( "boinc_upload_status", upload_status_ret );
-        result.ok = false;
-        result.error_step = "boinc_upload_status";
-        result.error_code = upload_status_ret;
-        result.error_message = boincerror( upload_status_ret );
-        return result;
-    }
-
-    return result;
-}
-
-
-/**
  * @brief Parse and validate an optional trailing --nthreads argument from app_config.xml.
  *
  * @param argc Program argument count.
@@ -454,38 +292,6 @@ static std::string get_result_base_name( const BoincConfig& bconfig, const TaskC
 
 
 /**
- * @brief Collect upload files that match the expected model output filename pattern.
- *
- * @returns zero on success, otherwise error code value.
- */
-static int collect_upload_output_files( const fs::path& dir, std::vector<fs::path>& out, const ModelControl& model_ctrl )
-{
-    std::error_code ec;
-
-    for ( const auto& entry : fs::directory_iterator( dir, ec ) ) {
-        if ( ec ) {
-            std::cerr << "..Unable to scan upload directory: " << dir << " (" << ec.message() << ")\n";
-            return ec.value();
-        }
-        if ( !entry.is_regular_file( ec ) ) {
-            if ( ec ) {
-                std::cerr << "..Unable to read directory entry: " << entry.path() << " (" << ec.message() << ")\n";
-                return ec.value();
-            }
-            continue;
-        }
-
-        const auto filename = entry.path().filename().string();
-        if ( model_ctrl.is_output_filename( filename ) ) {
-            out.push_back( entry.path() );
-            std::cerr << "Adding to the zip: " << entry.path().string() << '\n';
-        }
-    }
-    return 0;
-}
-
-
-/**
  * @brief Prints a banner to stderr at start of controller with model name and version.
  */
 static void banner( const BoincConfig& bc, const std::string& code_version )
@@ -500,13 +306,10 @@ static void banner( const BoincConfig& bc, const std::string& code_version )
 }
 
 
-/**
- * @brief Cleanup and finish the task.
- *        Closes any child-process handle state, ends any BOINC critical section,
- *        then calls boinc_finish() and returns the same exit code.
- *        boinc_finish exits under BOINC, but return is kept for dummy libraries.
- */
-static int finish_task( TaskState& tstate, int exit_code )
+enum class ShutdownReason { boinc_client_shutdown, controller_error };
+
+
+static void terminate_child_for_shutdown( TaskState& tstate )
 {
     bool child_termination_requested = false;
     std::string child_cleanup_err;
@@ -515,11 +318,45 @@ static int finish_task( TaskState& tstate, int exit_code )
     } else if ( child_termination_requested ) {
         std::cerr << "..Task shutdown requested while child process is still active; terminating child process before boinc_finish()\n";
     }
+}
 
+
+/**
+ * @brief Cleanup and finish the task.
+ *        Closes any child-process handle state, ends any BOINC critical section,
+ *        then calls boinc_finish() and returns the same exit code.
+ *        boinc_finish exits under BOINC, but return is kept for dummy libraries.
+ */
+static int finish_task( TaskState& tstate, int exit_code )
+{
+    terminate_child_for_shutdown( tstate );
     close_child_process_handle( tstate.child_process );
     boinc_end_critical_section();    // in case we abort while in critical section (boinc api handles case if not in critical section).
     boinc_finish( exit_code );       // boinc_finish exits, no further code executed after this call (unless a dummy library is used).
     return exit_code;
+}
+
+
+static int shutdown_task( TaskState& tstate, int exit_code, const ShutdownReason reason, UploadManager* upload_manager, BoincRuntime* runtime )
+{
+    if ( reason == ShutdownReason::controller_error && upload_manager != nullptr && runtime != nullptr ) {
+        terminate_child_for_shutdown( tstate );
+
+        std::cerr << "Waiting for file operations to complete...(60 secs)" << std::endl;
+        if ( !sleep_with_boinc_poll( *runtime, upload_manager->standalone(), 60 ) ) {
+            if ( runtime->client_status.quit_request || runtime->client_status.abort_request || runtime->client_status.no_heartbeat ) {
+                return finish_task( tstate, get_task_finish_code( tstate, *runtime ) );
+            }
+        }
+
+        auto upload_result = upload_manager->finalize_remaining_uploads( *runtime, tstate, tstate.last_completed_step, true, false );
+        if ( !upload_result.ok ) {
+            return finish_task( tstate, upload_result.finish_code );
+        }
+        upload_manager->cleanup_upload_dir();
+    }
+
+    return finish_task( tstate, exit_code );
 }
 
 
@@ -780,8 +617,11 @@ int main( int argc, char** argv )
     std::string result_base_name = get_result_base_name( bconfig, tconfig );
     std::cerr << "result_base_name: " << result_base_name << '\n';
 
+    UploadManager upload_manager( bconfig, *model_ctrl, upload_dir, result_base_name, total_steps, tconfig.upload_interval );
+
     // Create the trickle handler (only trickle if not in standalone mode)
     TrickleHandler trickler( bconfig.wu_name, result_base_name, bconfig.slot_path );
+    BoincRuntime bruntime;
 
     // Check model executable to run.
     // GC. This should be an input parameter on the command line or the init_data.xml (or model_config.xml) later on.
@@ -836,9 +676,6 @@ int main( int argc, char** argv )
     //    - if required, move the latest model output to the project dir
     //    - if required, prepare and commit an upload
 
-    std::vector<fs::path> zfl;
-    BoincRuntime bruntime;
-
     double loop_delay_seconds = static_cast<double>( LOOP_DELAY_DEFAULT );
     double next_delay_seconds = loop_delay_seconds;
 
@@ -850,7 +687,8 @@ int main( int argc, char** argv )
         // Wait for short period to avoid excessive filesystem activity.
         if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, next_delay_seconds ) &&
              !handle_boinc_client_status( tstate.child_process, bruntime ) ) {
-            return finish_task( tstate, get_task_finish_code( tstate, bruntime ) );
+            return shutdown_task( tstate, get_task_finish_code( tstate, bruntime ), ShutdownReason::boinc_client_shutdown, &upload_manager,
+                                  &bruntime );
         }
 
         next_delay_seconds = loop_delay_seconds;
@@ -892,59 +730,14 @@ int main( int argc, char** argv )
                 std::cerr << "DEBUG:880   " << output_file << '\n';
             }
 
-            for ( const auto& result : copyable_output_files ) {
-                retval = move_result_file( bconfig.slot_path, upload_dir, result );
-                if ( retval ) {
-                    std::cerr << ".. Moving " << result << " result file to the temp folder in the projects directory failed" << "\n";
-                    return finish_task( tstate, retval );
-                }
-            }
+            upload_manager.move_copyable_output_files( observed_step );
 
             //  3:  Process upload if required.
 
-            // command arg: upload_interval == 0 disables result uploads, but trickles are still made below.
-            if ( tconfig.upload_interval > 0 && ( ( observed_step - tstate.last_upload_step ) >= tconfig.upload_interval ) &&
-                 ( observed_step < total_steps ) ) {
-                // Create an intermediate results zip file
-                zfl.clear();
-
-                std::cerr << "Model result upload step reached. Starting a new upload: " << " obs_step: " << observed_step
-                          << ", last_upload_step: " << tstate.last_upload_step << ", upload_interval: " << tconfig.upload_interval
-                          << ", total_steps: " << total_steps << std::endl;
-
-                // *****  Critical section start  *****
-                boinc_begin_critical_section();
-
-                retval = collect_upload_output_files( upload_dir, zfl, *model_ctrl );
-                if ( retval ) {
-                    std::cerr << "Adding model output files to the upload zip failed!\n";
-                    return finish_task( tstate, retval );
-                }
-
-                // todo: in the new way of doing it, if we are at an upload point and there are no files present,
-                // create a small text file to zip and send; probably indicates an error but better not to fail.
-                if ( !zfl.empty() ) {
-                    std::string upload_file_name = "upload_file_" + std::to_string( tstate.upload_file_number ) + ".zip";
-                    std::cerr << "Uploading the results file: " << upload_file_name << '\n';
-
-                    auto upload_result = zip_and_send_upload( bconfig, bruntime, tstate, result_base_name, tstate.upload_file_number, zfl );
-                    if ( !upload_result.ok ) {
-                        report_upload_send_failure( "result upload", upload_result );
-                        return finish_task( tstate, upload_result.finish_code );
-                    }
-                    if ( upload_result.upload_attempted ) {
-                        std::cerr << "Finished the upload of : " << upload_file_name << '\n';
-                    }
-                    tstate.last_upload_step = observed_step;
-                }
-                tstate.last_upload_step = observed_step;
-
-                // *****  Normal end of critical section  *****
-                boinc_end_critical_section();
-
-                tstate.upload_file_number++;
-
-            }    // end of upload new output file block.
+            auto scheduled_upload_result = upload_manager.process_scheduled_upload( bruntime, tstate, observed_step );
+            if ( !scheduled_upload_result.ok ) {
+                return finish_task( tstate, scheduled_upload_result.finish_code );
+            }
 
             //  4:  Trickle every required fraction of the model run
             if ( trickle_freq > 0 && ( observed_step % trickle_freq ) == 0 ) {
@@ -960,7 +753,7 @@ int main( int argc, char** argv )
         //  5: Update progress file with current values
         if ( !progress_file.write( tstate, err_msg ) ) {
             std::cerr << "..Failed to write progress file: " << err_msg << '\n';
-            return finish_task( tstate, 1 );
+            return shutdown_task( tstate, 1, ShutdownReason::controller_error, &upload_manager, &bruntime );
         }
 
         //  6:  BOINC client housekeeping tasks
@@ -1008,7 +801,7 @@ int main( int argc, char** argv )
     // Time delay to ensure model files are all flushed to disk
     std::cerr << "Waiting for file operations to complete...(60 secs)" << std::endl;
     if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 60 ) && !handle_boinc_client_status( tstate.child_process, bruntime ) ) {
-        return finish_task( tstate, get_task_finish_code( tstate, bruntime ) );    // boinc asked us to die; should we delay??
+        return shutdown_task( tstate, get_task_finish_code( tstate, bruntime ), ShutdownReason::boinc_client_shutdown, &upload_manager, &bruntime );
     }
 
     tstate.model_success = model_ctrl->check_model_success();
@@ -1026,58 +819,9 @@ int main( int argc, char** argv )
     std::cerr << ".. Printing controller progress file .. " << std::endl;
     progress_file.print( std::cerr );
 
-
-    //---------------- Create the final results zip file-------------------
-
-    // Although the final move of output files may have failed above, there might still be some previous
-    // output files in the upload dir ready to be zipped and uploaded.
-
-    boinc_begin_critical_section();
-
-    // Move any model result files that are currently safe to copy at the final observed step.
-    auto copyable_output_files = model_ctrl->get_copyable_output_filenames( tstate.last_completed_step );
-    for ( const auto& result : copyable_output_files ) {
-        retval = move_result_file( bconfig.slot_path, upload_dir, result );
-        if ( retval ) {
-            std::cerr << ".. Copying " << result << " model output file to the temp upload folder in projects directory failed" << "\n";
-        }
-    }
-
-    if ( tconfig.upload_interval > 0 ) {
-        zfl.clear();
-
-        // Add the model log files to the final upload
-        for ( const auto& logfile : model_ctrl->get_log_filenames() ) {
-            fs::path logpath = bconfig.slot_path;
-            logpath /= logfile;
-            if ( fs::exists( logpath ) ) {
-                zfl.push_back( logpath.string() );
-                std::cerr << "Adding model log file to the upload zipfile: " << logpath << '\n';
-            }
-        }
-
-        // Read the remaining list of files from the temp upload directory and
-        // add the matching files to the upload zip
-        retval = collect_upload_output_files( upload_dir, zfl, *model_ctrl );
-        if ( retval ) {
-            std::cerr << "Adding model output files to the upload zip failed!\n";
-        }
-
-        if ( !zfl.empty() ) {
-            std::string upload_file_name = "upload_file_" + std::to_string( tstate.upload_file_number ) + ".zip";
-            if ( !bconfig.standalone ) {
-                std::cerr << "Uploading the final file: " << upload_file_name << '\n';
-            }
-
-            auto upload_result = zip_and_send_upload( bconfig, bruntime, tstate, result_base_name, tstate.upload_file_number, zfl );
-            if ( !upload_result.ok ) {
-                report_upload_send_failure( "final upload", upload_result );
-                return finish_task( tstate, upload_result.finish_code );
-            }
-            if ( upload_result.upload_attempted ) {
-                std::cerr << "Finished the upload of the final file" << '\n';
-            }
-        }
+    auto final_upload_result = upload_manager.finalize_remaining_uploads( bruntime, tstate, tstate.last_completed_step, true );
+    if ( !final_upload_result.ok ) {
+        return finish_task( tstate, final_upload_result.finish_code );
     }
 
     // upload_interval == 0 disables result uploads, but trickles remain enabled.
@@ -1089,15 +833,14 @@ int main( int argc, char** argv )
     //---------------- Cleanup ---------------------------------------
 
     // Remove the temp folder
-    fs::remove_all( upload_dir );
-
-    boinc_end_critical_section();
+    upload_manager.cleanup_upload_dir();
 
     // Delay to ensure all files are flushed to disk before exiting
     std::cerr << "Waiting for file operations to complete...(60 secs)" << std::endl;
     if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 60 ) ) {
         if ( !handle_boinc_client_status( tstate.child_process, bruntime ) ) {
-            return finish_task( tstate, get_task_finish_code( tstate, bruntime ) );
+            return shutdown_task( tstate, get_task_finish_code( tstate, bruntime ), ShutdownReason::boinc_client_shutdown, &upload_manager,
+                                  &bruntime );
         }
     }
 

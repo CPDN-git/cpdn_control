@@ -816,18 +816,20 @@ std::vector<std::string> WRFControl::get_copyable_output_filenames( int current_
     }
 
     // Return the model output files considered safe to copy as of the current timestep.
-    // Cached output_interval includes the 'frames_per_outfile', so this is the time
-    // an output file is complete.
-    const int output_count = ( current_step / output_interval ) + 1;
+    // Each output file becomes complete only after one full output interval has elapsed
+    // beyond the step that starts it. For example, with an output_interval of 24 steps,
+    // the initial output file (step 0) is copyable once current_step reaches 24, and the
+    // next output file (step 24) becomes copyable once current_step reaches 48.
+    const int completed_output_count = current_step / output_interval;
     static const std::size_t file_count = get_output_filenames( 0 ).size();    // make static to only get size once
-    output_files.reserve( static_cast<std::size_t>( output_count ) * file_count );
+    output_files.reserve( static_cast<std::size_t>( completed_output_count ) * file_count );
 
-    // WRF will write multiple steps, defined by frames_per_outfile, into a single netcdf domain specific file.
-    // Each output is every 'history_interval' (in mins).  The code in parse_control_input sets
-    // output_interval to be the number of steps before a new output file is started.
-    // Note that WRF does not create a separate file for step 0 (initial fields). Step 0 is written into
-    // the first netcdf file.
-    for ( int output_step = output_interval; output_step <= current_step; output_step += output_interval ) {
+    for ( int output_step = 0; output_step < current_step; output_step += output_interval ) {
+        const int completed_step = output_step + output_interval;
+        if ( completed_step > current_step ) {
+            continue;
+        }
+
         auto step_files = get_output_filenames( output_step );
         if ( step_files.empty() ) {
             continue;

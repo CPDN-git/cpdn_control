@@ -150,10 +150,33 @@ int t_parse_control_input()
     const std::vector<std::string> wrf_output_files = wrf_model.get_output_filenames( 0 );
     const std::vector<std::string> wrf_copyable_files = wrf_model.get_copyable_output_filenames( 1 );
     const std::vector<std::string> expected_wrf_files = { "wrfout_d03_2022-07-01_00:00:00" };
-    if ( wrf_output_files != expected_wrf_files || wrf_copyable_files[0] != "" ) {
+    if ( wrf_output_files != expected_wrf_files || !wrf_copyable_files.empty() ) {
         TEST_FAIL;
         std::cout << "Unexpected WRF output filenames for step zero/copyable set. expected_wrf_files: " << expected_wrf_files[0]
-                  << ". Got wrf_output_files : " << wrf_output_files[0] << ", wrf_copyable_files: " << wrf_copyable_files[0] << "\n";
+                  << ". Got wrf_output_files : " << wrf_output_files[0] << ", wrf_copyable_files size: " << wrf_copyable_files.size() << "\n";
+        fs::current_path( original_cwd );
+        fs::remove_all( tmp_dir, ec );
+        return EXIT_FAILURE;
+    }
+
+    std::cout << "Subtest: WRF output files become copyable only after one full output interval has elapsed.\n";
+    const std::vector<std::string> wrf_copyable_files_at_first_boundary = wrf_model.get_copyable_output_filenames( 288 );
+    const std::vector<std::string> expected_copyable_files_at_first_boundary = { "wrfout_d03_2022-07-01_00:00:00" };
+    if ( wrf_copyable_files_at_first_boundary != expected_copyable_files_at_first_boundary ) {
+        TEST_FAIL;
+        std::cout << "Expected first output file to become copyable at the first full output interval. Got size "
+                  << wrf_copyable_files_at_first_boundary.size() << "\n";
+        fs::current_path( original_cwd );
+        fs::remove_all( tmp_dir, ec );
+        return EXIT_FAILURE;
+    }
+
+    const std::vector<std::string> wrf_copyable_files_at_second_boundary = wrf_model.get_copyable_output_filenames( 576 );
+    const std::vector<std::string> expected_copyable_files_at_second_boundary = { "wrfout_d03_2022-07-01_00:00:00",
+                                                                                  "wrfout_d03_2022-07-02_00:00:00" };
+    if ( wrf_copyable_files_at_second_boundary != expected_copyable_files_at_second_boundary ) {
+        TEST_FAIL;
+        std::cout << "Expected both completed output files to be copyable at the second boundary.\n";
         fs::current_path( original_cwd );
         fs::remove_all( tmp_dir, ec );
         return EXIT_FAILURE;

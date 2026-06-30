@@ -703,7 +703,8 @@ int main( int argc, char** argv )
         if ( model_ctrl->get_current_step( observed_step, total_steps ) ) {
             tstate.current_step = observed_step;
         }
-        std::cerr << "DEBUG 852: tstate.current_step, last_completed_step " << tstate.current_step << ", " << tstate.last_completed_step << '\n';
+        std::cerr << "Main loop. Current observed model step: " << tstate.current_step << ", last completed step: " << tstate.last_completed_step
+                  << '\n';
 
         // If the model step has updated, carry out various tasks.
         if ( observed_step != tstate.last_completed_step ) {
@@ -725,9 +726,8 @@ int main( int argc, char** argv )
 
             auto copyable_output_files = model_ctrl->get_copyable_output_filenames( observed_step );
 
-            std::cerr << "DEBUG 878:  returned " << copyable_output_files.size() << " copyable output filenames\n";
             for ( const auto& output_file : copyable_output_files ) {
-                std::cerr << "DEBUG:880   " << output_file << '\n';
+                std::cerr << "DEBUG:730 Output file ready to copy:  " << output_file << '\n';
             }
 
             upload_manager.move_copyable_output_files( observed_step );

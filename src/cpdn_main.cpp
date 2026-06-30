@@ -703,11 +703,11 @@ int main( int argc, char** argv )
         if ( model_ctrl->get_current_step( observed_step, total_steps ) ) {
             tstate.current_step = observed_step;
         }
-        std::cerr << "Main loop. Current observed model step: " << tstate.current_step << ", last completed step: " << tstate.last_completed_step
-                  << '\n';
 
         // If the model step has updated, carry out various tasks.
         if ( observed_step != tstate.last_completed_step ) {
+
+            std::cerr << "Main loop. Current observed step: " << tstate.current_step << ", last step: " << tstate.last_completed_step << '\n';
 
             //  1:  Ask the model to do its own tasks on a step change.
             //  This can involve running a separate external diagnostics executable to create trickle data, or,

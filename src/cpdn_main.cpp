@@ -43,7 +43,7 @@ namespace {
 
 void log_boinc_api_error( const char* api_name, int retval )
 {
-    std::cerr << ".." << api_name << " failed (" << retval << "): " << boincerror( retval ) << '\n';
+    std::cerr << "Error in boinc : " << api_name << " failed (" << retval << "): " << boincerror( retval ) << '\n';
 }
 
 }    // namespace
@@ -101,7 +101,7 @@ static std::unique_ptr<ModelControl> create_model_control( std::string_view mode
  */
 static void report_input_stage_failure( std::string_view context, const InputStageResult& result )
 {
-    std::cerr << "..Failed to stage " << context;
+    std::cerr << "Failed to stage " << context;
     if ( !result.logical_file.empty() ) {
         std::cerr << " for logical file '" << result.logical_file << "'";
     }
@@ -133,7 +133,7 @@ static void report_input_stage_failure( std::string_view context, const InputSta
  */
 static void report_model_control_input_failure( const ModelControlInputData& result )
 {
-    std::cerr << "..Failed to parse model control input";
+    std::cerr << "Failed to parse model control input";
     if ( !result.source_file.empty() ) {
         std::cerr << " '" << result.source_file.string() << "'";
     }
@@ -281,7 +281,7 @@ static std::string get_result_base_name( const BoincConfig& bconfig, const TaskC
             base_name.erase( base_name.length() - 2 );    // remove the '_0'
         }
         if ( base_name.compare( "upload_file" ) == 0 ) {
-            std::cerr << "..Failed to get result name" << std::endl;
+            std::cerr << "Failed to get result name" << std::endl;
             return base_name;
         }
     } else {
@@ -314,9 +314,9 @@ static void terminate_child_for_shutdown( TaskState& tstate )
     bool child_termination_requested = false;
     std::string child_cleanup_err;
     if ( !terminate_child_process_if_active( tstate.child_process, tstate.child_status, child_termination_requested, child_cleanup_err ) ) {
-        std::cerr << "..Failed to terminate active child process during task shutdown: " << child_cleanup_err << '\n';
+        std::cerr << "Failed to terminate active child process during task shutdown: " << child_cleanup_err << '\n';
     } else if ( child_termination_requested ) {
-        std::cerr << "..Task shutdown requested while child process is still active; terminating child process before boinc_finish()\n";
+        std::cerr << "Task shutdown requested while child process is still active; terminating child process before boinc_finish()\n";
     }
 }
 
@@ -379,11 +379,11 @@ int main( int argc, char** argv )
     // Note this redirects stderr output to stderr.txt in slot dir.
     retval = init_boinc( bconfig );
     if ( retval ) {
-        std::cerr << "..BOINC initialisation failed" << "\n";
+        std::cerr << "BOINC initialisation failed" << "\n";
         return finish_task( tstate, retval );
     }
     if ( bconfig.slot_path.empty() ) {
-        std::cerr << "..Error. Can't determine slot path: current_path() returned empty" << std::endl;
+        std::cerr << "Error. Can't determine slot path: current_path() returned empty" << std::endl;
         return finish_task( tstate, 1 );
     }
 
@@ -406,7 +406,7 @@ int main( int argc, char** argv )
 
     // Check for existence of model_config.xml in current directory (task) and fail if not found.
     //if ( !path_exists( MODEL_CONFIG_FILE ) ) {
-    //    std::cerr << ".. DEV NOTE: The model config does not yet exist in the current directory: " << MODEL_CONFIG_FILE << std::endl;
+    //    std::cerr << " DEV NOTE: The model config does not yet exist in the current directory: " << MODEL_CONFIG_FILE << std::endl;
     //    //GC. Testing only; return finish_task( tstate, 1 );        // should terminate, the model won't run.
     //}
 
@@ -415,7 +415,7 @@ int main( int argc, char** argv )
     // "CPDN" and "fort.4" are placeholders for vendor name and primary control file respectively.
     auto model_ctrl = create_model_control( bconfig.app_name, bconfig.app_version );
     if ( model_ctrl == nullptr ) {
-        std::cerr << "..Error creating model control instance. Unsupported model: " << bconfig.app_name << std::endl;
+        std::cerr << "Error creating model control instance. Unsupported model: " << bconfig.app_name << std::endl;
         return finish_task( tstate, 1 );
     }
 
@@ -429,7 +429,7 @@ int main( int argc, char** argv )
 
     // Process parsed arguments into the data structures used by the rest of the code.
     if ( !process_args( parse_result, tconfig, err_msg ) ) {
-        std::cerr << ".." << err_msg << '\n';
+        std::cerr << err_msg << '\n';
         return finish_task( tstate, 1 );
     }
 
@@ -440,9 +440,9 @@ int main( int argc, char** argv )
     int app_config_nthreads = 0;
 
     if ( !get_app_config_nthreads( argc, argv, app_config_nthreads, using_app_config_nthreads, err_msg ) ) {
-        std::cerr << "..Failed to parse --nthreads argument: " << err_msg << '\n'
-                  << "..Expected usage: --nthreads <integer value>\n"
-                  << "..Ignoring app_config.xml and using default nthreads value.\n";
+        std::cerr << "Failed to parse --nthreads argument: " << err_msg << '\n'
+                  << "Expected usage: --nthreads <integer value>\n"
+                  << "Ignoring app_config.xml and using default nthreads value.\n";
         using_app_config_nthreads = false;
     }
 
@@ -456,7 +456,7 @@ int main( int argc, char** argv )
     // TODO. This should be in process_args??
     double num_days = 0.0;
     if ( !parse_double_arg( tconfig.filename_fclen, num_days, err_msg ) ) {
-        std::cerr << "..Failed to parse --filename_fclen value: " << err_msg << '\n';
+        std::cerr << "Failed to parse --filename_fclen value: " << err_msg << '\n';
         return finish_task( tstate, 1 );
     }
 
@@ -470,7 +470,7 @@ int main( int argc, char** argv )
 
     std::cerr << "Location of upload folder in project directory: " << upload_dir << '\n';
     if ( !ensure_directory( upload_dir, &err_msg ) ) {
-        std::cerr << "..Failed to create temp upload folder for results: " << err_msg << std::endl;
+        std::cerr << "Failed to create temp upload folder for results: " << err_msg << std::endl;
         return finish_task( tstate, 1 );
     }
 
@@ -502,10 +502,10 @@ int main( int argc, char** argv )
     //  -------------- Unpack application executables zipfile into slot ------------------
     //  This will be the actual model executable and any accompanying executables (e.g. diagnostics.exe).
 
-    std::cerr << ".. Staging application executable(s) into slot.." << '\n';
+    std::cerr << " Staging application executable(s) into slot.." << '\n';
     retval = stage_and_unzip_app_file( bconfig.app_name, bconfig.app_version, bconfig.project_dir, bconfig.slot_path );
     if ( retval ) {
-        std::cerr << "..stage_and_unzip_app_file failed" << '\n';
+        std::cerr << "stage_and_unzip_app_file failed" << '\n';
         return finish_task( tstate, retval );
     }
 
@@ -516,11 +516,11 @@ int main( int argc, char** argv )
     app_bundle_path /= std::string( bconfig.app_name ) + "_" + tconfig.memberid + "_" + tconfig.filename_startdate + "_" +
                        std::to_string( (int)num_days ) + "_" + tconfig.batch + "_" + tconfig.workunit + ".zip";
 
-    std::cerr << ".. Staging workunit files zipfile into slot.." << '\n';
+    std::cerr << " Staging workunit files zipfile into slot.." << '\n';
     auto app_bundle_stage = stage_boinc_input_file( app_bundle_path, bconfig.slot_path, fs::path( "." ), "app_bundle" );
     if ( !app_bundle_stage.ok ) {
         report_input_stage_failure( "app bundle", app_bundle_stage );
-        std::cerr << "..App bundle logical path was: " << app_bundle_path.string() << std::endl;
+        std::cerr << "App bundle logical path was: " << app_bundle_path.string() << std::endl;
         return finish_task( tstate, 1 );    // should terminate, the model won't run.
     }
 
@@ -530,7 +530,7 @@ int main( int argc, char** argv )
     // Do this before setup() so unpacking works correctly (may be a null op)
     model_ctrl->setup_directories( bconfig.slot_path );
 
-    std::cerr << ".. Staging remaining workunit model zipfiles into slot.." << '\n';
+    std::cerr << " Staging remaining workunit model zipfiles into slot.." << '\n';
     auto input_manifest = model_ctrl->get_input_manifest( tconfig.workunit );
     auto manifest_stage = stage_model_input_manifest( input_manifest, bconfig.slot_path );
     if ( !manifest_stage.ok ) {
@@ -543,7 +543,7 @@ int main( int argc, char** argv )
     // For example, WRF restart flag might need to be reset if restart files are present.
 
     if ( !model_ctrl->setup( bconfig.slot_path ) ) {
-        std::cerr << "..Model setup failed.\n";
+        std::cerr << "Model setup failed.\n";
         return finish_task( tstate, 1 );
     }
 
@@ -581,7 +581,7 @@ int main( int argc, char** argv )
 
     auto startup_state = initialize_task_state_from_restart( *model_ctrl, progress_file, restart_interval_steps, tstate, err_msg );
     if ( !startup_state.ok ) {
-        std::cerr << ".." << err_msg << '\n';
+        std::cerr << err_msg << '\n';
         if ( startup_state.print_model_logs ) {
             model_ctrl->print_logs( 50 );
         }
@@ -598,14 +598,14 @@ int main( int argc, char** argv )
 
     // Update progress file with current values
     if ( !progress_file.write( tstate, err_msg ) ) {
-        std::cerr << "..Failed to write progress file: " << err_msg << '\n';
+        std::cerr << "Failed to write progress file: " << err_msg << '\n';
         return finish_task( tstate, 1 );
     }
 
     // upload_interval is controller/task policy in model steps.
     // upload_interval == 0 disables intermediate and final result uploads, but does not disable trickles.
     if ( tconfig.upload_interval < 0 || timestep_seconds <= 0 ) {
-        std::cerr << "..upload_interval or timestep_seconds is invalid" << std::endl;
+        std::cerr << "upload_interval or timestep_seconds is invalid" << std::endl;
         return finish_task( tstate, 1 );
     }
     if ( tconfig.upload_interval == 0 ) {
@@ -630,7 +630,7 @@ int main( int argc, char** argv )
     model_exe /= model_ctrl->get_executable_name();
 
     if ( !fs::exists( model_exe ) ) {
-        std::cerr << ".. Abort. Model executable not found: " << model_exe << std::endl;
+        std::cerr << " Abort. Model executable not found: " << model_exe << std::endl;
         return finish_task( tstate, 1 );
     }
 
@@ -639,7 +639,7 @@ int main( int argc, char** argv )
     // GC. Dec/2025
 
     if ( !set_exec_perms( model_exe.string() ) ) {
-        std::cerr << "..Cannot start model. Setting execute permission for model executable failed: " << model_exe << std::endl;
+        std::cerr << "Cannot start model. Setting execute permission for model executable failed: " << model_exe << std::endl;
         return finish_task( tstate, 1 );
     }
 
@@ -651,7 +651,7 @@ int main( int argc, char** argv )
     if ( child_process_is_valid( tstate.child_process ) ) {
         tstate.child_status = 0;
     } else {
-        std::cerr << "..Error launching model process" << std::endl;
+        std::cerr << "Error launching model process" << std::endl;
         return finish_task( tstate, 1 );
     }
 
@@ -752,7 +752,7 @@ int main( int argc, char** argv )
 
         //  5: Update progress file with current values
         if ( !progress_file.write( tstate, err_msg ) ) {
-            std::cerr << "..Failed to write progress file: " << err_msg << '\n';
+            std::cerr << "Failed to write progress file: " << err_msg << '\n';
             return shutdown_task( tstate, 1, ShutdownReason::controller_error, &upload_manager, &bruntime );
         }
 
@@ -785,7 +785,7 @@ int main( int argc, char** argv )
     // -------- Allow the model to do any final work before we do our final steps -------
 
     if ( !model_ctrl->finalize( bconfig.slot_path ) ) {
-        std::cerr << "..Model finalize() function reported failure.\n";
+        std::cerr << "Model finalize() function reported failure.\n";
         // Not a critical failure so continue with final steps.
     }
 
@@ -795,7 +795,7 @@ int main( int argc, char** argv )
 
     tstate.model_completed = 1;    // completed does not mean it ran ok!
     if ( !progress_file.write( tstate, err_msg ) ) {
-        std::cerr << "..Warning. Failed to write final progress file: " << err_msg << '\n';    // not a critical error.
+        std::cerr << "Warning. Failed to write final progress file: " << err_msg << '\n';    // not a critical error.
     }
 
     // Time delay to ensure model files are all flushed to disk
@@ -807,16 +807,16 @@ int main( int argc, char** argv )
     tstate.model_success = model_ctrl->check_model_success();
 
     if ( tstate.model_success ) {
-        std::cerr << ".. Model completed successfully" << std::endl;
+        std::cerr << " Model completed successfully" << std::endl;
     } else {
-        std::cerr << ".. Failed, model did not complete successfully" << std::endl;
-        std::cerr << ".. Model exit code: " << tstate.exit_code << std::endl;
+        std::cerr << " Failed, model did not complete successfully" << std::endl;
+        std::cerr << " Model exit code: " << tstate.exit_code << std::endl;
     }
 
     // Print the model logs & progress file (if they exist)
-    std::cerr << ".. Printing tail of model log files (if any) .." << std::endl;
+    std::cerr << " Printing tail of model log files (if any) .." << std::endl;
     model_ctrl->print_logs( 40 );
-    std::cerr << ".. Printing controller progress file .. " << std::endl;
+    std::cerr << " Printing controller progress file .. " << std::endl;
     progress_file.print( std::cerr );
 
     auto final_upload_result = upload_manager.finalize_remaining_uploads( bruntime, tstate, tstate.last_completed_step, true );

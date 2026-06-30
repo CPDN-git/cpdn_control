@@ -551,9 +551,6 @@ int main( int argc, char** argv )
 
     // Parse the model control file (e.g. namelist) through the model layer so controller code stays generic.
     // The model control file is expected to get unpacked from the app bundle.
-    // TODO : this should be part of the 'setup()' call and the instance stores the variables itself.
-    // The controller just queries for the variables when it needs them.
-    // This would be a cleaner separation of concerns and allow for more flexible control file handling in the future.
 
     auto control_input = model_ctrl->parse_control_input();
     if ( !control_input.ok ) {
@@ -617,6 +614,7 @@ int main( int argc, char** argv )
     std::string result_base_name = get_result_base_name( bconfig, tconfig );
     std::cerr << "result_base_name: " << result_base_name << '\n';
 
+    // Create the upload manager; all main loop and final loop uploads go through this class
     UploadManager upload_manager( bconfig, *model_ctrl, upload_dir, result_base_name, total_steps, tconfig.upload_interval );
 
     // Create the trickle handler (only trickle if not in standalone mode)
@@ -624,7 +622,7 @@ int main( int argc, char** argv )
     BoincRuntime bruntime;
 
     // Check model executable to run.
-    // GC. This should be an input parameter on the command line or the init_data.xml (or model_config.xml) later on.
+    // GC. This could be an input parameter on the command line or the init_data.xml (or model_config.xml) later on.
 
     fs::path model_exe = bconfig.slot_path;
     model_exe /= model_ctrl->get_executable_name();
@@ -644,6 +642,11 @@ int main( int argc, char** argv )
     }
 
     // --------------- Start the model process -----------------
+    // child_status = 0 running
+    // child_status = 1 exited normally
+    // child_status = 3 abnormal or forced termination
+    // child_status = 4 suspended
+    // child_status = 5 child process not found / status unavailable
 
     std::cerr << "Launching model executable: " << model_exe << std::endl;
     tstate.child_process = launch_process( *model_ctrl, bconfig.project_dir, bconfig.slot_path, model_exe.string(), nthreads );
@@ -656,13 +659,6 @@ int main( int argc, char** argv )
     }
 
     boinc_end_critical_section();
-
-
-    // child_status = 0 running
-    // child_status = 1 exited normally
-    // child_status = 3 abnormal or forced termination
-    // child_status = 4 suspended
-    // child_status = 5 child process not found / status unavailable
 
 
     //---------------- Main loop ------------------------------
@@ -725,11 +721,6 @@ int main( int argc, char** argv )
             //      many timesteps contribute to a file and when a file becomes complete.
 
             auto copyable_output_files = model_ctrl->get_copyable_output_filenames( observed_step );
-
-            for ( const auto& output_file : copyable_output_files ) {
-                std::cerr << "DEBUG:730 Output file ready to copy:  " << output_file << '\n';
-            }
-
             upload_manager.move_copyable_output_files( observed_step );
 
             //  3:  Process upload if required.
@@ -740,6 +731,7 @@ int main( int argc, char** argv )
             }
 
             //  4:  Trickle every required fraction of the model run
+
             if ( trickle_freq > 0 && ( observed_step % trickle_freq ) == 0 ) {
                 std::cerr << "Sending progress trickle message to CPDN at step: " << observed_step << '\n';
                 trickler.process_trickle( tstate.current_cpu_time, observed_step );
@@ -757,7 +749,6 @@ int main( int argc, char** argv )
         }
 
         //  6:  BOINC client housekeeping tasks
-
         // Calculate the fraction done
         tstate.fraction_done = model_frac_done( static_cast<double>( tstate.current_step ), static_cast<double>( total_steps ), bconfig.ncpus );
 
@@ -782,7 +773,7 @@ int main( int argc, char** argv )
 
     //--------- End of main loop ---------
 
-    // -------- Allow the model to do any final work before we do our final steps -------
+    // -------- Allow the model controller to do any final work before we do our final steps -------
 
     if ( !model_ctrl->finalize( bconfig.slot_path ) ) {
         std::cerr << "Model finalize() function reported failure.\n";

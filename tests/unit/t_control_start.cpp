@@ -151,7 +151,7 @@ int t_control_start()
         const fs::path dir = make_temp_dir();
         FakeModelControl model_ctrl;
         model_ctrl.restart_file_exists = true;
-        model_ctrl.restart_step = "14";
+        model_ctrl.restart_step = "20";
         ProgressFileHandler progress_file( dir.string() );
         TaskState tstate;
 
@@ -163,7 +163,7 @@ int t_control_start()
 
         auto result = initialize_task_state_from_restart( model_ctrl, progress_file, restart_interval_steps, tstate, err_msg );
         if ( result.ok || result.startup_mode != TaskStartupMode::invalid ||
-             err_msg.find( "restart greater than last_completed_step" ) == std::string::npos ) {
+             err_msg.find( "restart is much higher than last_completed_step" ) == std::string::npos ) {
             TEST_FAIL;
             std::cout << "Unexpected invalid-restart result: " << err_msg << "\n";
             return EXIT_FAILURE;
@@ -282,7 +282,8 @@ int t_control_start()
         }
 
         prepare_task_state_for_controller_run( tstate );
-        if ( tstate.model_completed != 0 || tstate.current_step != tstate.last_completed_step || tstate.current_cpu_time != tstate.prior_acc_cpu_time ) {
+        if ( tstate.model_completed != 0 || tstate.current_step != tstate.last_completed_step ||
+             tstate.current_cpu_time != tstate.prior_acc_cpu_time ) {
             TEST_FAIL;
             std::cout << "Transient controller state was not reset correctly after restart bootstrap\n";
             return EXIT_FAILURE;

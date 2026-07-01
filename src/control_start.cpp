@@ -14,6 +14,15 @@ TaskStartupStateResult initialize_task_state_from_restart( ModelControl& model_c
     const bool restart_exists = model_ctrl.restart_exists();
     const bool progress_file_is_empty = progress_file_exists ? progress_file.is_empty() : false;
 
+    //  GlennC. In the past, OpenIFS could run alone if the control code crashed. This meant on a restart
+    //  the step count from the model's output could be way higher than the count in the progress file.
+    //  To fix this, code is now addded to the model to check the controller process is still running and
+    //  if not abort. However, due to delays in flushing file output, the model log can still be a few
+    //  steps ahead of the progress file. To account for this, we allow a small difference between the
+    //  restart step and the last_completed_step in the progress file.  Any more than this and we
+    //  assume the model has run standalone and the task should be aborted.
+    const int allowed_restart_step_diff = 5;
+
     if ( !progress_file_exists && !restart_exists ) {
         return { true, TaskStartupMode::fresh_run, "-- Starting new model run --\n", false };
     }
@@ -37,8 +46,8 @@ TaskStartupStateResult initialize_task_state_from_restart( ModelControl& model_c
             return { false, TaskStartupMode::invalid, "", false };
         }
 
-        if ( restart_step_value > tstate.last_completed_step ) {
-            err_msg = "STEP variable from model restart greater than last_completed_step from progress file, error occurred. Exiting..";
+        if ( restart_step_value > tstate.last_completed_step + allowed_restart_step_diff ) {
+            err_msg = "Timestep count from model restart is much higher than last_completed_step in the progress file, error occurred. Exiting..";
             return { false, TaskStartupMode::invalid, "", false };
         }
 

@@ -17,7 +17,7 @@ env:
 
 jobs:
   windows_build:
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
       - name: Checkout Repository
@@ -30,7 +30,7 @@ jobs:
           path: |
             ${{ env.VCPKG_ROOT }}
             ${{ env.CPDN_VCPKG_INSTALLED_DIR }}
-          key: windows-vcpkg-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg/vcpkg.json', 'vcpkg/vcpkg-configuration.json', 'vcpkg/triplets/*.cmake', 'vcpkg/overlays/boinc/*', '.github/workflows/windows_build.yml') }}
+          key: windows-vcpkg-windows-2022-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg/vcpkg.json', 'vcpkg/vcpkg-configuration.json', 'vcpkg/triplets/*.cmake', 'vcpkg/overlays/boinc/*', '.github/workflows/windows_build.yml') }}
 
       - name: Bootstrap vcpkg
         shell: pwsh
@@ -68,7 +68,7 @@ jobs:
           path: |
             ${{ env.VCPKG_ROOT }}
             ${{ env.CPDN_VCPKG_INSTALLED_DIR }}
-          key: windows-vcpkg-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg/vcpkg.json', 'vcpkg/vcpkg-configuration.json', 'vcpkg/triplets/*.cmake', 'vcpkg/overlays/boinc/*', '.github/workflows/windows_build.yml') }}
+          key: windows-vcpkg-windows-2022-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg/vcpkg.json', 'vcpkg/vcpkg-configuration.json', 'vcpkg/triplets/*.cmake', 'vcpkg/overlays/boinc/*', '.github/workflows/windows_build.yml') }}
 
       - name: Inspect installed BOINC CMake package
         shell: pwsh

@@ -18,8 +18,8 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include <TlHelp32.h>
 #include <Windows.h>
+#include <TlHelp32.h>
 
 namespace {
 

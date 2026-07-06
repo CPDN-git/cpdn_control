@@ -734,8 +734,12 @@ int main( int argc, char** argv )
 
             if ( TrickleHandler::crossed_trickle_boundary( tstate.last_completed_step, observed_step, trickle_freq ) ) {
                 std::cerr << "Sending progress trickle message to CPDN at step: " << observed_step << '\n';
-                trickler.process_trickle( tstate.current_cpu_time, observed_step );
-                tstate.last_trickle_step = observed_step;
+                const int trickle_retval = trickler.process_trickle( tstate.current_cpu_time, observed_step );
+                if ( trickle_retval == 0 ) {
+                    tstate.last_trickle_step = observed_step;
+                } else {
+                    std::cerr << "Progress trickle send failed at step " << observed_step << "; leaving last_trickle_step unchanged\n";
+                }
             }
 
             tstate.last_completed_step = observed_step;
@@ -818,7 +822,12 @@ int main( int argc, char** argv )
     // upload_interval == 0 disables result uploads, but trickles remain enabled.
     if ( !bconfig.standalone && tstate.current_step > tstate.last_trickle_step ) {
         refresh_current_cpu_time( tstate );
-        trickler.process_trickle( tstate.current_cpu_time, tstate.current_step );
+        const int trickle_retval = trickler.process_trickle( tstate.current_cpu_time, tstate.current_step );
+        if ( trickle_retval == 0 ) {
+            tstate.last_trickle_step = tstate.current_step;
+        } else {
+            std::cerr << "Final trickle send failed at step " << tstate.current_step << "; leaving last_trickle_step unchanged\n";
+        }
     }
 
     //---------------- Cleanup ---------------------------------------

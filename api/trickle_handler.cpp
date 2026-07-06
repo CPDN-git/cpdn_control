@@ -179,3 +179,12 @@ bool TrickleHandler::crossed_trickle_boundary( int previous_step, int observed_s
     const int observed_bucket = observed_step / trickle_freq;
     return observed_bucket > previous_bucket;
 }
+
+
+int TrickleHandler::get_recorded_trickle_step( int previous_last_trickle_step, int attempted_step, int trickle_retval )
+{
+    if ( trickle_retval == 0 ) {
+        return attempted_step;
+    }
+    return previous_last_trickle_step;
+}

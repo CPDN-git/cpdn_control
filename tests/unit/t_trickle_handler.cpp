@@ -43,6 +43,104 @@ int t_trickle_handler()
     int test_count = 0;
     int test_passed = 0;
 
+    test_count++;
+    if ( TrickleHandler::crossed_trickle_boundary( 23, 24, 24 ) ) {
+        test_passed++;
+    } else {
+        std::cerr << "  Boundary test FAILED: expected exact boundary crossing 23->24 at freq 24\n";
+    }
+
+    test_count++;
+    if ( TrickleHandler::crossed_trickle_boundary( 23, 25, 24 ) ) {
+        test_passed++;
+    } else {
+        std::cerr << "  Boundary test FAILED: expected skipped-over boundary crossing 23->25 at freq 24\n";
+    }
+
+    test_count++;
+    if ( !TrickleHandler::crossed_trickle_boundary( 20, 23, 24 ) ) {
+        test_passed++;
+    } else {
+        std::cerr << "  Boundary test FAILED: did not expect boundary crossing 20->23 at freq 24\n";
+    }
+
+    test_count++;
+    if ( !TrickleHandler::crossed_trickle_boundary( 24, 25, 24 ) ) {
+        test_passed++;
+    } else {
+        std::cerr << "  Boundary test FAILED: did not expect repeat boundary crossing 24->25 at freq 24\n";
+    }
+
+    test_count++;
+    if ( TrickleHandler::crossed_trickle_boundary( 20, 50, 24 ) ) {
+        test_passed++;
+    } else {
+        std::cerr << "  Boundary test FAILED: expected multi-boundary crossing 20->50 at freq 24\n";
+    }
+
+    test_count++;
+    if ( !TrickleHandler::crossed_trickle_boundary( 24, 24, 24 ) ) {
+        test_passed++;
+    } else {
+        std::cerr << "  Boundary test FAILED: did not expect no-progress boundary crossing 24->24 at freq 24\n";
+    }
+
+    test_count++;
+    if ( !TrickleHandler::crossed_trickle_boundary( 25, 24, 24 ) ) {
+        test_passed++;
+    } else {
+        std::cerr << "  Boundary test FAILED: did not expect backwards boundary crossing 25->24 at freq 24\n";
+    }
+
+    test_count++;
+    if ( !TrickleHandler::crossed_trickle_boundary( 23, 25, 0 ) ) {
+        test_passed++;
+    } else {
+        std::cerr << "  Boundary test FAILED: did not expect invalid-frequency boundary crossing\n";
+    }
+
+    test_count++;
+    if ( TrickleHandler::get_recorded_trickle_step( 24, 48, 0 ) == 48 ) {
+        test_passed++;
+    } else {
+        std::cerr << "  Record-step test FAILED: successful trickle should advance last_trickle_step to attempted step\n";
+    }
+
+    test_count++;
+    if ( TrickleHandler::get_recorded_trickle_step( 24, 48, 1 ) == 24 ) {
+        test_passed++;
+    } else {
+        std::cerr << "  Record-step test FAILED: failed trickle should leave last_trickle_step unchanged\n";
+    }
+
+    test_count++;
+    if ( TrickleHandler::get_recorded_trickle_step( 24, 24, 0 ) == 24 ) {
+        test_passed++;
+    } else {
+        std::cerr << "  Record-step test FAILED: successful trickle should preserve same-step state when attempted step matches prior state\n";
+    }
+
+    test_count++;
+    if ( TrickleHandler::get_trickle_frequency( 3600, 120 ) == 24 ) {
+        test_passed++;
+    } else {
+        std::cerr << "  Frequency test FAILED: expected daily minimum of 24 steps for 1-hour timestep and 120 total steps\n";
+    }
+
+    test_count++;
+    if ( TrickleHandler::get_trickle_frequency( 300, 1000 ) == 288 ) {
+        test_passed++;
+    } else {
+        std::cerr << "  Frequency test FAILED: expected daily minimum of 288 steps for 5-minute timestep and 1000 total steps\n";
+    }
+
+    test_count++;
+    if ( TrickleHandler::get_trickle_frequency( 3600, 10000 ) == 600 ) {
+        test_passed++;
+    } else {
+        std::cerr << "  Frequency test FAILED: expected percentage-based frequency of 600 steps for long 1-hour run\n";
+    }
+
     // Use a test directory for isolation
     std::string test_dir = "trickle_test_temp/";
 

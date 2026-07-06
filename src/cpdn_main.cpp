@@ -712,7 +712,9 @@ int main( int argc, char** argv )
             //  some cleanup of restarts for example. Time it as it might be a significant delay.
 
             const auto step_start = chrono::steady_clock::now();
+
             (void)model_ctrl->do_step_tasks( observed_step, bconfig.slot_path );
+
             const double step_elapsed = chrono::duration<double>( chrono::steady_clock::now() - step_start ).count();
             next_delay_seconds = std::max( 0.0, loop_delay_seconds - step_elapsed );
 
@@ -732,7 +734,10 @@ int main( int argc, char** argv )
                 return finish_task( tstate, scheduled_upload_result.finish_code );
             }
 
-            //  4:  Trickle every required fraction of the model run
+            //  4:  Trickle every required fraction of the model run.
+            //      Note that we cannot assume the controller will see every model step, if some steps
+            //      are skipped due to long delay or output being buffered and writing more than one step at a time.
+            //      Instead check a trickle boundary has been crossed.
 
             if ( TrickleHandler::crossed_trickle_boundary( tstate.last_completed_step, observed_step, trickle_freq ) ) {
                 std::cerr << "Sending progress trickle message to CPDN at step: " << observed_step << '\n';

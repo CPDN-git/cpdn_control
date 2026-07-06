@@ -610,7 +610,9 @@ int main( int argc, char** argv )
     }
 
     // Get result_base_name to construct upload file names for both standalone and under BOINC.
-
+    // GC. TODO: would getting the result_name from the init_data.xml be better? It's not the same as
+    // using the resolved upload_file but might work and avoids the bug where no resolved name is
+    // returned if uploads are disabled.
     std::string result_base_name = get_result_base_name( bconfig, tconfig );
     std::cerr << "result_base_name: " << result_base_name << '\n';
 
@@ -824,8 +826,7 @@ int main( int argc, char** argv )
     if ( !bconfig.standalone && tstate.current_step > tstate.last_trickle_step ) {
         refresh_current_cpu_time( tstate );
         const int trickle_retval = trickler.process_trickle( tstate.current_cpu_time, tstate.current_step );
-        const int recorded_trickle_step =
-            TrickleHandler::get_recorded_trickle_step( tstate.last_trickle_step, tstate.current_step, trickle_retval );
+        const int recorded_trickle_step = TrickleHandler::get_recorded_trickle_step( tstate.last_trickle_step, tstate.current_step, trickle_retval );
         if ( recorded_trickle_step == tstate.last_trickle_step && trickle_retval != 0 ) {
             std::cerr << "Final trickle send failed at step " << tstate.current_step << "; leaving last_trickle_step unchanged\n";
         }

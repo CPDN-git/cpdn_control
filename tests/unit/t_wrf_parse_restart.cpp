@@ -2,6 +2,7 @@
 //
 //  Glenn Carver, CPDN, 2026
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -36,6 +37,14 @@ bool write_binary_stub( const fs::path& path )
 
     out << "restart-data";
     return static_cast<bool>( out );
+}
+
+std::string make_platform_restart_filename( std::string filename )
+{
+#if defined( _WIN32 )
+    std::replace( filename.begin(), filename.end(), ':', '-' );
+#endif
+    return filename;
 }
 
 bool read_text_file( const fs::path& path, std::string& content )
@@ -158,13 +167,13 @@ int t_wrf_parse_restart()
         }
 
         const std::vector<std::string> valid_restart_files = {
-            "wrfrst_d01_2022-07-01_00:15:00",
-            "wrfrst_d02_2022-07-01_00:15:00",
-            "wrfrst_d03_2022-07-01_00:15:00",
+            make_platform_restart_filename( "wrfrst_d01_2022-07-01_00:15:00" ),
+            make_platform_restart_filename( "wrfrst_d02_2022-07-01_00:15:00" ),
+            make_platform_restart_filename( "wrfrst_d03_2022-07-01_00:15:00" ),
         };
         const std::vector<std::string> incomplete_restart_files = {
-            "wrfrst_d01_2022-07-01_00:20:00",
-            "wrfrst_d02_2022-07-01_00:20:00",
+            make_platform_restart_filename( "wrfrst_d01_2022-07-01_00:20:00" ),
+            make_platform_restart_filename( "wrfrst_d02_2022-07-01_00:20:00" ),
         };
 
         for ( const auto& filename : valid_restart_files ) {
@@ -242,9 +251,9 @@ int t_wrf_parse_restart()
         }
 
         const std::vector<std::string> restart_files = {
-            "wrfrst_d01_2022-07-01_00:10:00",
-            "wrfrst_d02_2022-07-01_00:10:00",
-            "wrfrst_d03_2022-07-01_00:10:00",
+            make_platform_restart_filename( "wrfrst_d01_2022-07-01_00:10:00" ),
+            make_platform_restart_filename( "wrfrst_d02_2022-07-01_00:10:00" ),
+            make_platform_restart_filename( "wrfrst_d03_2022-07-01_00:10:00" ),
         };
         for ( const auto& filename : restart_files ) {
             if ( !write_binary_stub( tmp_dir / filename ) ) {
@@ -312,8 +321,8 @@ int t_wrf_parse_restart()
         }
 
         const std::vector<std::string> incomplete_restart_files = {
-            "wrfrst_d01_2022-07-01_00:25:00",
-            "wrfrst_d02_2022-07-01_00:25:00",
+            make_platform_restart_filename( "wrfrst_d01_2022-07-01_00:25:00" ),
+            make_platform_restart_filename( "wrfrst_d02_2022-07-01_00:25:00" ),
         };
         for ( const auto& filename : incomplete_restart_files ) {
             if ( !write_binary_stub( tmp_dir / filename ) ) {

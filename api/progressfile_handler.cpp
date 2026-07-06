@@ -57,7 +57,8 @@ bool sync_file_to_disk( const fs::path& path, std::string& err_msg )
 {
 #if defined( _WIN32 )
     const std::wstring native_path = path.native();
-    HANDLE file_handle = CreateFileW( native_path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+    HANDLE file_handle = CreateFileW( native_path.c_str(), GENERIC_READ | GENERIC_WRITE,
+                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
                                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr );
     if ( file_handle == INVALID_HANDLE_VALUE ) {
         err_msg = "Failed to open file for sync: " + path.string();

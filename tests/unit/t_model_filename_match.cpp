@@ -114,7 +114,11 @@ int t_model_filename_match()
          wrf_model.is_restart_filename( "wrfrst_d02_2022-07-01_00:00:00" ) &&
          wrf_model.is_restart_filename( "wrfrst_d03_2022-07-01_00:00:00" ) &&
          !wrf_model.is_restart_filename( "wrfrst_d04_2022-07-01_00:00:00" ) &&
+#if defined( _WIN32 )
+         wrf_model.is_restart_filename( "wrfrst_d03_2022-07-01_00-00-00" ) ) {
+#else
          !wrf_model.is_restart_filename( "wrfrst_d03_2022-07-01_00-00-00" ) ) {
+#endif
         test_passed++;
     } else {
         std::cerr << "  WRF restart filename matching did not behave as expected\n";

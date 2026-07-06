@@ -2,6 +2,7 @@
 //
 //  Glenn Carver, CPDN, 2026
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -36,6 +37,14 @@ bool write_binary_stub( const fs::path& path )
 
     out << "restart-data";
     return static_cast<bool>( out );
+}
+
+std::string make_platform_restart_filename( std::string filename )
+{
+#if defined( _WIN32 )
+    std::replace( filename.begin(), filename.end(), ':', '-' );
+#endif
+    return filename;
 }
 
 bool all_files_exist( const fs::path& dir, const std::vector<std::string>& filenames )
@@ -116,19 +125,19 @@ int t_wrf_restart_pruning()
     }
 
     const std::vector<std::string> oldest_files = {
-        "wrfrst_d01_2022-07-01_18:00:00",
-        "wrfrst_d02_2022-07-01_18:00:00",
-        "wrfrst_d03_2022-07-01_18:00:00",
+        make_platform_restart_filename( "wrfrst_d01_2022-07-01_18:00:00" ),
+        make_platform_restart_filename( "wrfrst_d02_2022-07-01_18:00:00" ),
+        make_platform_restart_filename( "wrfrst_d03_2022-07-01_18:00:00" ),
     };
     const std::vector<std::string> middle_files = {
-        "wrfrst_d01_2022-07-01_20:00:00",
-        "wrfrst_d02_2022-07-01_20:00:00",
-        "wrfrst_d03_2022-07-01_20:00:00",
+        make_platform_restart_filename( "wrfrst_d01_2022-07-01_20:00:00" ),
+        make_platform_restart_filename( "wrfrst_d02_2022-07-01_20:00:00" ),
+        make_platform_restart_filename( "wrfrst_d03_2022-07-01_20:00:00" ),
     };
     const std::vector<std::string> newest_files = {
-        "wrfrst_d01_2022-07-01_22:00:00",
-        "wrfrst_d02_2022-07-01_22:00:00",
-        "wrfrst_d03_2022-07-01_22:00:00",
+        make_platform_restart_filename( "wrfrst_d01_2022-07-01_22:00:00" ),
+        make_platform_restart_filename( "wrfrst_d02_2022-07-01_22:00:00" ),
+        make_platform_restart_filename( "wrfrst_d03_2022-07-01_22:00:00" ),
     };
 
     for ( const auto& filename : oldest_files ) {

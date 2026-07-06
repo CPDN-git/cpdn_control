@@ -60,7 +60,17 @@ bool is_wrf_datetime_suffix( std::string_view suffix )
         }
     }
 
-    return suffix[4] == '-' && suffix[7] == '-' && suffix[10] == '_' && suffix[13] == ':' && suffix[16] == ':';
+    const bool date_separators_ok = suffix[4] == '-' && suffix[7] == '-' && suffix[10] == '_';
+#if defined( _WIN32 )
+    // Windows cannot create filenames containing ':'.
+    // This fallback accepts a Windows-safe HH-MM-SS timestamp, but WRF itself still needs a
+    // corresponding code change to emit '-' instead of ':' in restart/output filename datestamps.
+    const bool time_separators_ok = ( suffix[13] == ':' || suffix[13] == '-' ) && ( suffix[16] == ':' || suffix[16] == '-' );
+#else
+    const bool time_separators_ok = suffix[13] == ':' && suffix[16] == ':';
+#endif
+
+    return date_separators_ok && time_separators_ok;
 }
 
 

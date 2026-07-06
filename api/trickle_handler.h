@@ -24,6 +24,7 @@ class TrickleHandler {
 
     // make static so we can call this outside of a class.
     static int get_trickle_frequency( int timestep, int total_timesteps );
+    static bool crossed_trickle_boundary( int previous_step, int observed_step, int trickle_freq );
 
 
     // Delete copy constructor and assignment operator

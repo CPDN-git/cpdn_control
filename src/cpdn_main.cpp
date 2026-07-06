@@ -732,7 +732,7 @@ int main( int argc, char** argv )
 
             //  4:  Trickle every required fraction of the model run
 
-            if ( trickle_freq > 0 && ( observed_step % trickle_freq ) == 0 ) {
+            if ( TrickleHandler::crossed_trickle_boundary( tstate.last_completed_step, observed_step, trickle_freq ) ) {
                 std::cerr << "Sending progress trickle message to CPDN at step: " << observed_step << '\n';
                 trickler.process_trickle( tstate.current_cpu_time, observed_step );
                 tstate.last_trickle_step = observed_step;

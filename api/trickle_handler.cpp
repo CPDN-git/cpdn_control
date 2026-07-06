@@ -167,3 +167,15 @@ int TrickleHandler::get_trickle_frequency( int timestep, int total_timesteps )
     }
     return trickle_freq;
 }
+
+
+bool TrickleHandler::crossed_trickle_boundary( int previous_step, int observed_step, int trickle_freq )
+{
+    if ( trickle_freq <= 0 || observed_step <= previous_step ) {
+        return false;
+    }
+
+    const int previous_bucket = previous_step / trickle_freq;
+    const int observed_bucket = observed_step / trickle_freq;
+    return observed_bucket > previous_bucket;
+}

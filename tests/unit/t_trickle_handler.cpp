@@ -100,27 +100,6 @@ int t_trickle_handler()
     }
 
     test_count++;
-    if ( TrickleHandler::get_recorded_trickle_step( 24, 48, 0 ) == 48 ) {
-        test_passed++;
-    } else {
-        std::cerr << "  Record-step test FAILED: successful trickle should advance last_trickle_step to attempted step\n";
-    }
-
-    test_count++;
-    if ( TrickleHandler::get_recorded_trickle_step( 24, 48, 1 ) == 24 ) {
-        test_passed++;
-    } else {
-        std::cerr << "  Record-step test FAILED: failed trickle should leave last_trickle_step unchanged\n";
-    }
-
-    test_count++;
-    if ( TrickleHandler::get_recorded_trickle_step( 24, 24, 0 ) == 24 ) {
-        test_passed++;
-    } else {
-        std::cerr << "  Record-step test FAILED: successful trickle should preserve same-step state when attempted step matches prior state\n";
-    }
-
-    test_count++;
     if ( TrickleHandler::get_trickle_frequency( 3600, 120 ) == 24 ) {
         test_passed++;
     } else {

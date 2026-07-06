@@ -742,12 +742,11 @@ int main( int argc, char** argv )
             if ( TrickleHandler::crossed_trickle_boundary( tstate.last_completed_step, observed_step, trickle_freq ) ) {
                 std::cerr << "Sending progress trickle message to CPDN at step: " << observed_step << '\n';
                 const int trickle_retval = trickler.process_trickle( tstate.current_cpu_time, observed_step );
-                const int recorded_trickle_step =
-                    TrickleHandler::get_recorded_trickle_step( tstate.last_trickle_step, observed_step, trickle_retval );
-                if ( recorded_trickle_step == tstate.last_trickle_step && trickle_retval != 0 ) {
+                if ( trickle_retval != 0 ) {
                     std::cerr << "Progress trickle send failed at step " << observed_step << "; leaving last_trickle_step unchanged\n";
+                } else {
+                    tstate.last_trickle_step = observed_step;
                 }
-                tstate.last_trickle_step = recorded_trickle_step;
             }
 
             tstate.last_completed_step = observed_step;
@@ -831,11 +830,11 @@ int main( int argc, char** argv )
     if ( !bconfig.standalone && tstate.current_step > tstate.last_trickle_step ) {
         refresh_current_cpu_time( tstate );
         const int trickle_retval = trickler.process_trickle( tstate.current_cpu_time, tstate.current_step );
-        const int recorded_trickle_step = TrickleHandler::get_recorded_trickle_step( tstate.last_trickle_step, tstate.current_step, trickle_retval );
-        if ( recorded_trickle_step == tstate.last_trickle_step && trickle_retval != 0 ) {
+        if ( trickle_retval != 0 ) {
             std::cerr << "Final trickle send failed at step " << tstate.current_step << "; leaving last_trickle_step unchanged\n";
+        } else {
+            tstate.last_trickle_step = tstate.current_step;
         }
-        tstate.last_trickle_step = recorded_trickle_step;
     }
 
     //---------------- Cleanup ---------------------------------------

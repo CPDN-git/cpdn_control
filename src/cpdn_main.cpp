@@ -705,7 +705,9 @@ int main( int argc, char** argv )
         // If the model step has updated, carry out various tasks.
         if ( observed_step != tstate.last_completed_step ) {
 
-            std::cerr << "Main loop. Current observed step: " << tstate.current_step << ", last step: " << tstate.last_completed_step << '\n';
+            double model_day = ( static_cast<double>( observed_step ) * static_cast<double>( timestep_seconds ) ) / 86400.0;
+            std::cerr << "Main loop. Current observed step: " << tstate.current_step << std::fixed << std::setprecision( 2 ) << " (model day "
+                      << model_day << "), last step: " << tstate.last_completed_step << '\n';
 
             //  1:  Ask the model to do its own tasks on a step change.
             //  This can involve running a separate external diagnostics executable to create trickle data, or,

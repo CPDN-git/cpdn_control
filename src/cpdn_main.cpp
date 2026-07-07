@@ -50,8 +50,12 @@ void log_boinc_api_error( const char* api_name, int retval )
 
 
 // Define the code version if not defined at compile time with -D option.
+// Version numbering should follow Semantic Versioning (MAJOR.MINOR.PATCH) and be updated with each release.
+//   Major : increment for incompatible API changes, adding new models, or major refactoring.
+//   Minor : increment for backward-compatible functionality, new features, or improvements.
+//   Patch : increment for backward-compatible bug fixes, performance improvements, or minor changes.
 #ifndef CODE_VERSION
-#define CODE_VERSION "1.0.0"
+#define CODE_VERSION "2.0.0"
 #endif
 
 

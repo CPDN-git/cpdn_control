@@ -110,25 +110,25 @@ Relevant code:
 
 Current controller source references are from this repository.
 
-### BOINC quit currently maps to `boinc_finish(0)`
+### BOINC `QUIT` now takes an explicit restartable no-finish path
 
-The current controller polls BOINC state in the main loop and, on quit, calls
-`shutdown_task(...)` and then `finish_task(...)`. `get_task_finish_code(...)`
-maps `quit_request` to `0`, so the controller ends up calling
-`boinc_finish(0)`.
+The current controller polls BOINC state in the main loop and, on quit, builds
+an explicit `boinc_quit` exit decision with process exit code `0` and
+`should_call_boinc_finish=false`. The controller cleans up the child and
+returns from `main()` without writing a `boinc_finish_called` file.
 
 Relevant code:
 
-- `src/cpdn_main.cpp`: main loop quit path
-- `src/cpdn_main.cpp`: `finish_task(...)`
-- `src/cpdn_control.cpp`: `get_task_finish_code(...)`
+- `src/cpdn_main.cpp`: `make_boinc_shutdown_exit_decision(...)`
+- `src/cpdn_main.cpp`: `shutdown_task(...)`
+- `src/cpdn_main.cpp`: `exit_task(...)`
 
 Practical consequence:
 
-- current quit handling is nondeterministic from the controller's point of view
-- some BOINC clients restart the task
-- some BOINC clients later treat the same quit-driven `boinc_finish(0)` as
-  successful completion
+- `QUIT` no longer depends on BOINC racing between live `QUIT_PENDING` handling
+  and finish-file handling
+- the controller now leaves BOINC to treat the exit as a restartable premature
+  exit rather than a finished result
 
 ### Current code has multiple exit routes
 
@@ -142,14 +142,13 @@ The current controller can exit from:
 
 Those routes currently converge imperfectly:
 
-- child termination can be requested from more than one helper
-- BOINC quit can bypass post-loop diagnostics
-- `boinc_finish(...)` is used for both genuine completion and non-completion
-  shutdown paths
+- child termination is centralized in the final exit helper
+- BOINC quit still bypasses post-loop diagnostics by design
+- `boinc_finish(...)` is now reserved for genuine timestep-loop completion
 
 ## Refactor Direction
 
-The intended refactor direction is:
+The current refactor target is:
 
 1. `QUIT` becomes an explicit restartable non-finish path
 2. `boinc_finish(...)` is reserved for genuine timestep-loop completion only

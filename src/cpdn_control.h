@@ -110,7 +110,6 @@ ChildProcessHandle launch_process( const ModelControl&, const std::string&, cons
 bool terminate_child_process_if_active( ChildProcessHandle&, int, bool&, std::string& );
 double model_frac_done( double, double, int );
 bool sleep_with_boinc_poll( BoincRuntime&, bool, double );
-int get_task_finish_code( const TaskState&, const BoincRuntime& );
 int move_result_file( const std::filesystem::path&, const std::filesystem::path&, const std::string& );
 int zip_and_delete( const std::string&, const std::vector<std::filesystem::path>& );
 int expected_upload_file_count( int total_steps, int upload_interval );

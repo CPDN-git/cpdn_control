@@ -157,7 +157,7 @@ UploadManager::UploadSendResult UploadManager::zip_and_send_upload( BoincRuntime
                 result.ok = false;
                 result.error_step = "boinc_poll";
                 result.error_message = "BOINC status changed before upload could be submitted";
-                result.finish_code = get_task_finish_code( tstate, runtime );
+                result.finish_code = runtime.client_status.quit_request ? 0 : 1;
                 return result;
             }
         } else {
@@ -169,7 +169,7 @@ UploadManager::UploadSendResult UploadManager::zip_and_send_upload( BoincRuntime
                 result.ok = false;
                 result.error_step = "boinc_poll";
                 result.error_message = "BOINC status changed before upload could be submitted";
-                result.finish_code = get_task_finish_code( tstate, runtime );
+                result.finish_code = runtime.client_status.quit_request ? 0 : 1;
                 return result;
             }
         }

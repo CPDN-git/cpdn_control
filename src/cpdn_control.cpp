@@ -666,21 +666,6 @@ double model_frac_done( double step, double total_steps, int nthreads )
 }
 
 
-int get_task_finish_code( const TaskState& tstate, const BoincRuntime& runtime )
-{
-    if ( runtime.client_status.quit_request ) {
-        return 0;
-    }
-    if ( runtime.client_status.abort_request || runtime.client_status.no_heartbeat ) {
-        return 1;
-    }
-    if ( tstate.child_status == 1 ) {
-        return 0;
-    }
-    return 1;
-}
-
-
 bool sleep_with_boinc_poll( BoincRuntime& runtime, const bool standalone, const double total_seconds )
 {
     if ( total_seconds <= 0.0 ) {

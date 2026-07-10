@@ -431,7 +431,11 @@ static int finish_controller_exit( TaskState& tstate, const ExitDecision& decisi
 
 
 /**
- * @brief Stop any active child process, then take the controller's final exit path.
+ * @brief Take the controller's immediate final-exit path.
+ *        This helper stops any active child process and then exits via
+ *        finish_controller_exit() without doing any extra shutdown work such
+ *        as upload finalization. Use it for ordinary completion and for
+ *        failures where the controller should leave immediately.
  */
 static int exit_task( TaskState& tstate, const ExitDecision& decision )
 {
@@ -441,9 +445,12 @@ static int exit_task( TaskState& tstate, const ExitDecision& decision )
 
 
 /**
- * @brief Apply the controller shutdown policy for non-completion exits.
- *        Controller errors stop the child early so uploads can be finalized safely
- *        before the controller takes its final non-finish exit path.
+ * @brief Take the controller-managed non-completion shutdown path.
+ *        Unlike exit_task(), this helper may do extra pre-exit shutdown work
+ *        before the final controller exit. In particular, controller errors
+ *        stop the child early, wait for file activity to settle, finalize any
+ *        remaining uploads, and clean up the upload directory so that logs and
+ *        staged outputs are preserved before the controller leaves.
  */
 static int shutdown_task( TaskState& tstate, const ExitDecision& decision, UploadManager* upload_manager, BoincRuntime* runtime )
 {

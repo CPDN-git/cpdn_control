@@ -62,6 +62,7 @@ void log_boinc_api_error( const char* api_name, int retval )
 // Constants
 constexpr std::string_view MODEL_CONFIG_FILE = "model_config.xml";    // not in use (yet?)
 constexpr int LOOP_DELAY_DEFAULT = 5;                                 // secs
+constexpr int FILE_OP_DELAY = 30;                                     // secs
 
 
 // ------------------------------------------
@@ -449,8 +450,8 @@ static int shutdown_task( TaskState& tstate, const ExitDecision& decision, Uploa
     if ( decision.reason == ExitReason::controller_error && upload_manager != nullptr && runtime != nullptr ) {
         stop_child_for_shutdown( tstate );
 
-        std::cerr << "Waiting for file operations to complete...(60 secs)" << std::endl;
-        if ( !sleep_with_boinc_poll( *runtime, upload_manager->standalone(), 60 ) ) {
+        std::cerr << "Waiting for file operations to complete...(" << FILE_OP_DELAY << " secs)" << std::endl;
+        if ( !sleep_with_boinc_poll( *runtime, upload_manager->standalone(), FILE_OP_DELAY ) ) {
             if ( runtime->client_status.quit_request || runtime->client_status.abort_request || runtime->client_status.no_heartbeat ) {
                 return finish_controller_exit( tstate, make_boinc_shutdown_exit_decision( *runtime ) );
             }
@@ -906,8 +907,8 @@ int main( int argc, char** argv )
     }
 
     // Time delay to ensure model files are all flushed to disk
-    std::cerr << "Waiting for file operations to complete...(60 secs)" << std::endl;
-    if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 60 ) ) {
+    std::cerr << "Waiting for file operations to complete...(" << FILE_OP_DELAY << " secs)" << std::endl;
+    if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, FILE_OP_DELAY ) ) {
         if ( !apply_boinc_suspend_resume( tstate.child_process, bruntime ) ) {
             return shutdown_task( tstate, make_boinc_shutdown_exit_decision( bruntime ), &upload_manager, &bruntime );
         }
@@ -950,8 +951,8 @@ int main( int argc, char** argv )
     upload_manager.cleanup_upload_dir();
 
     // Delay to ensure all files are flushed to disk before exiting
-    std::cerr << "Waiting for file operations to complete...(60 secs)" << std::endl;
-    if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 60 ) ) {
+    std::cerr << "Waiting for file operations to complete...(" << FILE_OP_DELAY << " secs)" << std::endl;
+    if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, FILE_OP_DELAY ) ) {
         if ( !apply_boinc_suspend_resume( tstate.child_process, bruntime ) ) {
             return shutdown_task( tstate, make_boinc_shutdown_exit_decision( bruntime ), &upload_manager, &bruntime );
         }

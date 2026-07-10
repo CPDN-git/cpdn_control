@@ -112,6 +112,40 @@ include(cmake/TargetHelpers.cmake)
 set(RELEASE_TARGET_NAME cpdn_release)
 set(DEBUG_TARGET_NAME   cpdn_debug)
 
+#--------------------------- Documentation -----------------------------------
+
+find_program(CPDN_DOXYGEN_EXECUTABLE NAMES doxygen)
+find_program(CPDN_DOT_EXECUTABLE NAMES dot)
+
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/doxygen)
+
+set(CPDN_DOXYGEN_HAVE_DOT NO)
+if(CPDN_DOT_EXECUTABLE)
+    set(CPDN_DOXYGEN_HAVE_DOT YES)
+endif()
+
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/doxygen/Doxyfile.in
+    ${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile
+    @ONLY
+)
+
+if(CPDN_DOXYGEN_EXECUTABLE)
+    add_custom_target(doxygen
+        COMMAND ${CPDN_DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/doxygen
+        COMMENT "Generating Doxygen documentation"
+        VERBATIM
+    )
+else()
+    add_custom_target(doxygen
+        COMMAND ${CMAKE_COMMAND} -E echo "Doxygen executable not found. Install doxygen and rerun this target."
+        COMMAND ${CMAKE_COMMAND} -E false
+        COMMENT "Doxygen executable not available"
+        VERBATIM
+    )
+endif()
+
 #--------------------------- Dependencies -----------------------------------
 
 # --- CONFIGURATION FOR BOINC LIBRARY (headers & lib)

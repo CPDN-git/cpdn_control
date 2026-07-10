@@ -1,5 +1,6 @@
 # Ignore binaries 
 build
+build/doxygen
 zip/build
 zip/install
 vcpkg/vcpkg_installed

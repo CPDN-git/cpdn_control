@@ -291,6 +291,7 @@ Notes:
 - Keep build logic in CMake (don’t hardcode machine-specific paths in code).
 - Formatting: use the repo `.clang-format` when you need to format code; avoid reformatting unrelated files/sections.
 - When changing controller behavior, add/adjust a unit test where practical; use functional tests for end-to-end behavior.
+- When changing controller/model interfaces, execution flow, or other key seams, keep the Doxygen documentation current by updating the relevant comments/markdown and regenerating the `doxygen` target.
 - After any significant tidying or refactor, rerun the code-complexity scan with `pmccabe` and `/home/glenn/.local/bin/lizard` without waiting to be asked, and update [docs/code_complexity_refactor_tracking.md](/home/glenn/github/cpdn_control/docs/code_complexity_refactor_tracking.md).
 - The debug controller binary enables ASan; prefer it for test runs and bug hunting.
 - When touching the experimental diagnostics path, keep the change narrowly scoped unless the task is explicitly to migrate it into the model classes.
@@ -322,6 +323,8 @@ Notes:
 
 - [docs/Adding_new_model.md](/home/glenn/github/cpdn_control/docs/Adding_new_model.md)
   Use this as the starting guide for integrating a new model through the current `ModelControl` seam.
+- [doxygen/README.md](/home/glenn/github/cpdn_control/doxygen/README.md)
+  Use this for the repo-owned Doxygen setup, generation command, included paths, and maintenance contract for keeping the API/call-tree documentation aligned with the code.
 - [docs/code_complexity_refactor_tracking.md](/home/glenn/github/cpdn_control/docs/code_complexity_refactor_tracking.md)
   Use this to track `main()` and related refactor complexity measurements over time; update it after significant tidy/refactor work.
 - [docs/cpdn_control_data_flow.md](/home/glenn/github/cpdn_control/docs/cpdn_control_data_flow.md)

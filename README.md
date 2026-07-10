@@ -239,6 +239,24 @@ remain the canonical build configuration.
 build_ziplib.sh : this script only needs to be run once on an architecture. It does not 
 need to be run each time the code is changed or rebuilt.
 
+## Doxygen documentation
+
+The repository includes a repo-owned Doxygen configuration under [doxygen/README.md](doxygen/README.md).
+The generated documentation uses this `README.md` as the landing page, includes existing markdown
+from `docs/`, and generates call/caller graphs for the controller code, including internal `static` helpers.
+
+After configuring CMake, generate the documentation with:
+
+```bash
+cmake --build build --target doxygen
+```
+
+The HTML output is written to:
+
+```text
+build/doxygen/html/index.html
+```
+
 ```bash
 scripts/build_ziplib.sh     # run once
 scripts/build_with_vcpkg.sh --vcpkg-root /PATH/TO/vcpkg

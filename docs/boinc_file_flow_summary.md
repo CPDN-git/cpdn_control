@@ -591,8 +591,12 @@ main()
 │     ├─ Verify model success via model_ctrl->check_model_success()
 │     ├─ Collect output files matching is_output_filename() pattern
 │     └─ Zip and upload results
-└─ task_finish()
-   └─ boinc_finish(exit_code)
+└─ EXIT CONTROLLER
+   ├─ On natural completion:
+   │  ├─ Verify model success via model_ctrl->check_model_success()
+   │  └─ boinc_finish(exit_code)
+   └─ On BOINC quit or controller failure:
+      └─ take the controller exit path without boinc_finish()
 ```
 
 ---

@@ -203,35 +203,6 @@ Comparison against the original baseline:
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `src/cpdn_main.cpp::main()` | 120 | 67 | -53 (`-44.2%`) | 516 | 342 | -174 (`-33.7%`) |
 
-## After BOINC exit-path split for restartable `QUIT`
-
-Measured on 2026-07-10 after:
-
-- introducing explicit exit-decision helpers in `[src/cpdn_main.cpp](/home/glenn/github/cpdn_control/src/cpdn_main.cpp)`
-- reserving `boinc_finish(...)` for genuine timestep-loop completion only
-- routing BOINC `QUIT` to a restartable no-finish exit path
-- removing the old `get_task_finish_code(...)` helper from `[src/cpdn_control.cpp](/home/glenn/github/cpdn_control/src/cpdn_control.cpp)`
-
-| File | Function | `pmccabe` | `lizard` CCN | `lizard` NLOC | Notes |
-| --- | --- | ---: | ---: | ---: | --- |
-| `src/cpdn_main.cpp` | `main()` | 51 | 51 | 253 | Main is still within the target range; the small increase comes from making BOINC exit semantics explicit in the orchestration flow |
-| `src/cpdn_main.cpp` | `shutdown_task()` | 9 | 9 | 18 | Controller-owned shutdown helper now ends in a plain process exit instead of `boinc_finish(...)` |
-| `src/cpdn_main.cpp` | `exit_task()` | 2 | 2 | 11 | Final cleanup helper now owns child termination, handle close, critical-section unwind, and optional completion finish |
-| `src/cpdn_control.cpp` | `apply_boinc_suspend_resume()` | 11 | 11 | 43 | BOINC suspend/resume policy remains the main controller helper hotspot after quit/abort handling was split from final exit |
-| `src/cpdn_control.cpp` | `resolve_boinc_input_file()` | 11 | 11 | 37 | Unchanged helper hotspot |
-
-Comparison against the previous recorded `main()` refactor point:
-
-| Function | Prior `pmccabe` | Current `pmccabe` | Change | Prior `lizard` NLOC | Current `lizard` NLOC | Change |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `src/cpdn_main.cpp::main()` | 50 | 51 | +1 (`+2.0%`) | 247 | 253 | +6 (`+2.4%`) |
-
-Comparison against the original baseline:
-
-| Function | Baseline `pmccabe` | Current `pmccabe` | Change | Baseline `lizard` NLOC | Current `lizard` NLOC | Change |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `src/cpdn_main.cpp::main()` | 120 | 51 | -69 (`-57.5%`) | 516 | 253 | -263 (`-51.0%`) |
-
 ## After converting upload progress tracking from time to step counts
 
 Measured on 2026-06-27 after removing the `current_step_time` upload bookkeeping from `src/cpdn_main.cpp`, renaming `TaskState::last_upload_time` to `last_upload_step`, and switching the controller progress-file schema to record upload progress directly in model steps.
@@ -456,7 +427,7 @@ Comparison against the original baseline:
 - The process-control refactor improved platform separation more than raw complexity numbers:
   - low-level POSIX child-process mechanics now live in `lib/process_control_posix.cpp`
   - a matching Windows implementation path exists in `lib/process_control_windows.cpp`
-  - `handle_boinc_client_status()` became more complex because it still owns the BOINC-driven suspend/abort/quit policy while delegating the platform actions underneath
+  - the current BOINC policy seam is split between `apply_boinc_suspend_resume()` for suspend/resume control and the `main()` exit helpers for final task shutdown decisions
 - The model-env refactor improved ownership more than top-level control-flow complexity:
   - model-specific launch environment assembly now lives behind `ModelControl::get_env_vars()`
   - both launch and diagnostics now use the same model-owned env seam
@@ -505,3 +476,33 @@ Comparison against the original baseline:
 | Function | Baseline `pmccabe` | Current `pmccabe` | Change | Baseline `lizard` NLOC | Current `lizard` NLOC | Change |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `src/cpdn_main.cpp::main()` | 120 | 67 | -53 (`-44.2%`) | 516 | 342 | -174 (`-33.7%`) |
+
+## After BOINC exit-path split for restartable `QUIT`
+
+Measured on 2026-07-10 after:
+
+- introducing explicit completion/failure/BOINC-shutdown exit-decision helpers in `[src/cpdn_main.cpp](/home/glenn/github/cpdn_control/src/cpdn_main.cpp)`
+- reserving `boinc_finish(...)` for genuine timestep-loop completion only
+- routing BOINC `QUIT` to a restartable no-finish exit path
+- removing the old `get_task_finish_code(...)` helper from `[src/cpdn_control.cpp](/home/glenn/github/cpdn_control/src/cpdn_control.cpp)`
+- separating early child shutdown from final controller exit cleanup for readability
+
+| File | Function | `pmccabe` | `lizard` CCN | `lizard` NLOC | Notes |
+| --- | --- | ---: | ---: | ---: | --- |
+| `src/cpdn_main.cpp` | `main()` | 50 | 50 | 252 | Main remains within the target range; BOINC exit semantics are more explicit while overall complexity stayed flat against the previous recorded point |
+| `src/cpdn_main.cpp` | `shutdown_task()` | 9 | 9 | 18 | Controller-owned shutdown helper now stops the child early when upload finalization still needs to run |
+| `src/cpdn_main.cpp` | `exit_task()` | 1 | 1 | 5 | Thin helper that performs the general "stop child then exit" path |
+| `src/cpdn_main.cpp` | `finish_controller_exit()` | 2 | 2 | 10 | Final common exit cleanup now has a single responsibility |
+| `src/cpdn_control.cpp` | `apply_boinc_suspend_resume()` | 11 | 11 | 43 | BOINC suspend/resume policy remains the main controller helper hotspot after final shutdown decisions moved into `main()` |
+
+Comparison against the previous recorded `main()` refactor point:
+
+| Function | Prior `pmccabe` | Current `pmccabe` | Change | Prior `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src/cpdn_main.cpp::main()` | 50 | 50 | `0` | 247 | 252 | +5 (`+2.0%`) |
+
+Comparison against the original baseline:
+
+| Function | Baseline `pmccabe` | Current `pmccabe` | Change | Baseline `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src/cpdn_main.cpp::main()` | 120 | 50 | -70 (`-58.3%`) | 516 | 252 | -264 (`-51.2%`) |

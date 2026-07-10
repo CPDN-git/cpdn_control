@@ -56,7 +56,7 @@ Now in place:
 - shared controller policy in `src/cpdn_control.cpp` for:
   - `launch_process(...)`
   - `check_child_status(...)`
-  - `handle_boinc_client_status(...)`
+  - `apply_boinc_suspend_resume(...)`
 
 The POSIX backend now keeps `setrlimit(...)` in the forked child, but all argument/environment preparation is done in the parent first. The child branch is intentionally limited to:
 

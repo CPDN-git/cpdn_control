@@ -324,8 +324,6 @@ enum class ExitReason {
 struct ExitDecision {
     ExitReason reason = ExitReason::none;
     int exit_code = 1;
-    bool child_cleanup_needed = true;
-    bool should_check_model_success = false;
     bool should_call_boinc_finish = true;
 };
 
@@ -353,26 +351,11 @@ static const char* exit_reason_to_string( const ExitReason reason )
 }
 
 /**
- * @brief Construct a controller exit decision describing how the task should leave BOINC.
- */
-static ExitDecision make_exit_decision( const ExitReason reason, const int exit_code, const bool should_check_model_success = false,
-                                        const bool should_call_boinc_finish = true, const bool child_cleanup_needed = true )
-{
-    ExitDecision decision;
-    decision.reason = reason;
-    decision.exit_code = exit_code;
-    decision.child_cleanup_needed = child_cleanup_needed;
-    decision.should_check_model_success = should_check_model_success;
-    decision.should_call_boinc_finish = should_call_boinc_finish;
-    return decision;
-}
-
-/**
  * @brief Construct a non-completion exit decision that must not call boinc_finish().
  */
 static ExitDecision make_failure_exit_decision( const ExitReason reason, const int exit_code )
 {
-    return make_exit_decision( reason, exit_code, false, false );
+    return { reason, exit_code, false };
 }
 
 /**
@@ -401,9 +384,18 @@ static ExitDecision make_boinc_shutdown_exit_decision( const BoincRuntime& runti
 {
     const ExitReason reason = classify_boinc_shutdown_reason( runtime );
     if ( reason == ExitReason::boinc_quit ) {
-        return make_exit_decision( reason, 0, false, false );
+        return { reason, 0, false };
     }
     return make_failure_exit_decision( reason, 1 );
+}
+
+/**
+ * @brief Construct the genuine task-completion exit decision.
+ *        This is the only path that is allowed to call boinc_finish().
+ */
+static ExitDecision make_completion_exit_decision( const bool model_success )
+{
+    return { ExitReason::loop_completed, model_success ? 0 : 1, true };
 }
 
 /**
@@ -412,8 +404,6 @@ static ExitDecision make_boinc_shutdown_exit_decision( const BoincRuntime& runti
 static void log_exit_decision_summary( const ExitDecision& decision, const TaskState& tstate )
 {
     std::cerr << "Exit decision: reason=" << exit_reason_to_string( decision.reason ) << ", exit_code=" << decision.exit_code
-              << ", child_cleanup_needed=" << ( decision.child_cleanup_needed ? "true" : "false" )
-              << ", should_check_model_success=" << ( decision.should_check_model_success ? "true" : "false" )
               << ", should_call_boinc_finish=" << ( decision.should_call_boinc_finish ? "true" : "false" )
               << ", child_status=" << tstate.child_status << ", model_completed=" << tstate.model_completed
               << ", model_success=" << ( tstate.model_success ? "true" : "false" ) << '\n';
@@ -421,9 +411,9 @@ static void log_exit_decision_summary( const ExitDecision& decision, const TaskS
 
 
 /**
- * @brief Terminate the model child process if it is still active during controller shutdown.
+ * @brief Stop the model child process if it is still active during controller shutdown.
  */
-static void terminate_child_for_shutdown( TaskState& tstate )
+static void stop_child_for_shutdown( TaskState& tstate )
 {
     bool child_termination_requested = false;
     std::string child_cleanup_err;
@@ -436,14 +426,13 @@ static void terminate_child_for_shutdown( TaskState& tstate )
 
 
 /**
- * @brief Cleanup and exit the task.
+ * @brief Finalize the controller exit after any required child-process shutdown work is done.
  *        Closes any child-process handle state, ends any BOINC critical section,
  *        and optionally calls boinc_finish() for genuine task completion.
  */
-static int exit_task( TaskState& tstate, const ExitDecision& decision )
+static int finish_controller_exit( TaskState& tstate, const ExitDecision& decision )
 {
     log_exit_decision_summary( decision, tstate );
-    terminate_child_for_shutdown( tstate );
     close_child_process_handle( tstate.child_process );
     boinc_end_critical_section();    // in case we abort while in critical section (boinc api handles case if not in critical section).
     if ( decision.should_call_boinc_finish ) {
@@ -454,30 +443,40 @@ static int exit_task( TaskState& tstate, const ExitDecision& decision )
 
 
 /**
+ * @brief Stop any active child process, then take the controller's final exit path.
+ */
+static int exit_task( TaskState& tstate, const ExitDecision& decision )
+{
+    stop_child_for_shutdown( tstate );
+    return finish_controller_exit( tstate, decision );
+}
+
+
+/**
  * @brief Apply the controller shutdown policy for non-completion exits.
- *        Controller errors may still finalize already prepared uploads before the
- *        controller takes its final non-finish exit path.
+ *        Controller errors stop the child early so uploads can be finalized safely
+ *        before the controller takes its final non-finish exit path.
  */
 static int shutdown_task( TaskState& tstate, const ExitDecision& decision, UploadManager* upload_manager, BoincRuntime* runtime )
 {
     if ( decision.reason == ExitReason::controller_error && upload_manager != nullptr && runtime != nullptr ) {
-        terminate_child_for_shutdown( tstate );
+        stop_child_for_shutdown( tstate );
 
         std::cerr << "Waiting for file operations to complete...(60 secs)" << std::endl;
         if ( !sleep_with_boinc_poll( *runtime, upload_manager->standalone(), 60 ) ) {
             if ( runtime->client_status.quit_request || runtime->client_status.abort_request || runtime->client_status.no_heartbeat ) {
-                return exit_task( tstate, make_boinc_shutdown_exit_decision( *runtime ) );
+                return finish_controller_exit( tstate, make_boinc_shutdown_exit_decision( *runtime ) );
             }
         }
 
         auto upload_result = upload_manager->finalize_remaining_uploads( *runtime, tstate, tstate.last_completed_step, true, false );
         if ( !upload_result.ok ) {
-            return exit_task( tstate, make_failure_exit_decision( ExitReason::upload_error, upload_result.finish_code ) );
+            return finish_controller_exit( tstate, make_failure_exit_decision( ExitReason::upload_error, upload_result.finish_code ) );
         }
         upload_manager->cleanup_upload_dir();
     }
 
-    return exit_task( tstate, decision );
+    return finish_controller_exit( tstate, decision );
 }
 
 
@@ -847,7 +846,6 @@ int main( int argc, char** argv )
             //      main() must not infer readiness from a step->filename mapping because models differ in how
             //      many timesteps contribute to a file and when a file becomes complete.
 
-            auto copyable_output_files = model_ctrl->get_copyable_output_filenames( observed_step );
             upload_manager.move_copyable_output_files( observed_step );
 
             //  3:  Process upload if required.
@@ -879,7 +877,7 @@ int main( int argc, char** argv )
         //  5: Update progress file with current values
         if ( !progress_file.write( tstate, err_msg ) ) {
             std::cerr << "Failed to write progress file: " << err_msg << '\n';
-            return shutdown_task( tstate, make_exit_decision( ExitReason::controller_error, 1 ), &upload_manager, &bruntime );
+            return shutdown_task( tstate, make_failure_exit_decision( ExitReason::controller_error, 1 ), &upload_manager, &bruntime );
         }
 
         //  6:  BOINC client housekeeping tasks
@@ -974,5 +972,5 @@ int main( int argc, char** argv )
     }
 
     std::cerr << "Task finished." << std::endl;
-    return exit_task( tstate, make_exit_decision( ExitReason::loop_completed, tstate.model_success ? 0 : 1, true, true ) );
+    return exit_task( tstate, make_completion_exit_decision( tstate.model_success ) );
 }

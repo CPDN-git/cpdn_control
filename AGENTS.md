@@ -16,7 +16,7 @@ This repository builds the **CPDN controller** executable used to run/manage cli
 - `src/cpdn_control.cpp`, `src/cpdn_control.h`
   - Core controller logic used by the release/debug executables and unit tests.
   - BOINC API call sites in controller helpers now log the failing BOINC function name, numeric return code, and `boincerror(...)` string locally before returning control to the caller.
-  - Includes the child-process cleanup helper used by `finish_task(...)` to terminate an active model child before calling `boinc_finish(...)`.
+  - Includes the BOINC suspend/resume helper used by `main()` to apply suspend/resume requests without deciding the final controller exit path.
 - `src/upload_manager.h`, `src/upload_manager.cpp`
   - Upload/finalization helper used by `main()` and `shutdown_task(...)` to stage copyable model outputs, create placeholder payloads for missing scheduled uploads, zip result archives, and submit BOINC uploads.
   - `UploadManager::move_copyable_output_files(...)` is intentionally best-effort: it should attempt to copy every eligible model output file, log individual failures, and continue so remote logs retain as much evidence as possible.
@@ -256,14 +256,20 @@ Notes:
 - `BoincRuntime::client_status` stores the latest `BOINC_STATUS` snapshot returned by `boinc_get_status()`.
 - Do not overload `child_status` with BOINC meanings such as quit, abort, suspend, or no-heartbeat.
 - `sleep_with_boinc_poll(...)` in `src/cpdn_main.cpp` is intended to poll BOINC state only. It should not directly stop, resume, or kill the child process.
-- `handle_boinc_client_status(...)` in `src/cpdn_control.cpp` is the side-effecting BOINC handler. It may stop, resume, or kill the child based on `BoincRuntime::client_status`.
-- `finish_task(...)` in `src/cpdn_main.cpp` now performs child-process cleanup as well: if the model child is still active, it should log that fact, terminate the child, then call `boinc_finish(...)`.
+- `apply_boinc_suspend_resume(...)` in `src/cpdn_control.cpp` is the side-effecting BOINC handler for suspend/resume only.
+  It returns `false` on quit, abort, or no-heartbeat so `main()` can choose the correct final exit path.
+- `exit_task(...)` in `src/cpdn_main.cpp` is the general final-exit helper:
+  it performs defensive child-process shutdown, closes the child handle, unwinds the BOINC critical section, and only calls `boinc_finish(...)` on genuine loop completion.
+- `shutdown_task(...)` in `src/cpdn_main.cpp` is the controller-error shutdown helper:
+  it may stop the child early so uploads can be finalized safely before the controller takes its final non-finish exit path.
 - Do not assume a non-BOINC controller error implies the child is already gone. If the controller is exiting after launch, preserve the invariant that the model child must not be left running.
 - In `main()`, prefer the explicit sequence:
   - call `boinc_get_status(&bruntime.client_status)`
   - inspect or poll for a BOINC state change
-  - call `handle_boinc_client_status(...)` if action is required
-  - derive the controller exit via `finish_task(...)`, which terminates any active child then calls `boinc_finish(...)`
+  - call `apply_boinc_suspend_resume(...)` if action is required
+  - on BOINC `QUIT`, take the explicit restartable non-finish exit path
+  - on ordinary controller failure, route through `shutdown_task(...)` if uploads still need finalizing
+  - only call `boinc_finish(...)` after natural timestep-loop completion and `check_model_success()`
 - If this area is refactored further, preserve the separation of responsibilities:
   - polling BOINC state
   - applying BOINC-driven process control

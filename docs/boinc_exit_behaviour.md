@@ -146,9 +146,9 @@ Those routes currently converge imperfectly:
 - BOINC quit still bypasses post-loop diagnostics by design
 - `boinc_finish(...)` is now reserved for genuine timestep-loop completion
 
-## Refactor Direction
+## Current Contract
 
-The current refactor target is:
+The current controller contract is:
 
 1. `QUIT` becomes an explicit restartable non-finish path
 2. `boinc_finish(...)` is reserved for genuine timestep-loop completion only

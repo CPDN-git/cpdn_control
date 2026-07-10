@@ -80,3 +80,4 @@ cmake --build build --target doxygen
 
 - The most useful graphs are expected to be around `main()`, BOINC shutdown helpers, upload/finalization flow, and the model-control seam.
 - Doxygen call graphs are static-analysis based; they are useful for structure and navigation but should not be treated as a runtime trace.
+- In Doxygen caller/callee graphs, a red-bordered node means the graph has been truncated and not all relationships are shown. In this repo that is usually due to `DOT_GRAPH_MAX_NODES` in `Doxyfile.in`, which keeps very large graphs such as `main()` readable.

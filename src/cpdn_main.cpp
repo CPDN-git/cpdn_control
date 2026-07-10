@@ -353,10 +353,7 @@ static const char* exit_reason_to_string( const ExitReason reason )
 /**
  * @brief Construct a non-completion exit decision that must not call boinc_finish().
  */
-static ExitDecision make_failure_exit_decision( const ExitReason reason, const int exit_code )
-{
-    return { reason, exit_code, false };
-}
+static ExitDecision make_failure_exit_decision( const ExitReason reason, const int exit_code ) { return { reason, exit_code, false }; }
 
 /**
  * @brief Classify the current BOINC shutdown state into the controller exit reason enum.
@@ -393,21 +390,7 @@ static ExitDecision make_boinc_shutdown_exit_decision( const BoincRuntime& runti
  * @brief Construct the genuine task-completion exit decision.
  *        This is the only path that is allowed to call boinc_finish().
  */
-static ExitDecision make_completion_exit_decision( const bool model_success )
-{
-    return { ExitReason::loop_completed, model_success ? 0 : 1, true };
-}
-
-/**
- * @brief Log the resolved controller exit decision together with the key task state.
- */
-static void log_exit_decision_summary( const ExitDecision& decision, const TaskState& tstate )
-{
-    std::cerr << "Exit decision: reason=" << exit_reason_to_string( decision.reason ) << ", exit_code=" << decision.exit_code
-              << ", should_call_boinc_finish=" << ( decision.should_call_boinc_finish ? "true" : "false" )
-              << ", child_status=" << tstate.child_status << ", model_completed=" << tstate.model_completed
-              << ", model_success=" << ( tstate.model_success ? "true" : "false" ) << '\n';
-}
+static ExitDecision make_completion_exit_decision( const bool model_success ) { return { ExitReason::loop_completed, model_success ? 0 : 1, true }; }
 
 
 /**
@@ -432,7 +415,11 @@ static void stop_child_for_shutdown( TaskState& tstate )
  */
 static int finish_controller_exit( TaskState& tstate, const ExitDecision& decision )
 {
-    log_exit_decision_summary( decision, tstate );
+    // Log the exit decision and key task state to stderr for debugging and post-mortem analysis.
+    std::cerr << "Exit decision: reason=" << exit_reason_to_string( decision.reason ) << ", exit_code=" << decision.exit_code
+              << ", should_call_boinc_finish=" << ( decision.should_call_boinc_finish ? "true" : "false" ) << ", child_status=" << tstate.child_status
+              << ", model_completed=" << tstate.model_completed << ", model_success=" << ( tstate.model_success ? "true" : "false" ) << '\n';
+
     close_child_process_handle( tstate.child_process );
     boinc_end_critical_section();    // in case we abort while in critical section (boinc api handles case if not in critical section).
     if ( decision.should_call_boinc_finish ) {
@@ -897,7 +884,6 @@ int main( int argc, char** argv )
 
             // Provide the fraction done to the BOINC client, necessary for the percentage bar on the client
             boinc_fraction_done( tstate.fraction_done );
-
         }
     }
 

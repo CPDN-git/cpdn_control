@@ -246,7 +246,8 @@ int t_launch_process()
     clear_test_env( kStderrEnv );
 #endif
 
-    // Controller-driven termination case.
+    // BOINC shutdown request should be reported back to the caller without
+    // killing the child directly; final exit helpers own termination.
     set_test_env( kSleepEnv, "5000" );
     test_count++;
     child_process = launch_process( model_ctrl, project_path, slot_path, cmd, nthreads );
@@ -255,16 +256,20 @@ int t_launch_process()
     } else {
         BoincRuntime runtime{};
         runtime.client_status.abort_request = 1;
-        if ( !handle_boinc_client_status( child_process, runtime ) ) {
-            bool saw_running = false;
+        if ( !apply_boinc_suspend_resume( child_process, runtime ) ) {
             int exit_code = 0;
-            if ( wait_for_status( child_process, 3, 10, saw_running, exit_code ) && exit_code == -1 ) {
+            const int process_status = check_child_status( child_process, 0, exit_code );
+            std::string err_msg;
+            bool termination_requested = false;
+            if ( process_status == 0 && terminate_child_process_if_active( child_process, 0, termination_requested, err_msg ) &&
+                 termination_requested ) {
                 test_passed++;
             } else {
-                std::cerr << "  Controller termination case did not behave as expected (exit_code=" << exit_code << ")\n";
+                std::cerr << "  BOINC shutdown request case did not leave child running for caller cleanup (status=" << process_status
+                          << ", exit_code=" << exit_code << ", err=" << err_msg << ")\n";
             }
         } else {
-            std::cerr << "  handle_boinc_client_status should have requested task shutdown\n";
+            std::cerr << "  apply_boinc_suspend_resume should have requested task shutdown\n";
         }
     }
 

@@ -279,30 +279,22 @@ int check_child_status( ChildProcessHandle& child_process, int child_status, int
  * 
  * @param child_process The child process handle.
  * @param runtime Holds the latest BOINC runtime status snapshot.
- * @return True if the controller should continue running, false on quit/abort/no-heartbeat.
+ * @return True if the controller should continue running, false on quit/abort/no-heartbeat
+ *         requests or suspend/resume failure.
  */
-bool handle_boinc_client_status( ChildProcessHandle& child_process, BoincRuntime& runtime )
+bool apply_boinc_suspend_resume( ChildProcessHandle& child_process, BoincRuntime& runtime )
 {
     std::string err_msg;
 
-    // If a quit, abort or no heartbeat has been received from the BOINC client, end child process
+    // Let the caller decide the final shutdown path for quit/abort/no-heartbeat.
     if ( runtime.client_status.quit_request ) {
-        std::cerr << "Quit request received from BOINC client, ending the child process" << '\n';
-        if ( !terminate_child_process( child_process, err_msg ) ) {
-            std::cerr << "..Failed to terminate child process: " << err_msg << '\n';
-        }
+        std::cerr << "Quit request received from BOINC client, requesting task shutdown" << '\n';
         return false;
     } else if ( runtime.client_status.abort_request ) {
-        std::cerr << "Abort request received from BOINC client, ending the child process" << '\n';
-        if ( !terminate_child_process( child_process, err_msg ) ) {
-            std::cerr << "..Failed to terminate child process: " << err_msg << '\n';
-        }
+        std::cerr << "Abort request received from BOINC client, requesting task shutdown" << '\n';
         return false;
     } else if ( runtime.client_status.no_heartbeat ) {
-        std::cerr << "No heartbeat received from BOINC client, ending the child process" << '\n';
-        if ( !terminate_child_process( child_process, err_msg ) ) {
-            std::cerr << "..Failed to terminate child process: " << err_msg << '\n';
-        }
+        std::cerr << "No heartbeat received from BOINC client, requesting task shutdown" << '\n';
         return false;
     }
     // Else if BOINC client is suspended, suspend child process and periodically refresh BOINC client status
@@ -317,22 +309,13 @@ bool handle_boinc_client_status( ChildProcessHandle& child_process, BoincRuntime
             while ( runtime.client_status.suspended ) {
                 boinc_get_status( &runtime.client_status );
                 if ( runtime.client_status.quit_request ) {
-                    std::cerr << "Quit request received from the BOINC client, ending the child process" << '\n';
-                    if ( !terminate_child_process( child_process, err_msg ) ) {
-                        std::cerr << "..Failed to terminate child process: " << err_msg << '\n';
-                    }
+                    std::cerr << "Quit request received from the BOINC client, requesting task shutdown" << '\n';
                     return false;
                 } else if ( runtime.client_status.abort_request ) {
-                    std::cerr << "Abort request received from the BOINC client, ending the child process" << '\n';
-                    if ( !terminate_child_process( child_process, err_msg ) ) {
-                        std::cerr << "..Failed to terminate child process: " << err_msg << '\n';
-                    }
+                    std::cerr << "Abort request received from the BOINC client, requesting task shutdown" << '\n';
                     return false;
                 } else if ( runtime.client_status.no_heartbeat ) {
-                    std::cerr << "No heartbeat received from the BOINC client, ending the child process" << '\n';
-                    if ( !terminate_child_process( child_process, err_msg ) ) {
-                        std::cerr << "..Failed to terminate child process: " << err_msg << '\n';
-                    }
+                    std::cerr << "No heartbeat received from the BOINC client, requesting task shutdown" << '\n';
                     return false;
                 }
                 sleep_seconds( 1 );

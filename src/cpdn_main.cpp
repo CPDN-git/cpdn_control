@@ -765,11 +765,12 @@ int main( int argc, char** argv )
     while ( tstate.child_status == 0 && tstate.model_completed == 0 ) {
 
         // Wait for short period to avoid excessive filesystem activity.
-        if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, next_delay_seconds ) &&
-             !handle_boinc_client_status( tstate.child_process, bruntime ) ) {
-            return shutdown_task( tstate,
-                                  make_exit_decision( classify_boinc_shutdown_reason( bruntime ), get_task_finish_code( tstate, bruntime ) ),
-                                  &upload_manager, &bruntime );
+        if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, next_delay_seconds ) ) {
+            if ( !apply_boinc_suspend_resume( tstate.child_process, bruntime ) ) {
+                return shutdown_task(
+                    tstate, make_exit_decision( classify_boinc_shutdown_reason( bruntime ), get_task_finish_code( tstate, bruntime ) ),
+                    &upload_manager, &bruntime );
+            }
         }
 
         next_delay_seconds = loop_delay_seconds;
@@ -862,8 +863,6 @@ int main( int argc, char** argv )
             // Provide the fraction done to the BOINC client, necessary for the percentage bar on the client
             boinc_fraction_done( tstate.fraction_done );
 
-            boinc_get_status( &bruntime.client_status );
-            (void)handle_boinc_client_status( tstate.child_process, bruntime );
         }
     }
 
@@ -887,10 +886,12 @@ int main( int argc, char** argv )
 
     // Time delay to ensure model files are all flushed to disk
     std::cerr << "Waiting for file operations to complete...(60 secs)" << std::endl;
-    if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 60 ) && !handle_boinc_client_status( tstate.child_process, bruntime ) ) {
-        return shutdown_task( tstate,
-                              make_exit_decision( classify_boinc_shutdown_reason( bruntime ), get_task_finish_code( tstate, bruntime ) ),
-                              &upload_manager, &bruntime );
+    if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 60 ) ) {
+        if ( !apply_boinc_suspend_resume( tstate.child_process, bruntime ) ) {
+            return shutdown_task(
+                tstate, make_exit_decision( classify_boinc_shutdown_reason( bruntime ), get_task_finish_code( tstate, bruntime ) ),
+                &upload_manager, &bruntime );
+        }
     }
 
     tstate.model_success = model_ctrl->check_model_success();
@@ -932,7 +933,7 @@ int main( int argc, char** argv )
     // Delay to ensure all files are flushed to disk before exiting
     std::cerr << "Waiting for file operations to complete...(60 secs)" << std::endl;
     if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, 60 ) ) {
-        if ( !handle_boinc_client_status( tstate.child_process, bruntime ) ) {
+        if ( !apply_boinc_suspend_resume( tstate.child_process, bruntime ) ) {
             return shutdown_task( tstate,
                                   make_exit_decision( classify_boinc_shutdown_reason( bruntime ), get_task_finish_code( tstate, bruntime ) ),
                                   &upload_manager, &bruntime );

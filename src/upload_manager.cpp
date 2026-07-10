@@ -153,7 +153,7 @@ UploadManager::UploadSendResult UploadManager::zip_and_send_upload( BoincRuntime
     std::cerr << "Waiting for file operations to complete...(20 secs)" << std::endl;
     if ( !sleep_with_boinc_poll( runtime, bconfig_.standalone, 20 ) ) {
         if ( allow_boinc_child_control ) {
-            if ( !handle_boinc_client_status( tstate.child_process, runtime ) ) {
+            if ( !apply_boinc_suspend_resume( tstate.child_process, runtime ) ) {
                 result.ok = false;
                 result.error_step = "boinc_poll";
                 result.error_message = "BOINC status changed before upload could be submitted";

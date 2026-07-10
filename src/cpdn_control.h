@@ -105,7 +105,7 @@ struct InputStageResult {
 int init_boinc( BoincConfig& );
 int stage_and_unzip_app_file( const std::string&, const std::string&, const std::string&, const std::string& );
 int check_child_status( ChildProcessHandle&, int, int& );
-bool handle_boinc_client_status( ChildProcessHandle&, BoincRuntime& );
+bool apply_boinc_suspend_resume( ChildProcessHandle&, BoincRuntime& );
 ChildProcessHandle launch_process( const ModelControl&, const std::string&, const std::string&, const std::string&, const std::string& );
 bool terminate_child_process_if_active( ChildProcessHandle&, int, bool&, std::string& );
 double model_frac_done( double, double, int );

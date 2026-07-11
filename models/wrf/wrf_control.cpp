@@ -538,7 +538,7 @@ bool WRFControl::update_restart_namelist( const RestartSet& restart_set ) const
 
     std::ifstream input_stream( control_input_file );
     if ( !input_stream.is_open() ) {
-        std::cerr << "Failed to open WRF control file for restart update: " << control_input_file << '\n';
+        std::cerr << "update_restart_namelist: Failed to open WRF control file for restart update: " << control_input_file << '\n';
         return false;
     }
 
@@ -550,6 +550,7 @@ bool WRFControl::update_restart_namelist( const RestartSet& restart_set ) const
     int start_keys_updated = 0;
 
     // Scan the namelist.input file, find restart flag and start date/time keys and update them.
+    std::cerr << "update_restart_namelist: Scanning namelist.input to adjust restart variables... " << restart_set.datetime << '\n';
     while ( std::getline( input_stream, line ) ) {
         std::string updated_line = line;
         std::string trimmed_line = line;
@@ -651,7 +652,7 @@ bool WRFControl::update_restart_namelist( const RestartSet& restart_set ) const
     if ( original_start_fields_parsed == 6 && datetime_duration_seconds( start_datetime, start_datetime ) == 0 ) {
         restart_reference_start_datetime = start_datetime;
         restart_reference_start_valid = true;
-        std::cerr << "Cached original WRF start datetime before restart rewrite for step recovery.\n";
+        std::cerr << "Cached namelist.input start datetimes before restart rewrite.\n";
     } else {
         restart_reference_start_valid = false;
         std::cerr << "Failed to cache original WRF start datetime before restart rewrite; parsed " << original_start_fields_parsed
@@ -1088,7 +1089,7 @@ ModelControlInputData WRFControl::parse_control_input() const
     std::cerr << "WRF namelist.input parsed successfully from input file: " << parsed.source_file << "\n"
               << "Timestep (secs)=" << parsed.timestep_seconds << ", total_steps=" << parsed.total_steps
               << ", output_interval=" << parsed.output_interval << ", forecast_length_time=" << parsed.forecast_length_time
-              << ", max_domains=" << max_domains << ", restart interval=" << parsed.restart_interval << ", output_interval=" << parsed.output_interval
+              << ", max_domains=" << max_domains << ", restart interval=" << parsed.restart_interval 
               << '\n';
 
     parsed.ok = true;

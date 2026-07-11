@@ -722,6 +722,9 @@ int main( int argc, char** argv )
 
     // Parse the model control file (e.g. namelist) through the model layer so controller code stays generic.
     // The model control file is expected to get unpacked from the app bundle.
+    // IMPORTANT. The controller assumes the model information returned is correct for a brand new run.
+    // If the run is a restart, total_steps for example, must include steps already computed. This is
+    // important for models like WRF which edit the namelist file to change the start dates.
 
     auto control_input = model_ctrl->parse_control_input();
     if ( !control_input.ok ) {
@@ -875,7 +878,7 @@ int main( int argc, char** argv )
         if ( observed_step != tstate.last_completed_step ) {
 
             double model_day = ( static_cast<double>( observed_step ) * static_cast<double>( timestep_seconds ) ) / 86400.0;
-            std::cerr << "Main loop. Current observed step: " << tstate.current_step << std::fixed << std::setprecision( 2 ) << " (model day "
+            std::cerr << "Main loop. Current observed step: " << tstate.current_step << std::fixed << std::setprecision( 4 ) << " (model days "
                       << model_day << "), last step: " << tstate.last_completed_step << '\n';
 
             //  1:  Ask the model to do its own tasks on a step change.

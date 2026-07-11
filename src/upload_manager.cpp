@@ -208,8 +208,8 @@ UploadOperationResult UploadManager::process_scheduled_upload( BoincRuntime& run
 
     std::vector<fs::path> files_to_zip;
 
-    std::cerr << "Model result upload step reached. Starting a new upload: " << " obs_step: " << observed_step
-              << ", last_upload_step: " << tstate.last_upload_step << ", upload_interval: " << upload_interval_ << ", total_steps: " << total_steps_
+    std::cerr << "Model result upload step reached. Starting a new upload: " << " current step: " << observed_step
+              << ", last upload step: " << tstate.last_upload_step << ", upload interval: " << upload_interval_ << ", total steps: " << total_steps_
               << std::endl;
 
     boinc_begin_critical_section();

@@ -720,6 +720,14 @@ bool WRFControl::update_restart_namelist( const RestartSet& restart_set ) const
  * The timestamp in the latest matching domain-1 line is converted back into
  * elapsed seconds from the model start time. We then divide by the configured
  * timestep length to recover the completed step count expected by `cpdn_main()`.
+ * 
+ * Issue: On a restart the stdout.txt file could contain later timesteps from the
+ * previous run than the restart file. This will cause this function to return
+ * a step count that's higher than the restart timestamp. It will only happen
+ * on the first call after a restart. Potentially it's a problem if it causes
+ * the controller to trigger a trickle. The fix needs to be in this routine ideally.
+ * The right fix would be to ignore any log lines that are later than the restart timestamp. 
+ * But that requires the restart timestamp to be known here. TO DO.
  */
 bool WRFControl::get_current_step( int& step, const int total_steps ) const
 {
@@ -1089,8 +1097,7 @@ ModelControlInputData WRFControl::parse_control_input() const
     std::cerr << "WRF namelist.input parsed successfully from input file: " << parsed.source_file << "\n"
               << "Timestep (secs)=" << parsed.timestep_seconds << ", total_steps=" << parsed.total_steps
               << ", output_interval=" << parsed.output_interval << ", forecast_length_time=" << parsed.forecast_length_time
-              << ", max_domains=" << max_domains << ", restart interval=" << parsed.restart_interval 
-              << '\n';
+              << ", max_domains=" << max_domains << ", restart interval=" << parsed.restart_interval << '\n';
 
     parsed.ok = true;
     return parsed;

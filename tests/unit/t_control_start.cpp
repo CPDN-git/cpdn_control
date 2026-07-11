@@ -125,11 +125,11 @@ int t_control_start()
         const fs::path dir = make_temp_dir();
         FakeModelControl model_ctrl;
         model_ctrl.restart_file_exists = true;
-        model_ctrl.restart_step = "13";
+        model_ctrl.restart_step = "12";
         ProgressFileHandler progress_file( dir.string() );
         TaskState tstate;
 
-        if ( !write_progress_file( dir, 13 ) ) {
+        if ( !write_progress_file( dir, 12 ) ) {
             TEST_FAIL;
             std::cout << "Unable to write valid progress file\n";
             return EXIT_FAILURE;
@@ -137,7 +137,7 @@ int t_control_start()
 
         auto result = initialize_task_state_from_restart( model_ctrl, progress_file, restart_interval_steps, tstate, err_msg );
         if ( !result.ok || result.startup_mode != TaskStartupMode::restart_run ||
-             result.log_message.find( "Model is restarting" ) == std::string::npos || tstate.last_completed_step != 13 ) {
+             result.log_message.find( "Model is restarting" ) == std::string::npos || tstate.last_completed_step != 12 ) {
             TEST_FAIL;
             std::cout << "Unexpected restart result or adjusted step: " << tstate.last_completed_step << "\n";
             return EXIT_FAILURE;
@@ -151,11 +151,11 @@ int t_control_start()
         const fs::path dir = make_temp_dir();
         FakeModelControl model_ctrl;
         model_ctrl.restart_file_exists = true;
-        model_ctrl.restart_step = "20";
+        model_ctrl.restart_step = "30";
         ProgressFileHandler progress_file( dir.string() );
         TaskState tstate;
 
-        if ( !write_progress_file( dir, 13 ) ) {
+        if ( !write_progress_file( dir, 12 ) ) {
             TEST_FAIL;
             std::cout << "Unable to write valid progress file\n";
             return EXIT_FAILURE;

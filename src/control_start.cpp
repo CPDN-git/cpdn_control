@@ -18,11 +18,11 @@ TaskStartupStateResult initialize_task_state_from_restart( ModelControl& model_c
     //  the step count from the model's output could be way higher than the count in the progress file.
     //  To fix this, code is now addded to the model to check the controller process is still running and
     //  if not abort. However, due to delays in flushing file output, the model log can still be a few
-    //  steps ahead of the progress file. To account for this, we allow a small difference between the
+    //  steps ahead of the progress file. To account for this, we allow a difference between the
     //  restart step and the last_completed_step in the progress file.  Any more than this and we
     //  assume the model has run standalone and the task should be aborted.
     const int allowed_restart_step_diff =
-        restart_interval_steps * 2;    // allow 2 restart intervals difference between progress file and model restart file.
+        restart_interval_steps + 2; 
 
     if ( !progress_file_exists && !restart_exists ) {
         return { true, TaskStartupMode::fresh_run, "-- Starting new model run --\n", false };

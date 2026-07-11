@@ -877,19 +877,16 @@ int main( int argc, char** argv )
 
             double model_day = ( static_cast<double>( tstate.current_step ) * static_cast<double>( timestep_seconds ) ) / 86400.0;
             std::cerr << "Main loop. Current step: " << tstate.current_step << std::fixed << std::setprecision( 4 ) << ", Model day: " << model_day
-                      << ") \n";
+                      << '\n';
+
+            // Use a timer to measure how long the model's own step tasks take, and adjust the next loop delay accordingly.
+            const auto step_start = chrono::steady_clock::now();
 
             //  1:  Ask the model to do its own tasks on a step change.
             //  This can involve running a separate external diagnostics executable to create trickle data, or,
-            //  some cleanup of restarts for example. Time it as it might be a significant delay.
-
-            const auto step_start = chrono::steady_clock::now();
+            //  some cleanup of restarts for example. This might be a significant delay.
 
             (void)model_ctrl->do_step_tasks( observed_step, bconfig.slot_path );
-
-            const double step_elapsed = chrono::duration<double>( chrono::steady_clock::now() - step_start ).count();
-            next_delay_seconds = std::max( 0.0, loop_delay_seconds - step_elapsed );
-
 
             //  2:  Ask the model which output files are currently safe to copy out of the slot directory.
             //      This controller seam intentionally asks for all files safe to copy as of the current timestep.
@@ -919,6 +916,9 @@ int main( int argc, char** argv )
                     tstate.last_trickle_step = observed_step;
                 }
             }
+
+            const double step_elapsed = chrono::duration<double>( chrono::steady_clock::now() - step_start ).count();
+            next_delay_seconds = std::max( 0.0, loop_delay_seconds - step_elapsed );
 
             tstate.last_completed_step = observed_step;
 

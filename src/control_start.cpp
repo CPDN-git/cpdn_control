@@ -21,15 +21,16 @@ TaskStartupStateResult initialize_task_state_from_restart( ModelControl& model_c
     //  steps ahead of the progress file. To account for this, we allow a small difference between the
     //  restart step and the last_completed_step in the progress file.  Any more than this and we
     //  assume the model has run standalone and the task should be aborted.
-    const int allowed_restart_step_diff = 5;
+    const int allowed_restart_step_diff =
+        restart_interval_steps * 2;    // allow 2 restart intervals difference between progress file and model restart file.
 
     if ( !progress_file_exists && !restart_exists ) {
         return { true, TaskStartupMode::fresh_run, "-- Starting new model run --\n", false };
     }
 
     if ( progress_file_exists && !progress_file_is_empty && restart_exists ) {
-        std::string restart_step;
-        if ( !model_ctrl.parse_restart( restart_step ) ) {
+        std::string restart_file_step;
+        if ( !model_ctrl.parse_restart( restart_file_step ) ) {
             err_msg = "Parsing model restart metadata failed";
             return { false, TaskStartupMode::invalid, "", true };
         }
@@ -39,27 +40,26 @@ TaskStartupStateResult initialize_task_state_from_restart( ModelControl& model_c
             return { false, TaskStartupMode::invalid, "", false };
         }
 
-        int restart_step_value = 0;
-        std::string restart_step_text = restart_step;
-        if ( !parse_int( restart_step_text, restart_step_value, err_msg ) ) {
+        int restart_file_step_value = 0;
+        std::string step_text = restart_file_step;
+        if ( !parse_int( step_text, restart_file_step_value, err_msg ) ) {
             err_msg = "Failed to parse restart STEP value: " + err_msg;
             return { false, TaskStartupMode::invalid, "", false };
         }
 
-        if ( restart_step_value > tstate.last_completed_step + allowed_restart_step_diff ) {
+        if ( restart_file_step_value > tstate.last_completed_step + allowed_restart_step_diff ) {
             err_msg = "Timestep count from model restart is much higher than last_completed_step in the progress file, error occurred. Exiting..";
             return { false, TaskStartupMode::invalid, "", false };
         }
 
         std::ostringstream log_message;
         log_message << "-- Model is restarting --\n"
-                    << "Adjusting last_completed_step, " << tstate.last_completed_step << ", to previous model restart step.\n";
+                    << "Adjusting last_completed_step, " << tstate.last_completed_step << ", to model restart step: "
+                    << restart_file_step_value << '\n';
 
-        int adjusted_restart_step = tstate.last_completed_step;
-        adjusted_restart_step = adjusted_restart_step - ( ( adjusted_restart_step % restart_interval_steps ) -
-                                                          1 );    // -1 because the model will continue from restart_step.
-        tstate.last_completed_step = adjusted_restart_step;
+        tstate.last_completed_step = restart_file_step_value;
 
+        // Normal return for a successful restart
         return { true, TaskStartupMode::restart_run, log_message.str(), false };
     }
 

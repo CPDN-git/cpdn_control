@@ -87,7 +87,7 @@ class WRFControl : public ModelControl {
 
     // Start date and time for the run read from namelist.input.
     // Needed to construct time periods for output and restart files.
-    mutable DateTime start_datetime{};
+    mutable DateTime step0_datetime{};    // this is the date/time of the very start, read from namelist.input.step0.
     mutable DateTime restart_reference_start_datetime{};
     mutable bool restart_reference_start_valid = false;
 

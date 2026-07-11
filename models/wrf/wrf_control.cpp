@@ -522,6 +522,7 @@ bool WRFControl::update_restart_namelist( const RestartSet& restart_set ) const
         return false;
     }
     DateTime original_start_datetime{};
+
     int original_start_fields_parsed = 0;
 
     std::ifstream input_stream( control_input_file );
@@ -747,7 +748,7 @@ bool WRFControl::get_current_step( int& step, const int total_steps ) const
     }
 
     // Convert the log timestamp back into "seconds since model start".
-    const long long elapsed_seconds = datetime_duration_seconds( start_datetime, latest_domain1_timestamp );
+    const long long elapsed_seconds = datetime_duration_seconds( step0_datetime, latest_domain1_timestamp );
     if ( elapsed_seconds < 0 || ( elapsed_seconds % static_cast<long long>( timestep_seconds ) ) != 0 ) {
         return false;
     }
@@ -770,6 +771,8 @@ bool WRFControl::get_current_step( int& step, const int total_steps ) const
  * This is not the ideal way for WRF to work. Rather than convert from date-time to steps
  * it would be more natural for the model instance to use an internal date-time diff rather
  * than keep converting. TO DO.
+ * Important: The start date-time in the namelist.input will be changed on each restart,
+ * so to compute time from the very start use the 'step0' date-time which is read from the original namelist.input.
  */
 std::vector<std::string> WRFControl::get_output_filenames( int step ) const
 {
@@ -778,11 +781,11 @@ std::vector<std::string> WRFControl::get_output_filenames( int step ) const
         return {};
     }
 
-    // Calculate duration and add to the start time.
+    // Calculate duration and add to the start time (step 0 at initial start).
     const long long elapsed_seconds = static_cast<long long>( step ) * static_cast<long long>( timestep_seconds );
 
     DateTime duration = secs_to_datetime_duration( elapsed_seconds );
-    DateTime output_date = add_duration_to_datetime( start_datetime, duration );
+    DateTime output_date = add_duration_to_datetime( step0_datetime, duration );
 
     // WRF output files use a fixed YYYY-MM-DD_HH:MM:SS suffix.
     std::array<char, 20> timestamp_buffer{};
@@ -996,7 +999,7 @@ ModelControlInputData WRFControl::parse_control_input() const
         // Get the run start date/time used to build output and restart timestamps.
         // WRF lists one value per domain, but the first value is enough because all
         // domains share the same start time.
-        else if ( int* start_field = get_wrf_start_datetime_field( start_datetime, parsed_key ); start_field != nullptr ) {
+        else if ( int* start_field = get_wrf_start_datetime_field( step0_datetime, parsed_key ); start_field != nullptr ) {
             tmpstr = parsed_value;
             if ( !parse_int( tmpstr, *start_field, err_msg ) ) {
                 return make_parse_error( parsed.source_file, "parse", parsed_key, err_msg );
@@ -1223,7 +1226,7 @@ bool WRFControl::setup( const fs::path& slot_path ) const
 {
     (void)slot_path;
 
-    // Preserve the origina starting namelist as controller needs to know the
+    // Preserve the original starting namelist as controller needs to know the
     // original starting time to compute the restart step later on.
     if ( !fs::exists( control_input_file_step0 ) ) {
         std::error_code copy_ec;
@@ -1248,7 +1251,6 @@ bool WRFControl::setup( const fs::path& slot_path ) const
         return false;
     }
 
-    std::cerr << "WRF setup() updating restart namelist using cached restart set at " << latest_restart_set->datetime << '\n';
     return update_restart_namelist( *latest_restart_set );
 }
 

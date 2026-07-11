@@ -260,7 +260,7 @@ bool extract_wrf_restart_timestamp( std::string_view filename, const std::vector
 }
 
 
-std::string build_repeated_wrf_start_value_list( int value, int width, int domain_count )
+std::string build_wrf_start_value_list( int value, int width, int domain_count )
 {
     std::ostringstream rhs_stream;
 
@@ -276,7 +276,13 @@ std::string build_repeated_wrf_start_value_list( int value, int width, int domai
 }
 
 
-std::string replace_namelist_rhs_preserving_comment( const std::string& line, const std::string& rhs )
+/**
+ * @brief Replace the right-hand-side of a namelist line while preserving any comment suffix.
+ * @param line The original line from the namelist.
+ * @param rhs The new right-hand-side value to replace in the line.
+ * @return A new string with the right-hand-side replaced, preserving any comment suffix.
+ */
+std::string replace_namelist_rhs( const std::string& line, const std::string& rhs )
 {
     const auto equals_pos = line.find( '=' );
     if ( equals_pos == std::string::npos ) {
@@ -514,14 +520,19 @@ const WRFControl::RestartSet* WRFControl::find_latest_valid_restart_set() const
 }
 
 
+/**
+ * @brief Update the namelist.input file to set the restart flag and update the start date/time values.
+ * @param restart_set The restart set containing the datetime and domain presence information.
+ * @returns True if the namelist was successfully updated, otherwise false.
+ */
 bool WRFControl::update_restart_namelist( const RestartSet& restart_set ) const
 {
-    DateTime restart_datetime{};
-    if ( !parse_wrf_timestamp( restart_set.datetime, restart_datetime ) ) {
-        std::cerr << "Failed to parse cached WRF restart timestamp while updating namelist.input: " << restart_set.datetime << '\n';
+    DateTime restart_file_datetime{};
+    if ( !parse_wrf_timestamp( restart_set.datetime, restart_file_datetime ) ) {
+        std::cerr << "update_restart_namelist : Failed to parse WRF restart timestamp to update namelist.input: " << restart_set.datetime << '\n';
         return false;
     }
-    DateTime original_start_datetime{};
+    DateTime start_datetime{};    // This is the current datetime in the namelist.input; it may NOT be the original start time if multiple restarts.
 
     int original_start_fields_parsed = 0;
 
@@ -538,10 +549,12 @@ bool WRFControl::update_restart_namelist( const RestartSet& restart_set ) const
     std::size_t time_control_line_index = std::string::npos;
     int start_keys_updated = 0;
 
+    // Scan the namelist.input file, find restart flag and start date/time keys and update them.
     while ( std::getline( input_stream, line ) ) {
         std::string updated_line = line;
         std::string trimmed_line = line;
         trim_whitespace( trimmed_line );
+
         if ( trimmed_line == "&time_control" && time_control_line_index == std::string::npos ) {
             time_control_line_index = lines.size();
         }
@@ -572,25 +585,25 @@ bool WRFControl::update_restart_namelist( const RestartSet& restart_set ) const
             } else {
                 int field_value = 0;
                 int field_width = 0;
-                int* original_field = get_wrf_start_datetime_field( original_start_datetime, lhs );
+                int* original_field = get_wrf_start_datetime_field( start_datetime, lhs );
 
                 if ( lhs == "start_year" ) {
-                    field_value = restart_datetime.year;
+                    field_value = restart_file_datetime.year;
                     field_width = 4;
                 } else if ( lhs == "start_month" ) {
-                    field_value = restart_datetime.month;
+                    field_value = restart_file_datetime.month;
                     field_width = 2;
                 } else if ( lhs == "start_day" ) {
-                    field_value = restart_datetime.day;
+                    field_value = restart_file_datetime.day;
                     field_width = 2;
                 } else if ( lhs == "start_hour" ) {
-                    field_value = restart_datetime.hour;
+                    field_value = restart_file_datetime.hour;
                     field_width = 2;
                 } else if ( lhs == "start_minute" ) {
-                    field_value = restart_datetime.minute;
+                    field_value = restart_file_datetime.minute;
                     field_width = 2;
                 } else if ( lhs == "start_second" ) {
-                    field_value = restart_datetime.second;
+                    field_value = restart_file_datetime.second;
                     field_width = 2;
                 }
 
@@ -609,8 +622,8 @@ bool WRFControl::update_restart_namelist( const RestartSet& restart_set ) const
                         }
                     }
 
-                    const std::string rhs = build_repeated_wrf_start_value_list( field_value, field_width, max_domains );
-                    const std::string rewritten_line = replace_namelist_rhs_preserving_comment( line, rhs );
+                    const std::string rhs = build_wrf_start_value_list( field_value, field_width, max_domains );
+                    const std::string rewritten_line = replace_namelist_rhs( line, rhs );
                     if ( rewritten_line != line ) {
                         updated_line = rewritten_line;
                         file_changed = true;
@@ -635,8 +648,8 @@ bool WRFControl::update_restart_namelist( const RestartSet& restart_set ) const
         std::cerr << "Inserted missing WRF restart setting after &time_control in " << control_input_file << '\n';
     }
 
-    if ( original_start_fields_parsed == 6 && datetime_duration_seconds( original_start_datetime, original_start_datetime ) == 0 ) {
-        restart_reference_start_datetime = original_start_datetime;
+    if ( original_start_fields_parsed == 6 && datetime_duration_seconds( start_datetime, start_datetime ) == 0 ) {
+        restart_reference_start_datetime = start_datetime;
         restart_reference_start_valid = true;
         std::cerr << "Cached original WRF start datetime before restart rewrite for step recovery.\n";
     } else {

@@ -55,6 +55,9 @@ void log_boinc_api_error( const char* api_name, int retval )
 //   Major : increment for incompatible API changes, adding new models, or major refactoring.
 //   Minor : increment for backward-compatible functionality, new features, or improvements.
 //   Patch : increment for backward-compatible bug fixes, performance improvements, or minor changes.
+
+//  Version 1.x.x  : OpeniFS only
+//  Version 2.x.x  : WRF support added, refactored into modular class structure, improved error handling and logging.
 #ifndef CODE_VERSION
 #define CODE_VERSION "2.0.0"
 #endif
@@ -877,9 +880,9 @@ int main( int argc, char** argv )
         // If the model step has updated, carry out various tasks.
         if ( observed_step != tstate.last_completed_step ) {
 
-            double model_day = ( static_cast<double>( observed_step ) * static_cast<double>( timestep_seconds ) ) / 86400.0;
-            std::cerr << "Main loop. Current observed step: " << tstate.current_step << std::fixed << std::setprecision( 4 ) << " (model days "
-                      << model_day << "), last step: " << tstate.last_completed_step << '\n';
+            double model_day = ( static_cast<double>( tstate.current_step ) * static_cast<double>( timestep_seconds ) ) / 86400.0;
+            std::cerr << "Main loop. Current step: " << tstate.current_step << std::fixed << std::setprecision( 4 ) << ", Model day: " << model_day
+                      << ") \n";
 
             //  1:  Ask the model to do its own tasks on a step change.
             //  This can involve running a separate external diagnostics executable to create trickle data, or,

@@ -77,7 +77,8 @@ class WRFControl : public ModelControl {
     // Private helper variables
 
     // WRF control namelist file
-    const fs::path control_input_file{ "namelist.input" };    // WRF control input file
+    const fs::path control_input_file{ "namelist.input" };                // WRF control input file
+    const fs::path control_input_file_step0{ "namelist.input.step0" };    // WRF control input file for step 0 (used for restart)
 
     // Timestep in seconds
     // Used to contruct time period differences
@@ -105,7 +106,7 @@ class WRFControl : public ModelControl {
     bool read_validated_max_domains( int& parsed_max_domains, std::string& err_msg ) const;
     bool ensure_domain_prefixes_initialized() const;
     void set_domain_prefixes( int domain_count ) const;
-    void invalidate_restart_scan_cache() const;
+    void clear_restart_scan_cache() const;
     const RestartSet* find_latest_valid_restart_set() const;
-    bool sync_restart_namelist( const RestartSet& restart_set ) const;
+    bool update_restart_namelist( const RestartSet& restart_set ) const;
 };

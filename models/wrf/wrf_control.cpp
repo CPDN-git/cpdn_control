@@ -452,7 +452,7 @@ void WRFControl::set_domain_prefixes( int domain_count ) const
 }
 
 
-void WRFControl::invalidate_restart_scan_cache() const
+void WRFControl::clear_restart_scan_cache() const
 {
     restart_sets.clear();
     restart_scan_cached = false;
@@ -514,7 +514,7 @@ const WRFControl::RestartSet* WRFControl::find_latest_valid_restart_set() const
 }
 
 
-bool WRFControl::sync_restart_namelist( const RestartSet& restart_set ) const
+bool WRFControl::update_restart_namelist( const RestartSet& restart_set ) const
 {
     DateTime restart_datetime{};
     if ( !parse_wrf_timestamp( restart_set.datetime, restart_datetime ) ) {
@@ -887,17 +887,29 @@ bool WRFControl::setup_directories( const fs::path& slot_path ) const
  */
 ModelControlInputData WRFControl::parse_control_input() const
 {
-    // Code is based on OpenIFSControl::parse_control_input()
+    // Code is based on OpenIFSControl::parse_control_input().
+    // Might be scope later for extracting common code patterns.
     ModelControlInputData parsed;
-    parsed.source_file = control_input_file;
 
-    if ( !fs::exists( control_input_file ) ) {
-        return make_parse_error( control_input_file, "exists", "", "model control input file does not exist" );
+    // On a new model start, the only control file will be the 'namelist.input' file.
+    // The 'setup()' function called before this will copy this into the 'step0' file
+    // to preserve it so the restart code can see the original start date-time. This allows
+    // the controller to measure the model run from the start which keeps trickles correct.
+    // So, by the time we get here, we should have the control_input_file_step0 available.
+    // However, if we don't fall back to the namelist.input but this is likely an error.
+    if ( fs::exists( control_input_file_step0 ) ) {
+        parsed.source_file = control_input_file_step0;
+    } else {
+        parsed.source_file = control_input_file;
+        std::cerr << "Warning! WRF control input file step0 not found; using namelist.input instead: " << control_input_file << '\n';
+    }
+    if ( !fs::exists( parsed.source_file ) ) {
+        return make_parse_error( parsed.source_file, "exists", "", "model control input file does not exist" );
     }
 
-    std::ifstream control_input_stream( control_input_file );
+    std::ifstream control_input_stream( parsed.source_file );
     if ( !control_input_stream.is_open() ) {
-        return make_parse_error( control_input_file, "open", "", "failed to open model control input file" );
+        return make_parse_error( parsed.source_file, "open", "", "failed to open model control input file" );
     }
 
     std::string input_line;
@@ -943,7 +955,7 @@ ModelControlInputData WRFControl::parse_control_input() const
                 tmpstr = tmpstr.substr( 0, decimal_point );
             }
             if ( !parse_int( tmpstr, parsed.timestep_seconds, err_msg ) ) {
-                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+                return make_parse_error( parsed.source_file, "parse", parsed_key, err_msg );
             }
             timestep_seconds = parsed.timestep_seconds;    // internal var for later use
         }
@@ -955,28 +967,28 @@ ModelControlInputData WRFControl::parse_control_input() const
             tmpstr = parsed_value;
             int days = 0;
             if ( !parse_int( tmpstr, days, err_msg ) ) {
-                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+                return make_parse_error( parsed.source_file, "parse", parsed_key, err_msg );
             }
             run_len_secs = days * 86400;    // Convert days to seconds
         } else if ( parsed_key == "run_hours" ) {
             tmpstr = parsed_value;
             int hours = 0;
             if ( !parse_int( tmpstr, hours, err_msg ) ) {
-                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+                return make_parse_error( parsed.source_file, "parse", parsed_key, err_msg );
             }
             run_len_secs = run_len_secs + hours * 3600;    // Convert hours to seconds and add to total
         } else if ( parsed_key == "run_minutes" ) {
             tmpstr = parsed_value;
             int minutes = 0;
             if ( !parse_int( tmpstr, minutes, err_msg ) ) {
-                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+                return make_parse_error( parsed.source_file, "parse", parsed_key, err_msg );
             }
             run_len_secs = run_len_secs + minutes * 60;    // Convert minutes to seconds and add to total
         } else if ( parsed_key == "run_seconds" ) {
             tmpstr = parsed_value;
             int seconds = 0;
             if ( !parse_int( tmpstr, seconds, err_msg ) ) {
-                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+                return make_parse_error( parsed.source_file, "parse", parsed_key, err_msg );
             }
             run_len_secs = run_len_secs + seconds;    // Add seconds to total
         }
@@ -987,7 +999,7 @@ ModelControlInputData WRFControl::parse_control_input() const
         else if ( int* start_field = get_wrf_start_datetime_field( start_datetime, parsed_key ); start_field != nullptr ) {
             tmpstr = parsed_value;
             if ( !parse_int( tmpstr, *start_field, err_msg ) ) {
-                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+                return make_parse_error( parsed.source_file, "parse", parsed_key, err_msg );
             }
         }
 
@@ -995,7 +1007,7 @@ ModelControlInputData WRFControl::parse_control_input() const
         else if ( parsed_key == "restart_interval" ) {
             tmpstr = parsed_value;
             if ( !parse_int( tmpstr, restart_interval_minutes, err_msg ) ) {
-                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+                return make_parse_error( parsed.source_file, "parse", parsed_key, err_msg );
             }
         }
 
@@ -1004,10 +1016,10 @@ ModelControlInputData WRFControl::parse_control_input() const
         else if ( parsed_key == "max_dom" ) {
             tmpstr = parsed_value;
             if ( !parse_int( tmpstr, parsed_max_domains, err_msg ) ) {
-                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
+                return make_parse_error( parsed.source_file, "parse", parsed_key, err_msg );
             }
             if ( parsed_max_domains <= 0 || parsed_max_domains > max_dom_allowed ) {
-                return make_parse_error( control_input_file, "validate", parsed_key,
+                return make_parse_error( parsed.source_file, "validate", parsed_key,
                                          "max_dom must be between 1 and " + std::to_string( max_dom_allowed ) );
             }
         }
@@ -1019,11 +1031,11 @@ ModelControlInputData WRFControl::parse_control_input() const
         //  The value of max_dom gives the value to use from these.
         else if ( parsed_key == "history_interval" ) {
             if ( !extract_namelist_rhs_preserving_list( input_line, history_interval ) ) {
-                return make_parse_error( control_input_file, "parse", parsed_key, "failed to extract namelist value list" );
+                return make_parse_error( parsed.source_file, "parse", parsed_key, "failed to extract namelist value list" );
             }
         } else if ( parsed_key == "frames_per_outfile" ) {
             if ( !extract_namelist_rhs_preserving_list( input_line, frames_per_outfile ) ) {
-                return make_parse_error( control_input_file, "parse", parsed_key, "failed to extract namelist value list" );
+                return make_parse_error( parsed.source_file, "parse", parsed_key, "failed to extract namelist value list" );
             }
         }
     }
@@ -1032,10 +1044,10 @@ ModelControlInputData WRFControl::parse_control_input() const
     // By 'output_interval', we mean the frequency at which new model output files are created,
     // which is not the rate at which WRF output fields are written to that file.
     if ( parsed.timestep_seconds <= 0 ) {
-        return make_parse_error( control_input_file, "validate", "time_step", "time_step must be a positive integer" );
+        return make_parse_error( parsed.source_file, "validate", "time_step", "time_step must be a positive integer" );
     }
     if ( parsed_max_domains <= 0 ) {
-        return make_parse_error( control_input_file, "validate", "max_dom", "max_dom must be between 1 and " + std::to_string( max_dom_allowed ) );
+        return make_parse_error( parsed.source_file, "validate", "max_dom", "max_dom must be between 1 and " + std::to_string( max_dom_allowed ) );
     }
 
     max_domains = parsed_max_domains;
@@ -1044,10 +1056,10 @@ ModelControlInputData WRFControl::parse_control_input() const
     int domain_history_interval = 0;
     int domain_frames_per_outfile = 0;
     if ( !parse_wrf_domain_list_value( history_interval, max_domains, domain_history_interval, err_msg ) ) {
-        return make_parse_error( control_input_file, "parse", "history_interval", err_msg );
+        return make_parse_error( parsed.source_file, "parse", "history_interval", err_msg );
     }
     if ( !parse_wrf_domain_list_value( frames_per_outfile, max_domains, domain_frames_per_outfile, err_msg ) ) {
-        return make_parse_error( control_input_file, "parse", "frames_per_outfile", err_msg );
+        return make_parse_error( parsed.source_file, "parse", "frames_per_outfile", err_msg );
     }
     parsed.output_interval = ( domain_history_interval * domain_frames_per_outfile * 60 ) / parsed.timestep_seconds;
     output_interval = parsed.output_interval;
@@ -1057,7 +1069,7 @@ ModelControlInputData WRFControl::parse_control_input() const
     parsed.total_steps = static_cast<decltype( parsed.total_steps )>( run_len_secs / static_cast<long long>( parsed.timestep_seconds ) );
     parsed.forecast_length_time = static_cast<double>( run_len_secs );
 
-    std::cerr << "WRF namelist.input parsed successfully:\n"
+    std::cerr << "WRF namelist.input parsed successfully from input file: " << parsed.source_file << "\n"
               << "Timestep (secs)=" << parsed.timestep_seconds << ", total_steps=" << parsed.total_steps
               << ", output_interval=" << parsed.output_interval << ", forecast_length_time=" << parsed.forecast_length_time
               << ", max_domains=" << max_domains << ", restart interval=" << parsed.restart_interval << ", output_interval=" << parsed.output_interval
@@ -1085,7 +1097,7 @@ bool WRFControl::restart_exists() const
         return cached_restart_exists;
     }
 
-    invalidate_restart_scan_cache();
+    clear_restart_scan_cache();
 
     // Scan the slot directory and group non-empty restart files by their timestamp suffix.
     for ( const auto& entry : fs::directory_iterator( scan_dir ) ) {
@@ -1211,6 +1223,20 @@ bool WRFControl::setup( const fs::path& slot_path ) const
 {
     (void)slot_path;
 
+    // Preserve the origina starting namelist as controller needs to know the
+    // original starting time to compute the restart step later on.
+    if ( !fs::exists( control_input_file_step0 ) ) {
+        std::error_code copy_ec;
+        fs::copy_file( control_input_file, control_input_file_step0, fs::copy_options::overwrite_existing, copy_ec );
+        if ( copy_ec ) {
+            std::cerr << "WRF setup() failed to preserve initial control input file " << control_input_file << " as " << control_input_file_step0
+                      << ": " << copy_ec.message() << '\n';
+            return false;
+        } else {
+            std::cerr << "WRF setup() preserved initial control input file " << control_input_file << " as " << control_input_file_step0 << '\n';
+        }
+    }
+
     // If no valid restart set exists, leave namelist.input unchanged.
     if ( !restart_exists() ) {
         return true;
@@ -1222,8 +1248,8 @@ bool WRFControl::setup( const fs::path& slot_path ) const
         return false;
     }
 
-    std::cerr << "WRF setup() syncing restart namelist using cached restart set at " << latest_restart_set->datetime << '\n';
-    return sync_restart_namelist( *latest_restart_set );
+    std::cerr << "WRF setup() updating restart namelist using cached restart set at " << latest_restart_set->datetime << '\n';
+    return update_restart_namelist( *latest_restart_set );
 }
 
 

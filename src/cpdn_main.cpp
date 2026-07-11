@@ -397,32 +397,27 @@ static ExitDecision make_recovered_exit_decision( const ExitReason reason, const
 
 
 /**
- * @brief Classify the current BOINC shutdown state into the controller exit reason enum.
- */
-static ExitReason classify_boinc_shutdown_reason( const BoincRuntime& runtime )
-{
-    if ( runtime.client_status.quit_request ) {
-        return ExitReason::boinc_quit;
-    }
-    if ( runtime.client_status.abort_request ) {
-        return ExitReason::boinc_abort;
-    }
-    if ( runtime.client_status.no_heartbeat ) {
-        return ExitReason::boinc_no_heartbeat;
-    }
-    return ExitReason::controller_error;
-}
-
-/**
  * @brief Construct the explicit controller exit decision for a BOINC-driven shutdown.
  *        QUIT remains restartable, while abort/no-heartbeat take a terminal non-finish path.
  */
 static ExitDecision make_boinc_shutdown_exit_decision( const BoincRuntime& runtime )
 {
-    const ExitReason reason = classify_boinc_shutdown_reason( runtime );
-    if ( reason == ExitReason::boinc_quit ) {
+    ExitReason reason = ExitReason::controller_error;    // default failure
+
+    // Classify the BOINC shutdown request into a controller exit reason for logging.
+    if ( runtime.client_status.quit_request ) {
+        reason = ExitReason::boinc_quit;
+    } else if ( runtime.client_status.abort_request ) {
+        reason = ExitReason::boinc_abort;
+    } else if ( runtime.client_status.no_heartbeat ) {
+        reason = ExitReason::boinc_no_heartbeat;
+    }
+
+    // If boinc is shutting down or the heartbeat is lost, return a non-zero exit code to indicate failure to the BOINC client.
+    if ( reason == ExitReason::boinc_quit || reason == ExitReason::boinc_no_heartbeat ) {
         return { reason, 0, ExitRoute::boinc_shutdown };
     }
+    // BOINC has asked to abort the task.
     return { reason, 1, ExitRoute::boinc_shutdown };
 }
 

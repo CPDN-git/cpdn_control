@@ -506,3 +506,31 @@ Comparison against the original baseline:
 | Function | Baseline `pmccabe` | Current `pmccabe` | Change | Baseline `lizard` NLOC | Current `lizard` NLOC | Change |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `src/cpdn_main.cpp::main()` | 120 | 50 | -70 (`-58.3%`) | 516 | 252 | -264 (`-51.2%`) |
+
+## After consolidating controller exit handling
+
+Measured on 2026-07-11 after:
+
+- replacing the overlapping `exit_task()` and `shutdown_task()` helpers with the single final `finish_task_exit()` endpoint
+- separating exit cause (`ExitReason`) from cleanup route (`ExitRoute`)
+- extracting controller-error output preservation into `recover_after_controller_error()`
+- consolidating the repeated BOINC-aware wait, suspend/resume, and terminal-exit decision code into `wait_for_boinc_exit()`
+
+| File | Function | `pmccabe` | `lizard` CCN | `lizard` NLOC | Notes |
+| --- | --- | ---: | ---: | ---: | --- |
+| `src/cpdn_main.cpp` | `main()` | 47 | 47 | 246 | Exit call sites now name an explicit route while the orchestration flow remains visible |
+| `src/cpdn_main.cpp` | `recover_after_controller_error()` | 6 | 6 | 16 | Owns child stop, file-settle delay, diagnostic upload preservation, and BOINC override during recovery |
+| `src/cpdn_main.cpp` | `wait_for_boinc_exit()` | 6 | 6 | 14 | Owns repeated BOINC-aware wait and suspend/resume handling |
+| `src/cpdn_main.cpp` | `finish_task_exit()` | 4 | 7 | 22 | Single final endpoint for child-handle closure, critical-section release, and completion-only `boinc_finish()` |
+
+Comparison against the previous exit-path refactor point:
+
+| Function | Prior `pmccabe` | Current `pmccabe` | Change | Prior `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `src/cpdn_main.cpp::main()` | 50 | 47 | -3 (`-6.0%`) | 252 | 246 | -6 (`-2.4%`) |
+
+Comparison against the original baseline:
+
+| Function | Baseline `pmccabe` | Current `pmccabe` | Change | Baseline `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `src/cpdn_main.cpp::main()` | 120 | 47 | -73 (`-60.8%`) | 516 | 246 | -270 (`-52.3%`) |

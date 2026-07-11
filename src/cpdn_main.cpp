@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
+#include <optional>
 #include <sstream>
 #include <thread>
 #include <vector>
@@ -312,7 +313,6 @@ static void banner( const BoincConfig& bc, const std::string& code_version )
 
 
 enum class ExitReason {
-    none,
     loop_completed,
     boinc_quit,
     boinc_abort,
@@ -322,17 +322,25 @@ enum class ExitReason {
     upload_error,
 };
 
+/**
+ * @brief Defines the cleanup policy for a controller exit independently from its cause.
+ */
+enum class ExitRoute {
+    immediate,
+    controller_error_recovery,
+    boinc_shutdown,
+    task_completed,
+};
+
 struct ExitDecision {
-    ExitReason reason = ExitReason::none;
-    int exit_code = 1;
-    bool should_call_boinc_finish = true;
+    ExitReason reason;
+    int exit_code;
+    ExitRoute route;
 };
 
 static const char* exit_reason_to_string( const ExitReason reason )
 {
     switch ( reason ) {
-    case ExitReason::none:
-        return "none";
     case ExitReason::loop_completed:
         return "loop_completed";
     case ExitReason::boinc_quit:
@@ -351,10 +359,39 @@ static const char* exit_reason_to_string( const ExitReason reason )
     return "unknown";
 }
 
+
+static const char* exit_route_to_string( const ExitRoute route )
+{
+    switch ( route ) {
+    case ExitRoute::immediate:
+        return "immediate";
+    case ExitRoute::controller_error_recovery:
+        return "controller_error_recovery";
+    case ExitRoute::boinc_shutdown:
+        return "boinc_shutdown";
+    case ExitRoute::task_completed:
+        return "task_completed";
+    }
+    return "unknown";
+}
+
 /**
- * @brief Construct a non-completion exit decision that must not call boinc_finish().
+ * @brief Construct a non-completion exit that stops an active child and leaves immediately.
  */
-static ExitDecision make_failure_exit_decision( const ExitReason reason, const int exit_code ) { return { reason, exit_code, false }; }
+static ExitDecision make_immediate_exit_decision( const ExitReason reason, const int exit_code )
+{
+    return { reason, exit_code, ExitRoute::immediate };
+}
+
+
+/**
+ * @brief Construct a non-completion exit after controller recovery has already stopped the child.
+ */
+static ExitDecision make_recovered_exit_decision( const ExitReason reason, const int exit_code )
+{
+    return { reason, exit_code, ExitRoute::controller_error_recovery };
+}
+
 
 /**
  * @brief Classify the current BOINC shutdown state into the controller exit reason enum.
@@ -374,24 +411,26 @@ static ExitReason classify_boinc_shutdown_reason( const BoincRuntime& runtime )
 }
 
 /**
- * @brief Construct the explicit controller exit decision for BOINC-driven shutdown.
- *        QUIT remains restartable and therefore does not call boinc_finish(),
- *        while abort/no-heartbeat take a terminal non-finish path.
+ * @brief Construct the explicit controller exit decision for a BOINC-driven shutdown.
+ *        QUIT remains restartable, while abort/no-heartbeat take a terminal non-finish path.
  */
 static ExitDecision make_boinc_shutdown_exit_decision( const BoincRuntime& runtime )
 {
     const ExitReason reason = classify_boinc_shutdown_reason( runtime );
     if ( reason == ExitReason::boinc_quit ) {
-        return { reason, 0, false };
+        return { reason, 0, ExitRoute::boinc_shutdown };
     }
-    return make_failure_exit_decision( reason, 1 );
+    return { reason, 1, ExitRoute::boinc_shutdown };
 }
 
 /**
  * @brief Construct the genuine task-completion exit decision.
  *        This is the only path that is allowed to call boinc_finish().
  */
-static ExitDecision make_completion_exit_decision( const bool model_success ) { return { ExitReason::loop_completed, model_success ? 0 : 1, true }; }
+static ExitDecision make_completion_exit_decision( const bool model_success )
+{
+    return { ExitReason::loop_completed, model_success ? 0 : 1, ExitRoute::task_completed };
+}
 
 
 /**
@@ -410,68 +449,85 @@ static void stop_child_for_shutdown( TaskState& tstate )
 
 
 /**
- * @brief Finalize the controller exit after any required child-process shutdown work is done.
- *        Closes any child-process handle state, ends any BOINC critical section,
- *        and optionally calls boinc_finish() for genuine task completion.
+ * @brief Preserve staged outputs after a controller error before returning a normal final exit decision.
  */
-static int finish_controller_exit( TaskState& tstate, const ExitDecision& decision )
+static ExitDecision recover_after_controller_error( TaskState& tstate, UploadManager& upload_manager, BoincRuntime& runtime, const int exit_code )
 {
+    stop_child_for_shutdown( tstate );
+
+    std::cerr << "Waiting for file operations to complete...(" << FILE_OP_DELAY << " secs)" << std::endl;
+    if ( !sleep_with_boinc_poll( runtime, upload_manager.standalone(), FILE_OP_DELAY ) ) {
+        if ( runtime.client_status.quit_request || runtime.client_status.abort_request || runtime.client_status.no_heartbeat ) {
+            return make_boinc_shutdown_exit_decision( runtime );
+        }
+    }
+
+    auto upload_result = upload_manager.finalize_remaining_uploads( runtime, tstate, tstate.last_completed_step, true, false );
+    if ( !upload_result.ok ) {
+        return make_recovered_exit_decision( ExitReason::upload_error, upload_result.finish_code );
+    }
+    upload_manager.cleanup_upload_dir();
+
+    return make_recovered_exit_decision( ExitReason::controller_error, exit_code );
+}
+
+
+/**
+ * @brief Handle a BOINC-aware wait and return an exit decision only when the task must stop.
+ *        A suspend/resume failure without a BOINC shutdown request is recovered as a controller error.
+ */
+static std::optional<ExitDecision> wait_for_boinc_exit( TaskState& tstate, BoincRuntime& runtime, UploadManager& upload_manager,
+                                                        const bool standalone, const double wait_seconds )
+{
+    if ( sleep_with_boinc_poll( runtime, standalone, wait_seconds ) ) {
+        return std::nullopt;
+    }
+
+    if ( apply_boinc_suspend_resume( tstate.child_process, runtime ) ) {
+        return std::nullopt;
+    }
+
+    if ( runtime.client_status.quit_request || runtime.client_status.abort_request || runtime.client_status.no_heartbeat ) {
+        return make_boinc_shutdown_exit_decision( runtime );
+    }
+
+    return recover_after_controller_error( tstate, upload_manager, runtime, 1 );
+}
+
+
+/**
+ * @brief Take the controller's single final-exit path.
+ *        The exit route selects any required child cleanup, then this function closes the child
+ *        handle, ends the critical section, and calls boinc_finish() only after natural completion.
+ */
+static int finish_task_exit( TaskState& tstate, const ExitDecision& decision )
+{
+    switch ( decision.route ) {
+    case ExitRoute::immediate:
+    case ExitRoute::task_completed:
+        stop_child_for_shutdown( tstate );
+        break;
+
+    case ExitRoute::controller_error_recovery:
+        // recover_after_controller_error() already stopped the child before handling files.
+        break;
+
+    case ExitRoute::boinc_shutdown:
+        // The BOINC client owns the process-tree shutdown; do not finalize uploads here.
+        break;
+    }
+
     // Log the exit decision and key task state to stderr for debugging and post-mortem analysis.
-    std::cerr << "Exit decision: reason=" << exit_reason_to_string( decision.reason ) << ", exit_code=" << decision.exit_code
-              << ", should_call_boinc_finish=" << ( decision.should_call_boinc_finish ? "true" : "false" ) << ", child_status=" << tstate.child_status
-              << ", model_completed=" << tstate.model_completed << ", model_success=" << ( tstate.model_success ? "true" : "false" ) << '\n';
+    std::cerr << "Exit decision: reason=" << exit_reason_to_string( decision.reason ) << ", route=" << exit_route_to_string( decision.route )
+              << ", exit_code=" << decision.exit_code << ", child_status=" << tstate.child_status << ", model_completed=" << tstate.model_completed
+              << ", model_success=" << ( tstate.model_success ? "true" : "false" ) << '\n';
 
     close_child_process_handle( tstate.child_process );
     boinc_end_critical_section();    // in case we abort while in critical section (boinc api handles case if not in critical section).
-    if ( decision.should_call_boinc_finish ) {
+    if ( decision.route == ExitRoute::task_completed ) {
         boinc_finish( decision.exit_code );    // boinc_finish exits, no further code executed after this call (unless a dummy library is used).
     }
     return decision.exit_code;
-}
-
-
-/**
- * @brief Take the controller's immediate final-exit path.
- *        This helper stops any active child process and then exits via
- *        finish_controller_exit() without doing any extra shutdown work such
- *        as upload finalization. Use it for ordinary completion and for
- *        failures where the controller should leave immediately.
- */
-static int exit_task( TaskState& tstate, const ExitDecision& decision )
-{
-    stop_child_for_shutdown( tstate );
-    return finish_controller_exit( tstate, decision );
-}
-
-
-/**
- * @brief Take the controller-managed non-completion shutdown path.
- *        Unlike exit_task(), this helper may do extra pre-exit shutdown work
- *        before the final controller exit. In particular, controller errors
- *        stop the child early, wait for file activity to settle, finalize any
- *        remaining uploads, and clean up the upload directory so that logs and
- *        staged outputs are preserved before the controller leaves.
- */
-static int shutdown_task( TaskState& tstate, const ExitDecision& decision, UploadManager* upload_manager, BoincRuntime* runtime )
-{
-    if ( decision.reason == ExitReason::controller_error && upload_manager != nullptr && runtime != nullptr ) {
-        stop_child_for_shutdown( tstate );
-
-        std::cerr << "Waiting for file operations to complete...(" << FILE_OP_DELAY << " secs)" << std::endl;
-        if ( !sleep_with_boinc_poll( *runtime, upload_manager->standalone(), FILE_OP_DELAY ) ) {
-            if ( runtime->client_status.quit_request || runtime->client_status.abort_request || runtime->client_status.no_heartbeat ) {
-                return finish_controller_exit( tstate, make_boinc_shutdown_exit_decision( *runtime ) );
-            }
-        }
-
-        auto upload_result = upload_manager->finalize_remaining_uploads( *runtime, tstate, tstate.last_completed_step, true, false );
-        if ( !upload_result.ok ) {
-            return finish_controller_exit( tstate, make_failure_exit_decision( ExitReason::upload_error, upload_result.finish_code ) );
-        }
-        upload_manager->cleanup_upload_dir();
-    }
-
-    return finish_controller_exit( tstate, decision );
 }
 
 
@@ -495,11 +551,11 @@ int main( int argc, char** argv )
     retval = init_boinc( bconfig );
     if ( retval ) {
         std::cerr << "BOINC initialisation failed" << "\n";
-        return exit_task( tstate, make_failure_exit_decision( ExitReason::startup_error, retval ) );
+        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, retval ) );
     }
     if ( bconfig.slot_path.empty() ) {
         std::cerr << "Error. Can't determine slot path: current_path() returned empty" << std::endl;
-        return exit_task( tstate, make_failure_exit_decision( ExitReason::startup_error, 1 ) );
+        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, 1 ) );
     }
 
     // Install temporary streambuf wrapper on std::cerr so each new log line gets
@@ -522,7 +578,7 @@ int main( int argc, char** argv )
     // Check for existence of model_config.xml in current directory (task) and fail if not found.
     //if ( !path_exists( MODEL_CONFIG_FILE ) ) {
     //    std::cerr << " DEV NOTE: The model config does not yet exist in the current directory: " << MODEL_CONFIG_FILE << std::endl;
-    //    //GC. Testing only; return exit_task( tstate, make_failure_exit_decision( ExitReason::startup_error, 1 ) );
+    //    //GC. Testing only; return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, 1 ) );
     //}
 
     // Create model control instance.
@@ -531,7 +587,7 @@ int main( int argc, char** argv )
     auto model_ctrl = create_model_control( bconfig.app_name, bconfig.app_version );
     if ( model_ctrl == nullptr ) {
         std::cerr << "Error creating model control instance. Unsupported model: " << bconfig.app_name << std::endl;
-        return exit_task( tstate, make_failure_exit_decision( ExitReason::startup_error, 1 ) );
+        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, 1 ) );
     }
 
     // --------------- Argument processing -----------------
@@ -539,13 +595,13 @@ int main( int argc, char** argv )
     // Long-form arguments.
     ParseResult parse_result = parse_args( argc, argv );
     if ( !parse_result.ok ) {
-        return exit_task( tstate, make_failure_exit_decision( ExitReason::startup_error, parse_result.exit_code ) );
+        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, parse_result.exit_code ) );
     }
 
     // Process parsed arguments into the data structures used by the rest of the code.
     if ( !process_args( parse_result, tconfig, err_msg ) ) {
         std::cerr << err_msg << '\n';
-        return exit_task( tstate, make_failure_exit_decision( ExitReason::startup_error, 1 ) );
+        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, 1 ) );
     }
 
     // -------------- <app_config.xml> options processing ----
@@ -572,7 +628,7 @@ int main( int argc, char** argv )
     double num_days = 0.0;
     if ( !parse_double_arg( tconfig.filename_fclen, num_days, err_msg ) ) {
         std::cerr << "Failed to parse --filename_fclen value: " << err_msg << '\n';
-        return exit_task( tstate, make_failure_exit_decision( ExitReason::startup_error, 1 ) );
+        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, 1 ) );
     }
 
     // --------------- Prepare the task environment -----------------
@@ -586,7 +642,7 @@ int main( int argc, char** argv )
     std::cerr << "Location of upload folder in project directory: " << upload_dir << '\n';
     if ( !ensure_directory( upload_dir, &err_msg ) ) {
         std::cerr << "Failed to create temp upload folder for results: " << err_msg << std::endl;
-        return exit_task( tstate, make_failure_exit_decision( ExitReason::startup_error, 1 ) );
+        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, 1 ) );
     }
 
     //  ------------- Info: Naming and content of download applications and workunit files -----------------
@@ -621,7 +677,7 @@ int main( int argc, char** argv )
     retval = stage_and_unzip_app_file( bconfig.app_name, bconfig.app_version, bconfig.project_dir, bconfig.slot_path );
     if ( retval ) {
         std::cerr << "stage_and_unzip_app_file failed" << '\n';
-        return exit_task( tstate, make_failure_exit_decision( ExitReason::startup_error, retval ) );
+        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, retval ) );
     }
 
     //---------------- Stage (copy into slot & unpack) the workunit file(s) zip ---------------------------
@@ -636,7 +692,7 @@ int main( int argc, char** argv )
     if ( !app_bundle_stage.ok ) {
         report_input_stage_failure( "app bundle", app_bundle_stage );
         std::cerr << "App bundle logical path was: " << app_bundle_path.string() << std::endl;
-        return exit_task( tstate, make_failure_exit_decision( ExitReason::startup_error, 1 ) );    // should terminate, the model won't run.
+        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, 1 ) );    // should terminate, the model won't run.
     }
 
     //---------------- Stage (copy & unpack) remaining model input files -----------------------
@@ -650,7 +706,7 @@ int main( int argc, char** argv )
     auto manifest_stage = stage_model_input_manifest( input_manifest, bconfig.slot_path );
     if ( !manifest_stage.ok ) {
         report_input_stage_failure( "model input archive", manifest_stage );
-        return exit_task( tstate, make_failure_exit_decision( ExitReason::startup_error, 1 ) );    // should terminate, the model won't run.
+        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, 1 ) );    // should terminate, the model won't run.
     }
 
     //----------------  Ask model to run it's own setup before the model control file (e.g. namelist) is parsed.
@@ -659,7 +715,7 @@ int main( int argc, char** argv )
 
     if ( !model_ctrl->setup( bconfig.slot_path ) ) {
         std::cerr << "Model setup failed.\n";
-        return exit_task( tstate, make_failure_exit_decision( ExitReason::startup_error, 1 ) );
+        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, 1 ) );
     }
 
     //----------------  Ask model for key control variables needed to manage the task  -------------------------------
@@ -670,7 +726,7 @@ int main( int argc, char** argv )
     auto control_input = model_ctrl->parse_control_input();
     if ( !control_input.ok ) {
         report_model_control_input_failure( control_input );
-        return exit_task( tstate, make_failure_exit_decision( ExitReason::startup_error, 1 ) );
+        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, 1 ) );
     }
 
     const int timestep_seconds = control_input.timestep_seconds;
@@ -697,7 +753,7 @@ int main( int argc, char** argv )
         if ( startup_state.print_model_logs ) {
             model_ctrl->print_logs( 50 );
         }
-        return exit_task( tstate, make_failure_exit_decision( ExitReason::startup_error, 1 ) );
+        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, 1 ) );
     }
     if ( !startup_state.log_message.empty() ) {
         std::cerr << startup_state.log_message;
@@ -711,14 +767,14 @@ int main( int argc, char** argv )
     // Update progress file with current values
     if ( !progress_file.write( tstate, err_msg ) ) {
         std::cerr << "Failed to write progress file: " << err_msg << '\n';
-        return exit_task( tstate, make_failure_exit_decision( ExitReason::startup_error, 1 ) );
+        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, 1 ) );
     }
 
     // upload_interval is controller/task policy in model steps.
     // upload_interval == 0 disables intermediate and final result uploads, but does not disable trickles.
     if ( tconfig.upload_interval < 0 || timestep_seconds <= 0 ) {
         std::cerr << "upload_interval or timestep_seconds is invalid" << std::endl;
-        return exit_task( tstate, make_failure_exit_decision( ExitReason::startup_error, 1 ) );
+        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, 1 ) );
     }
     if ( tconfig.upload_interval == 0 ) {
         std::cerr << "Result uploads disabled (--upload_interval=0). Trickle messages remain enabled.\n";
@@ -746,7 +802,7 @@ int main( int argc, char** argv )
 
     if ( !fs::exists( model_exe ) ) {
         std::cerr << " Abort. Model executable not found: " << model_exe << std::endl;
-        return exit_task( tstate, make_failure_exit_decision( ExitReason::startup_error, 1 ) );
+        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, 1 ) );
     }
 
     // Bug workaround. The current cpdn_unzip function does not preserve executable permissions on Linux.
@@ -755,7 +811,7 @@ int main( int argc, char** argv )
 
     if ( !set_exec_perms( model_exe.string() ) ) {
         std::cerr << "Cannot start model. Setting execute permission for model executable failed: " << model_exe << std::endl;
-        return exit_task( tstate, make_failure_exit_decision( ExitReason::startup_error, 1 ) );
+        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, 1 ) );
     }
 
     // --------------- Start the model process -----------------
@@ -772,7 +828,7 @@ int main( int argc, char** argv )
         tstate.child_status = 0;
     } else {
         std::cerr << "Error launching model process" << std::endl;
-        return exit_task( tstate, make_failure_exit_decision( ExitReason::startup_error, 1 ) );
+        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, 1 ) );
     }
 
     boinc_end_critical_section();
@@ -797,11 +853,9 @@ int main( int argc, char** argv )
 
     while ( tstate.child_status == 0 && tstate.model_completed == 0 ) {
 
-        // Wait for short period to avoid excessive filesystem activity.
-        if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, next_delay_seconds ) ) {
-            if ( !apply_boinc_suspend_resume( tstate.child_process, bruntime ) ) {
-                return shutdown_task( tstate, make_boinc_shutdown_exit_decision( bruntime ), &upload_manager, &bruntime );
-            }
+        // Wait for short period to avoid excessive filesystem activity and handle BOINC requests.
+        if ( auto exit_decision = wait_for_boinc_exit( tstate, bruntime, upload_manager, bconfig.standalone, next_delay_seconds ) ) {
+            return finish_task_exit( tstate, *exit_decision );
         }
 
         next_delay_seconds = loop_delay_seconds;
@@ -847,7 +901,7 @@ int main( int argc, char** argv )
 
             auto scheduled_upload_result = upload_manager.process_scheduled_upload( bruntime, tstate, observed_step );
             if ( !scheduled_upload_result.ok ) {
-                return exit_task( tstate, make_failure_exit_decision( ExitReason::upload_error, scheduled_upload_result.finish_code ) );
+                return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::upload_error, scheduled_upload_result.finish_code ) );
             }
 
             //  4:  Trickle every required fraction of the model run.
@@ -872,7 +926,7 @@ int main( int argc, char** argv )
         //  5: Update progress file with current values
         if ( !progress_file.write( tstate, err_msg ) ) {
             std::cerr << "Failed to write progress file: " << err_msg << '\n';
-            return shutdown_task( tstate, make_failure_exit_decision( ExitReason::controller_error, 1 ), &upload_manager, &bruntime );
+            return finish_task_exit( tstate, recover_after_controller_error( tstate, upload_manager, bruntime, 1 ) );
         }
 
         //  6:  BOINC client housekeeping tasks
@@ -915,10 +969,8 @@ int main( int argc, char** argv )
 
     // Time delay to ensure model files are all flushed to disk
     std::cerr << "Waiting for file operations to complete...(" << FILE_OP_DELAY << " secs)" << std::endl;
-    if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, FILE_OP_DELAY ) ) {
-        if ( !apply_boinc_suspend_resume( tstate.child_process, bruntime ) ) {
-            return shutdown_task( tstate, make_boinc_shutdown_exit_decision( bruntime ), &upload_manager, &bruntime );
-        }
+    if ( auto exit_decision = wait_for_boinc_exit( tstate, bruntime, upload_manager, bconfig.standalone, FILE_OP_DELAY ) ) {
+        return finish_task_exit( tstate, *exit_decision );
     }
 
     tstate.model_success = model_ctrl->check_model_success();
@@ -938,7 +990,7 @@ int main( int argc, char** argv )
 
     auto final_upload_result = upload_manager.finalize_remaining_uploads( bruntime, tstate, tstate.last_completed_step, true );
     if ( !final_upload_result.ok ) {
-        return exit_task( tstate, make_failure_exit_decision( ExitReason::upload_error, final_upload_result.finish_code ) );
+        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::upload_error, final_upload_result.finish_code ) );
     }
 
     // upload_interval == 0 disables result uploads, but trickles remain enabled.
@@ -959,12 +1011,10 @@ int main( int argc, char** argv )
 
     // Delay to ensure all files are flushed to disk before exiting
     std::cerr << "Waiting for file operations to complete...(" << FILE_OP_DELAY << " secs)" << std::endl;
-    if ( !sleep_with_boinc_poll( bruntime, bconfig.standalone, FILE_OP_DELAY ) ) {
-        if ( !apply_boinc_suspend_resume( tstate.child_process, bruntime ) ) {
-            return shutdown_task( tstate, make_boinc_shutdown_exit_decision( bruntime ), &upload_manager, &bruntime );
-        }
+    if ( auto exit_decision = wait_for_boinc_exit( tstate, bruntime, upload_manager, bconfig.standalone, FILE_OP_DELAY ) ) {
+        return finish_task_exit( tstate, *exit_decision );
     }
 
     std::cerr << "Task finished." << std::endl;
-    return exit_task( tstate, make_completion_exit_decision( tstate.model_success ) );
+    return finish_task_exit( tstate, make_completion_exit_decision( tstate.model_success ) );
 }

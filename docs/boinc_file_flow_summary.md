@@ -332,7 +332,7 @@ bool parse_oifs_output_filename( std::string_view filename )
 - `ICMSHOIFS+001000` (3-hourly output at step 1000)
 - `ICMSHOIFS+002000` (3-hourly output at step 2000)
 
-**Zip and upload** (see `src/cpdn_main.cpp` lines 242–290 for `zip_and_send_upload()`):
+**Zip and upload** (see `src/upload_manager.cpp` for `UploadManager::zip_and_send_upload()`):
 
 ```cpp
 // Collect all matching output files
@@ -347,6 +347,12 @@ zip_and_delete( upload_archive.string(), files_to_zip );
 // Submit upload to BOINC
 boinc_upload_file( "upload_file_0.zip" );
 ```
+
+The controller checks the return code from `boinc_upload_file()` to confirm
+that BOINC accepted the request. It does not wait for transfer completion or
+call `boinc_upload_status()`: BOINC uploads are asynchronous, and the client is
+responsible for retaining and retrying pending transfers when the CPDN upload
+server is unavailable.
 
 **Result**:
 ```

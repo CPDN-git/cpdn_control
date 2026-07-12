@@ -186,15 +186,12 @@ UploadManager::UploadSendResult UploadManager::zip_and_send_upload( BoincRuntime
         return result;
     }
 
-    const int upload_status_ret = boinc_upload_status( upload_name );
-    if ( upload_status_ret != 0 ) {
-        log_boinc_api_error( "boinc_upload_status", upload_status_ret );
-        result.ok = false;
-        result.error_step = "boinc_upload_status";
-        result.error_code = upload_status_ret;
-        result.error_message = boincerror( upload_status_ret );
-        return result;
-    }
+    // BOINC uploads are asynchronous and the client owns transfer retries. In
+    // particular, a CPDN upload may remain pending while the upload server is
+    // unavailable. boinc_upload_status() is therefore not useful here: an
+    // immediate query can return ERR_NOT_FOUND before the client has published
+    // a status, while waiting for completion could block the model indefinitely.
+    // A successful boinc_upload_file() call means the request was handed off.
 
     return result;
 }
@@ -238,7 +235,7 @@ UploadOperationResult UploadManager::process_scheduled_upload( BoincRuntime& run
         return { false, upload_result.finish_code };
     }
     if ( upload_result.upload_attempted ) {
-        std::cerr << "Finished the upload of : " << upload_file_name << '\n';
+        std::cerr << "Submitted upload to BOINC: " << upload_file_name << '\n';
     }
 
     tstate.last_upload_step = observed_step;
@@ -296,7 +293,7 @@ UploadOperationResult UploadManager::finalize_remaining_uploads( BoincRuntime& r
             return { false, upload_result.finish_code };
         }
         if ( upload_result.upload_attempted ) {
-            std::cerr << "Finished the upload of the final file" << '\n';
+            std::cerr << "Submitted final upload to BOINC: " << upload_file_name << '\n';
         }
         tstate.upload_file_number = upload_index + 1;
     }

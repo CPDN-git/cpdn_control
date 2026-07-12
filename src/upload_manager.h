@@ -32,7 +32,7 @@ class UploadManager {
     UploadOperationResult process_scheduled_upload( BoincRuntime& runtime, TaskState& tstate, int observed_step ) const;
     UploadOperationResult finalize_remaining_uploads( BoincRuntime& runtime, TaskState& tstate, int final_step, bool include_log_files,
                                                       bool allow_boinc_child_control = true ) const;
-    void cleanup_upload_dir() const;
+    bool cleanup_upload_dir() const;
 
   private:
     struct UploadSendResult {

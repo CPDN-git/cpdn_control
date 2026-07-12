@@ -303,4 +303,14 @@ UploadOperationResult UploadManager::finalize_remaining_uploads( BoincRuntime& r
 }
 
 
-void UploadManager::cleanup_upload_dir() const { fs::remove_all( upload_dir_ ); }
+bool UploadManager::cleanup_upload_dir() const
+{
+    std::error_code ec;
+    fs::remove_all( upload_dir_, ec );
+    if ( ec ) {
+        std::cerr << "Failed to remove temporary upload directory '" << upload_dir_ << "': " << ec.message()
+                  << ". The directory may need to be removed manually.\n";
+        return false;
+    }
+    return true;
+}

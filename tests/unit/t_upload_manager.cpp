@@ -60,12 +60,13 @@ int t_upload_manager()
     const bool upload1_has_log = fs::exists( extract_dir / "upload1" / "ifs.stat" );
     const bool upload2_has_placeholder = fs::exists( extract_dir / "upload2" / "cpdn_upload_placeholder_2.txt" );
 
-    upload_manager.cleanup_upload_dir();
+    const bool cleanup_ok = upload_manager.cleanup_upload_dir();
+    const bool upload_dir_removed = !fs::exists( upload_dir );
     if ( fs::exists( test_root ) ) {
         fs::remove_all( test_root );
     }
 
-    if ( ok && unzip_ok && upload1_has_output && upload1_has_log && upload2_has_placeholder ) {
+    if ( ok && unzip_ok && upload1_has_output && upload1_has_log && upload2_has_placeholder && cleanup_ok && upload_dir_removed ) {
         TEST_SUCCESS;
         return EXIT_SUCCESS;
     }

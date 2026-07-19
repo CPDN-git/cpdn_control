@@ -12,14 +12,14 @@ namespace {
 
 bool is_valid_filename_label( const std::string& label, std::string& err_msg )
 {
-    constexpr std::size_t max_filename_label_length = 128;
+    constexpr std::size_t max_label_length = 32;
 
     if ( label.empty() ) {
         err_msg = "must not be empty";
         return false;
     }
-    if ( label.length() > max_filename_label_length ) {
-        err_msg = "must be no longer than " + std::to_string( max_filename_label_length ) + " characters";
+    if ( label.length() > max_label_length ) {
+        err_msg = "must be no longer than " + std::to_string( max_label_length ) + " characters";
         return false;
     }
     if ( label == "." || label.find( ".." ) != std::string::npos ) {

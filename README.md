@@ -384,25 +384,24 @@ long-form options for the CPDN task metadata it uses during startup.
 An example controller invocation is:
 ```bash
 ./cpdn_control_1.0.0_x86_64-pc-linux-gnu \
-    --startdate=2000010100 \
+    --filename_label=2000010100_1 \
     --memberid=0001 \
     --batch=1 \
-    --workunit=00001 \
-    --fcast_len=1
+    --workunit=00001
 ```
 
 ### Command line parameters
 
 The currently required controller arguments are:
 
-- `--startdate`: model start date in `YYYYMMDDHH` format
+- `--filename_label`: opaque, safe filename component used to locate the workunit app bundle; for example, `2000010100_1` or `20220701_london_caseD`. It is not parsed as a start date or forecast length.
 - `--memberid`: CPDN unique member id
 - `--batch`: CPDN batch id
 - `--workunit`: CPDN workunit id
-- `--fcast_len`: model forecast length in days
 
 Other information about the workunit, including the application name and version, comes
-from the BOINC-supplied `init_data.xml` data read during controller startup.
+from the BOINC-supplied `init_data.xml` data read during controller startup. The model
+control input remains the source of truth for runtime forecast duration.
 
 ## Testing
 

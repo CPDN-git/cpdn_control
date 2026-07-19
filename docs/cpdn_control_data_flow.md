@@ -16,7 +16,7 @@ Today these are split across BOINC init data, controller command-line arguments,
 | Source | Where read | Notes |
 | --- | --- | --- |
 | BOINC init data (`APP_INIT_DATA`) | `init_boinc()` in `src/cpdn_control.cpp` | Supplies BOINC/task environment values. |
-| Controller CLI args | `parse_args()` in `src/parse_args.cpp`, then `process_args()` in `src/cpdn_main.cpp` | Supplies CPDN task identifiers and forecast length. |
+| Controller CLI args | `parse_args()` in `src/parse_args.cpp`, then `process_args()` in `src/parse_args.cpp` | Supplies CPDN task identifiers and opaque app-bundle filename metadata. |
 | Raw trailing `--nthreads` arg | Directly inspected in `main()` in `src/cpdn_main.cpp` | Bypasses `ParseResult` and `TaskConfig`. |
 | CPDN header metadata in `fort.4` | Parsed in `main()` in `src/cpdn_main.cpp` | Comment-style `!KEY=VALUE` lines near top of file. |
 | Standard Fortran namelist values in `fort.4` | Parsed in `main()` in `src/cpdn_main.cpp` | Used for model timing/output scheduling. |
@@ -27,7 +27,7 @@ Today these are split across BOINC init data, controller command-line arguments,
 | Stage | Data pulled in | Output of stage |
 | --- | --- | --- |
 | BOINC init | app version/name, project dir, result/workunit names, CPU count, standalone flag | `BoincConfig` |
-| CLI parse | batch, workunit, memberid, startdate, forecast length | `ParseResult` then `TaskConfig` |
+| CLI parse | batch, workunit, memberid, filename label | `ParseResult` then `TaskConfig` |
 | CLI override | `--nthreads` if present at end of argv | `nthreads`, `nthreads_int`, also overwrites `bconfig.ncpus` |
 | `fort.4` CPDN header parse | archive names and metadata like `UPLOAD_INTERVAL` | loose locals in `main()` |
 | `fort.4` namelist parse | `UTSTEP`, `NFRPOS`, `NFRRES` | loose locals in `main()` |
@@ -56,9 +56,7 @@ Today these are split across BOINC init data, controller command-line arguments,
 | `batch` | `--batch` via `ParseResult` -> `process_args()` | Controller CLI | CPDN task identifier. |
 | `workunit` | `--workunit` via `ParseResult` -> `process_args()` | Controller CLI | CPDN task identifier. |
 | `memberid` | `--memberid` via `ParseResult` -> `process_args()` | Controller CLI | CPDN task identifier / UMID. |
-| `startdate` | `--startdate` via `ParseResult` -> `process_args()` | Controller CLI | Used in archive naming. |
-| `exptid` | Hard-coded to `"NSET"` in `process_args()` | Placeholder / incorrect source | Comments already note this should come from the model/namelist, not CLI. |
-| `fclen` | `--fcast_len` via `ParseResult` -> `process_args()` | Controller CLI | Used to derive `num_days` and construct namelist zip name. Comment in code says this should come from `fort.4`. |
+| `filename_label` | `--filename_label` via `ParseResult` -> `process_args()` | Controller CLI | Opaque middle component used to locate the app-bundle archive before model input can be parsed. |
 
 ## `ParseResult` Fields Not Properly Folded Into Config
 
@@ -88,7 +86,7 @@ This is one sign that controller setup data is currently split between an intend
 | Value | Current controller handling | Note |
 | --- | --- | --- |
 | `exptid` / `EXPTID` | Not read from `fort.4`; controller uses hard-coded `TaskConfig.exptid = "NSET"` | This is the clearest current mismatch. The model/test code reads `EXPTID` directly from `fort.4`, but the controller does not. |
-| Forecast length / stop condition | Controller uses CLI `--fcast_len` via `TaskConfig.fclen` | Code comments already note this should come from the model configuration / namelist instead of CLI. |
+| Forecast length / stop condition | Controller reads the model control input after app-bundle staging | Runtime duration must not be inferred from `filename_label`. |
 
 ## Derived Values in `main()` That Are Not In Config Structs
 
@@ -98,8 +96,7 @@ These are important values, but they are currently loose locals rather than grou
 | --- | --- | --- |
 | `nthreads` | `bconfig.ncpus`, optionally overridden by trailing `--nthreads` | Model launch env setup |
 | `nthreads_int` | Parsed integer form of `nthreads` | Progress/fraction calculations |
-| `num_days` | `atof(tconfig.fclen.c_str())` | Simulation length in days |
-| `namelist_zip_path` / `namelist_zip` | `app_name`, `memberid`, `startdate`, `fclen`, `batch`, `workunit` | Locate task namelist zip |
+| `app_bundle_path` | `app_name`, `memberid`, `filename_label`, `batch`, `workunit` | Locate and stage the app-bundle archive |
 | `namelist_file` | `slot_path` + `fort.4` | Main model/controller metadata file |
 | `trickle_freq` | `timestep`, `total_nsteps` via `TrickleHandler::get_trickle_frequency()` | Controller trickle cadence |
 | `total_nsteps` | `num_days`, `timestep` | Total step count estimate |

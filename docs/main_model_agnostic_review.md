@@ -63,8 +63,7 @@ This note records the current findings from reviewing the `main()` control flow 
 - The naming rule is based on CPDN task tokens such as:
   - `app_name`
   - `memberid`
-  - `filename_startdate`
-  - `filename_fclen`
+  - `filename_label`
   - `batch`
   - `workunit`
 
@@ -76,7 +75,7 @@ This note records the current findings from reviewing the `main()` control flow 
 ### Actions required : None for now
 
 - Assume all model implementations in CPDN will follow this approach for now.
-- Low priority: could generalise the 'filename_startdate & filename_fclen' into a single string?
+- The filename label is intentionally opaque; it can represent a date/length pair or a model-specific case label.
 
 
 ## 5. Progress smoothing is still based on an OpenIFS-tuned heuristic

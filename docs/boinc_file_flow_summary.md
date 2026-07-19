@@ -63,9 +63,13 @@ The app bundle contains the executable and control file. It's staged as a BOINC 
 ```cpp
 fs::path app_bundle_path = bconfig.slot_path;
 app_bundle_path /= std::string( bconfig.app_name ) + "_" + tconfig.memberid + "_" + 
-                   tconfig.filename_startdate + "_" + std::to_string( (int)num_days ) + 
-                   "_" + tconfig.batch + "_" + tconfig.workunit + ".zip";
+                   tconfig.filename_label + "_" + tconfig.batch + "_" +
+                   tconfig.workunit + ".zip";
 ```
+
+`filename_label` is an opaque filename component supplied by work generation. It lets the
+controller stage this archive before it reads the model control input; runtime forecast duration
+is read from that input rather than parsed from the label.
 
 **Example filename in slot**:
 ```

@@ -118,9 +118,9 @@ Keep the CPDN filename metadata in `TaskConfig` because the app-bundle naming pa
 Implemented direction:
 
 - the model namelist remains the model-side source of truth for runtime length
-- the CLI values were renamed to `--filename_startdate` and `--filename_fclen`
-- those CLI values are only used to resolve CPDN download filenames
-- they are not passed into the model and should not be validated against `CUSTOP`
+- the CLI uses one `--filename_label` value to resolve the CPDN app-bundle filename
+- that label is opaque archive-location metadata, not model configuration
+- it is not passed into the model and should not be validated against `CUSTOP`
 
 ### Upload interval
 
@@ -292,7 +292,7 @@ Remaining points to watch:
 - upload interval must remain clearly marked as unresolved
   - otherwise there is a risk of half-migrating it into the model parser again
 - CLI filename metadata and model runtime controls must remain visibly separate
-  - `--filename_startdate` and `--filename_fclen` are naming tokens only
+  - `--filename_label` is opaque archive-location metadata only
   - `CUSTOP` and `UTSTEP` remain model runtime controls
 
 Overall assessment:

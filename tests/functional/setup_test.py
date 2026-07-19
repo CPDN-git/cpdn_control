@@ -87,6 +87,7 @@ if __name__ == "__main__":
     print(f"[setup] Loaded config from {sys.argv[1]}: {config.get('test_name', '<unnamed>')}")
 
     forecast_length = config["forecast_length"]
+    filename_label = config.get("filename_label", f"yyyymmddhh_{forecast_length}")
     experiment_id = config["experiment_id"]
     member_id = config["member_id"]
     batch_id = config["batch_id"]
@@ -133,7 +134,7 @@ if __name__ == "__main__":
                        "     <project_preferences></project_preferences>\n" +\
                        f"    <project_dir>{project_dir}</project_dir>\n" +\
                        f"    <boinc_dir>{current_path}</boinc_dir>\n" +\
-                       f"    <wu_name>test_model_{member_id}_yyyymmddhh_1_{batch_id}_0</wu_name>\n" +\
+                       f"    <wu_name>test_model_{member_id}_{filename_label}_{batch_id}_{wu_name}</wu_name>\n" +\
                        "     <shm_key>0</shm_key>\n" +\
                        "     <slot>0</slot>\n" +\
                        "     <wu_cpu_time>0.000000</wu_cpu_time>\n" +\
@@ -203,7 +204,7 @@ if __name__ == "__main__":
     # filenames are not descriptive.
 
     # Create logical namelist file
-    namelist_path = slot0_dir / f"test_model_{member_id}_yyyymmddhh_{forecast_length}_{batch_id}_{wu_name}.zip"
+    namelist_path = slot0_dir / f"test_model_{member_id}_{filename_label}_{batch_id}_{wu_name}.zip"
     write_soft_link(namelist_path, Path(os.path.relpath(jf_namelist_path, slot0_dir)))
     print(f"[setup] Wrote logical namelist {namelist_path.name}")
 

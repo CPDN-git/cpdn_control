@@ -41,3 +41,4 @@ int t_wrf_current_step();
 int t_wrf_parse_restart();
 int t_wrf_check_model_success();
 int t_wrf_restart_pruning();
+int t_filename_label_args();

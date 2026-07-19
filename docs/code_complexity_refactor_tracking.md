@@ -534,3 +534,21 @@ Comparison against the original baseline:
 | Function | Baseline `pmccabe` | Current `pmccabe` | Change | Baseline `lizard` NLOC | Current `lizard` NLOC | Change |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | `src/cpdn_main.cpp::main()` | 120 | 47 | -73 (`-60.8%`) | 516 | 246 | -270 (`-52.3%`) |
+
+## After consolidating app-bundle filename metadata
+
+Measured on 2026-07-19 after replacing the separate start-date and forecast-length
+filename tokens with one opaque `filename_label` value. The label removes numeric
+filename parsing from `main()`; validation now lives with command-line processing.
+
+| File | Function | `pmccabe` | `lizard` CCN | `lizard` NLOC | Notes |
+| --- | --- | ---: | ---: | ---: | --- |
+| `src/cpdn_main.cpp` | `main()` | 46 | 46 | 241 | Removes the filename-length numeric parsing branch; app-bundle staging now consumes an opaque label. |
+| `src/parse_args.cpp` | `is_valid_filename_label()` | 10 | 10 | 23 | Validates a safe, single filename component. |
+| `src/parse_args.cpp` | `process_args()` | 10 | 10 | 49 | Preserves the controller/model configuration boundary while validating the label. |
+
+Comparison against the previous recorded point:
+
+| Function | Prior `pmccabe` | Current `pmccabe` | Change | Prior `lizard` NLOC | Current `lizard` NLOC | Change |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `src/cpdn_main.cpp::main()` | 47 | 46 | -1 (`-2.1%`) | 246 | 241 | -5 (`-2.0%`) |

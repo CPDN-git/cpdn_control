@@ -8,9 +8,7 @@
 //
 
 #include <algorithm>
-#include <cerrno>
 #include <chrono>
-#include <cstdlib>
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
@@ -173,31 +171,6 @@ static void refresh_current_cpu_time( TaskState& tstate )
 
 
 /**
- * @brief Parse a string as a double and validate that entire string was consumed and the value is in range.
- */
-static bool parse_double_arg( const std::string& text, double& value, std::string& err_msg )
-{
-    char* end = nullptr;
-    errno = 0;
-    value = std::strtod( text.c_str(), &end );
-
-    if ( end == text.c_str() ) {
-        err_msg = "invalid floating-point value";
-        return false;
-    }
-    if ( errno == ERANGE ) {
-        err_msg = "floating-point value out of range";
-        return false;
-    }
-    if ( end == nullptr || *end != '\0' ) {
-        err_msg = "unexpected trailing characters in floating-point value";
-        return false;
-    }
-    return true;
-}
-
-
-/**
  * @brief Parse and validate an optional trailing --nthreads argument from app_config.xml.
  *
  * @param argc Program argument count.
@@ -294,7 +267,7 @@ static std::string get_result_base_name( const BoincConfig& bconfig, const TaskC
             return base_name;
         }
     } else {
-        base_name = bconfig.app_name + "_" + tconfig.filename_startdate + "_" + tconfig.batch + "_" + tconfig.workunit;
+        base_name = bconfig.app_name + "_" + tconfig.filename_label + "_" + tconfig.batch + "_" + tconfig.workunit;
     }
     return base_name;
 }
@@ -622,13 +595,6 @@ int main( int argc, char** argv )
     }
     std::string nthreads = std::to_string( bconfig.ncpus );
 
-    // TODO. This should be in process_args??
-    double num_days = 0.0;
-    if ( !parse_double_arg( tconfig.filename_fclen, num_days, err_msg ) ) {
-        std::cerr << "Failed to parse --filename_fclen value: " << err_msg << '\n';
-        return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, 1 ) );
-    }
-
     // --------------- Prepare the task environment -----------------
 
     boinc_begin_critical_section();
@@ -654,7 +620,9 @@ int main( int argc, char** argv )
     //               The ic_ancil.zip file for OIFS contains the workunit initial conditions.
     //    ../workunits
     //       This contains the workunit input control data. e.g. for OIFS, fort.4 and wam_namelist.
-    //       Each filename is : <app_name>_<memberid>_<startdate>_<fclen>_<batch>_<workunit>.zip.
+    //       Each filename is : <app_name>_<memberid>_<filename_label>_<batch>_<workunit>.zip.
+    //       filename_label is opaque metadata supplied by the workunit generator so this archive can
+    //       be staged before the model control input is available. Runtime forecast length is read later.
     //
     //  Different models will use a different number of files.
     //
@@ -682,8 +650,8 @@ int main( int argc, char** argv )
     // This typically contains the model control file(s) (e.g. namelists).
 
     fs::path app_bundle_path = bconfig.slot_path;
-    app_bundle_path /= std::string( bconfig.app_name ) + "_" + tconfig.memberid + "_" + tconfig.filename_startdate + "_" +
-                       std::to_string( (int)num_days ) + "_" + tconfig.batch + "_" + tconfig.workunit + ".zip";
+    app_bundle_path /= std::string( bconfig.app_name ) + "_" + tconfig.memberid + "_" + tconfig.filename_label + "_" + tconfig.batch + "_" +
+                       tconfig.workunit + ".zip";
 
     std::cerr << " Staging workunit files zipfile into slot.." << '\n';
     auto app_bundle_stage = stage_boinc_input_file( app_bundle_path, bconfig.slot_path, fs::path( "." ), "app_bundle" );

@@ -79,16 +79,16 @@ def copy_binary(src: Path, dst: Path, label: str):
     print(f"[run] Copied {label} binary to {dst}")
 
 
-def ensure_forecast_zip(slot0_dir: Path, member_id: str, batch_id: str, forecast_length: int):
+def ensure_app_bundle_zip(slot0_dir: Path, member_id: str, batch_id: str, filename_label: str):
     base_zip = slot0_dir / f"test_model_{member_id}_yyyymmddhh_1_{batch_id}_0.zip"
-    target_zip = slot0_dir / f"test_model_{member_id}_yyyymmddhh_{forecast_length}_{batch_id}_0.zip"
+    target_zip = slot0_dir / f"test_model_{member_id}_{filename_label}_{batch_id}_0.zip"
     if target_zip.exists():
         print(f"[run] Forecast zip already present: {target_zip.name}")
         return
     if not base_zip.exists():
         raise FileNotFoundError(f"Base namelist zip not found: {base_zip}")
     shutil.copy2(base_zip, target_zip)
-    print(f"[run] Created forecast-length zip: {target_zip.name}")
+    print(f"[run] Created app-bundle zip: {target_zip.name}")
 
 
 def maybe_symlink(target: Path, link_path: Path):
@@ -169,10 +169,11 @@ def main():
     workunit = config["wu_name"]
     member_id = config["member_id"]
     forecast_length = int(config["forecast_length"])
+    filename_label = config.get("filename_label", f"yyyymmddhh_{forecast_length}")
     upload_interval = int(config["upload_interval"])
 
-    # create a copy for the correct forecast length.
-    ensure_forecast_zip(slot0_dir, member_id, batch_id, forecast_length)
+    # The bundle label is opaque controller metadata, not a runtime forecast length.
+    ensure_app_bundle_zip(slot0_dir, member_id, batch_id, filename_label)
 
     # set the library path environment
     env = os.environ.copy()
@@ -189,11 +190,10 @@ def main():
     # Either use <arg>=<val> syntax or split the arg & val into separate tokens.
     controller_cmd = [
         str(controller_dst),
-        "--filename_startdate=yyyymmddhh",
+        f"--filename_label={filename_label}",
         f"--batch={batch_id}",
         f"--workunit={workunit}",
         f"--memberid={member_id}",
-        f"--filename_fclen={forecast_length}",
         f"--upload_interval={upload_interval}",
     ]
 

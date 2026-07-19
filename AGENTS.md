@@ -11,7 +11,7 @@ This repository builds the **CPDN controller** executable used to run/manage cli
   - Currently also contains **experimental** step-diagnostics glue that runs `diagnostics.exe` before result files are moved out of the slot directory. This is a temporary integration and is expected to move under model-class control later.
 - `src/parse_args.h`, `src/parse_args.cpp`
   - CLI11-based command-line parsing for controller/task arguments.
-  - The `--filename_startdate` and `--filename_fclen` options are CPDN filename-resolution metadata only; they are not authoritative model runtime controls.
+  - The `--filename_label` option is opaque CPDN filename-resolution metadata used to locate the app bundle before its model control input is available. It is not authoritative model runtime configuration.
   - Uses vendored CLI11 headers under `third_party/CLI11/`.
 - `src/cpdn_control.cpp`, `src/cpdn_control.h`
   - Core controller logic used by the release/debug executables and unit tests.
@@ -241,8 +241,8 @@ Notes:
 ## CPDN Filename Metadata
 
 - The controller still needs CPDN task metadata on the command line to resolve downloaded filenames before the model input is parsed.
-- `TaskConfig::filename_startdate` and `TaskConfig::filename_fclen` are filename tokens for that purpose only.
-- Do not compare `filename_fclen` directly with model runtime controls such as `CUSTOP`; they belong to different contracts.
+- `TaskConfig::filename_label` is the opaque filename component used for that pre-staging lookup.
+- Do not infer or validate model runtime controls such as `CUSTOP` from `filename_label`; they belong to different contracts.
 
 ## BOINC And Child Status Semantics
 

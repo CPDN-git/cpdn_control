@@ -49,12 +49,13 @@ struct TaskState {
  * @brief Encapsulates all CPDN specific task-related configuration parameters passed on the command line.
  */
 struct TaskConfig {
-    std::string batch;                 // Batch ID
-    std::string workunit;              // Workunit ID
-    std::string memberid;              // Unique member ID (umid)
-    std::string filename_startdate;    // CPDN filename token used to resolve task download filenames; not passed to the model.
-    std::string filename_fclen;        // CPDN filename token used to resolve task download filenames; not passed to the model.
-    int upload_interval = 0;           // Upload interval in model steps; 0 disables result uploads but not trickles.
+    std::string batch;       // Batch ID
+    std::string workunit;    // Workunit ID
+    std::string memberid;    // Unique member ID (umid)
+    // Opaque middle component of the app-bundle logical filename. It is supplied
+    // before the bundle is staged, so it must not be derived from model input.
+    std::string filename_label;
+    int upload_interval = 0;    // Upload interval in model steps; 0 disables result uploads but not trickles.
 };
 
 

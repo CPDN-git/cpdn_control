@@ -49,6 +49,7 @@ int main( int argc, char* argv[] )
         { "WRF Parse Restart", t_wrf_parse_restart },
         { "WRF Check Model Success", t_wrf_check_model_success },
         { "WRF Restart Pruning", t_wrf_restart_pruning },
+        { "Filename Label Args", t_filename_label_args },
         // Add new test functions here! Remember previous trailing comma!
     };
 

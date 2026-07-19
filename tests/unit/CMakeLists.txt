@@ -42,6 +42,7 @@ add_executable(unit_tests unit_tests.cpp
                         t_wrf_parse_restart.cpp
                         t_wrf_check_model_success.cpp
                         t_wrf_restart_pruning.cpp
+                        t_filename_label_args.cpp
 )
 
 # Helper executable used by launch_process tests
@@ -88,3 +89,4 @@ add_test( NAME WRFCurrentStepTest COMMAND unit_tests "WRF Current Step" )
 add_test( NAME WRFParseRestartTest COMMAND unit_tests "WRF Parse Restart" )
 add_test( NAME WRFCheckModelSuccessTest COMMAND unit_tests "WRF Check Model Success" )
 add_test( NAME WRFRestartPruningTest COMMAND unit_tests "WRF Restart Pruning" )
+add_test( NAME FilenameLabelArgsTest COMMAND unit_tests "Filename Label Args" )

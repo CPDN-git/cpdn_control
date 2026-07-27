@@ -95,7 +95,6 @@ bool OpenIFSControl::check_model_success() const
  */
 void OpenIFSControl::print_logs( const int nlines ) const
 {
-    // TODO: could this be pushed down to the base class rather than re-implemented in each derived class?
     for ( const auto& log_file : log_files ) {
         print_last_lines( log_file, nlines );    // from lib/utils.h; will check file exists
     }

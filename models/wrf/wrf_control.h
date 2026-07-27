@@ -80,6 +80,9 @@ class WRFControl : public ModelControl {
     const fs::path control_input_file{ "namelist.input" };                // WRF control input file
     const fs::path control_input_file_step0{ "namelist.input.step0" };    // WRF control input file for step 0 (used for restart)
 
+    //  WRF writes to stdout.txt as control code redirects. We read this to determine success and upload it.
+    const fs::path model_log{ "stdout.txt" };
+
     // Timestep in seconds
     // Used to contruct time period differences
     mutable int timestep_seconds = 0;

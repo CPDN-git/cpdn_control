@@ -198,30 +198,29 @@ bool parse_wrf_domain_list_value( const std::string& values, int domain_index, i
 }
 
 
-int* get_wrf_start_datetime_field( DateTime& datetime, std::string_view parsed_key )
+int* get_wrf_datetime_field( DateTime& datetime, std::string_view parsed_key )
 {
-    if ( parsed_key == "start_year" ) {
+    if ( parsed_key == "start_year" || parsed_key == "end_year" ) {
         return &datetime.year;
     }
-    if ( parsed_key == "start_month" ) {
+    if ( parsed_key == "start_month" || parsed_key == "end_month" ) {
         return &datetime.month;
     }
-    if ( parsed_key == "start_day" ) {
+    if ( parsed_key == "start_day" || parsed_key == "end_day" ) {
         return &datetime.day;
     }
-    if ( parsed_key == "start_hour" ) {
+    if ( parsed_key == "start_hour" || parsed_key == "end_hour" ) {
         return &datetime.hour;
     }
-    if ( parsed_key == "start_minute" ) {
+    if ( parsed_key == "start_minute" || parsed_key == "end_minute" ) {
         return &datetime.minute;
     }
-    if ( parsed_key == "start_second" ) {
+    if ( parsed_key == "start_second" || parsed_key == "end_second" ) {
         return &datetime.second;
     }
 
     return nullptr;
 }
-
 
 /**
  * @brief Used to check wrf filename is a restart or output file
@@ -588,7 +587,7 @@ bool WRFControl::update_restart_namelist( const RestartSet& restart_set ) const
             } else {
                 int field_value = 0;
                 int field_width = 0;
-                int* original_field = get_wrf_start_datetime_field( start_datetime, lhs );
+                int* original_field = get_wrf_datetime_field( start_datetime, lhs );
 
                 if ( lhs == "start_year" ) {
                     field_value = restart_file_datetime.year;
@@ -948,7 +947,10 @@ ModelControlInputData WRFControl::parse_control_input() const
     std::string frames_per_outfile;
     int restart_interval_minutes = 0;
     int parsed_max_domains = 0;
-    long long run_len_secs = 0;
+    bool have_start_datetime = false;
+    bool have_end_datetime = false;
+    DateTime start_datetime{};
+    DateTime end_datetime{};
 
     while ( std::getline( control_input_stream, input_line ) ) {
         trim_whitespace( input_line );
@@ -987,46 +989,25 @@ ModelControlInputData WRFControl::parse_control_input() const
             timestep_seconds = parsed.timestep_seconds;    // internal var for later use
         }
 
-        // Parse the run length.
-        // First, read the run_days, run_hours, run_minutes, and run_seconds parameters from the namelist.input file.
-        // Then, convert the total run length to seconds and calculate the total number of model steps based on the timestep interval.
-        else if ( parsed_key == "run_days" ) {
-            tmpstr = parsed_value;
-            int days = 0;
-            if ( !parse_int( tmpstr, days, err_msg ) ) {
-                return make_parse_error( parsed.source_file, "parse", parsed_key, err_msg );
-            }
-            run_len_secs = days * 86400;    // Convert days to seconds
-        } else if ( parsed_key == "run_hours" ) {
-            tmpstr = parsed_value;
-            int hours = 0;
-            if ( !parse_int( tmpstr, hours, err_msg ) ) {
-                return make_parse_error( parsed.source_file, "parse", parsed_key, err_msg );
-            }
-            run_len_secs = run_len_secs + hours * 3600;    // Convert hours to seconds and add to total
-        } else if ( parsed_key == "run_minutes" ) {
-            tmpstr = parsed_value;
-            int minutes = 0;
-            if ( !parse_int( tmpstr, minutes, err_msg ) ) {
-                return make_parse_error( parsed.source_file, "parse", parsed_key, err_msg );
-            }
-            run_len_secs = run_len_secs + minutes * 60;    // Convert minutes to seconds and add to total
-        } else if ( parsed_key == "run_seconds" ) {
-            tmpstr = parsed_value;
-            int seconds = 0;
-            if ( !parse_int( tmpstr, seconds, err_msg ) ) {
-                return make_parse_error( parsed.source_file, "parse", parsed_key, err_msg );
-            }
-            run_len_secs = run_len_secs + seconds;    // Add seconds to total
-        }
-
-        // Get the run start date/time used to build output and restart timestamps.
+        // Get the run start/end date/time used to build output and restart timestamps.
         // WRF lists one value per domain, but the first value is enough because all
-        // domains share the same start time.
-        else if ( int* start_field = get_wrf_start_datetime_field( step0_datetime, parsed_key ); start_field != nullptr ) {
-            tmpstr = parsed_value;
-            if ( !parse_int( tmpstr, *start_field, err_msg ) ) {
-                return make_parse_error( parsed.source_file, "parse", parsed_key, err_msg );
+        // domains share the same start and end time.
+        else if ( parsed_key.rfind( "start_", 0 ) == 0 || parsed_key.rfind( "end_", 0 ) == 0 ) {
+            DateTime* datetime_target = nullptr;
+            if ( parsed_key.rfind( "start_", 0 ) == 0 ) {
+                datetime_target = &start_datetime;
+                have_start_datetime = true;
+            } else {
+                datetime_target = &end_datetime;
+                have_end_datetime = true;
+            }
+
+            int* datetime_field = get_wrf_datetime_field( *datetime_target, parsed_key );
+            if ( datetime_field != nullptr ) {
+                tmpstr = parsed_value;
+                if ( !parse_int( tmpstr, *datetime_field, err_msg ) ) {
+                    return make_parse_error( parsed.source_file, "parse", parsed_key, err_msg );
+                }
             }
         }
 
@@ -1093,6 +1074,20 @@ ModelControlInputData WRFControl::parse_control_input() const
     parsed.restart_interval = ( restart_interval_minutes * 60 ) / parsed.timestep_seconds;
 
     // Compute remaining time related variables
+    if ( !have_start_datetime || !have_end_datetime ) {
+        return make_parse_error( parsed.source_file, "validate", "time_control", "required start_* and end_* datetime fields were not found" );
+    }
+
+    step0_datetime = start_datetime;
+
+    const long long run_len_secs = datetime_duration_seconds( step0_datetime, end_datetime );
+    if ( run_len_secs < 0 ) {
+        return make_parse_error( parsed.source_file, "validate", "time_control", "forecast end time precedes start time" );
+    }
+    if ( ( run_len_secs % static_cast<long long>( parsed.timestep_seconds ) ) != 0 ) {
+        return make_parse_error( parsed.source_file, "validate", "time_control", "forecast length is not an exact multiple of the timestep" );
+    }
+
     parsed.total_steps = static_cast<decltype( parsed.total_steps )>( run_len_secs / static_cast<long long>( parsed.timestep_seconds ) );
     parsed.forecast_length_time = static_cast<double>( run_len_secs );
 

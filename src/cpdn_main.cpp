@@ -57,7 +57,7 @@ void log_boinc_api_error( const char* api_name, int retval )
 //  Version 1.x.x  : OpeniFS only
 //  Version 2.x.x  : WRF support added, refactored into modular class structure, improved error handling and logging.
 #ifndef CODE_VERSION
-#define CODE_VERSION "2.0.0"
+#define CODE_VERSION "2.0.1"
 #endif
 
 

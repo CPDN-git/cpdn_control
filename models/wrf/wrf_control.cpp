@@ -992,6 +992,9 @@ ModelControlInputData WRFControl::parse_control_input() const
         // Get the run start/end date/time used to build output and restart timestamps.
         // WRF lists one value per domain, but the first value is enough because all
         // domains share the same start and end time.
+        // DO NOT use the run_* variables in the namelist as these are usually set to
+        // zero as they are only used for the initial conditions and not for the actual run.
+        // If they are set, they override the end_* variables which causes problems for restarts.
         else if ( parsed_key.rfind( "start_", 0 ) == 0 || parsed_key.rfind( "end_", 0 ) == 0 ) {
             DateTime* datetime_target = nullptr;
             if ( parsed_key.rfind( "start_", 0 ) == 0 ) {

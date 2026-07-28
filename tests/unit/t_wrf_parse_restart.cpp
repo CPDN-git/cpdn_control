@@ -71,10 +71,10 @@ bool remove_files( const fs::path& dir, const std::vector<std::string>& filename
 }
 
 
-bool namelist_contains_restart_start_time( const std::string& content, const std::string& expected_restart_line, const std::string& expected_year_line,
-                                           const std::string& expected_month_line, const std::string& expected_day_line,
-                                           const std::string& expected_hour_line, const std::string& expected_minute_line,
-                                           const std::string& expected_second_line )
+bool namelist_contains_restart_start_time( const std::string& content, const std::string& expected_restart_line,
+                                           const std::string& expected_year_line, const std::string& expected_month_line,
+                                           const std::string& expected_day_line, const std::string& expected_hour_line,
+                                           const std::string& expected_minute_line, const std::string& expected_second_line )
 {
     return content.find( expected_restart_line ) != std::string::npos && content.find( expected_year_line ) != std::string::npos &&
            content.find( expected_month_line ) != std::string::npos && content.find( expected_day_line ) != std::string::npos &&
@@ -106,7 +106,7 @@ int t_wrf_parse_restart()
     const std::string wrf_namelist_with_restart_false = "&time_control\n"
                                                         " restart = .false.,\n"
                                                         " run_days = 0,\n"
-                                                        " run_hours = 1,\n"
+                                                        " run_hours = 0,\n"
                                                         " run_minutes = 0,\n"
                                                         " run_seconds = 0,\n"
                                                         " start_year = 2022, 2022, 2022,\n"
@@ -115,6 +115,12 @@ int t_wrf_parse_restart()
                                                         " start_hour = 0, 0, 0,\n"
                                                         " start_minute = 0, 0, 0,\n"
                                                         " start_second = 0, 0, 0,\n"
+                                                        " end_year = 2022, 2022, 2022,\n"
+                                                        " end_month = 7, 7, 7,\n"
+                                                        " end_day = 1, 1, 1,\n"
+                                                        " end_hour = 1, 1, 1,\n"
+                                                        " end_minute = 0, 0, 0,\n"
+                                                        " end_second = 0, 0, 0,\n"
                                                         " history_interval = 9999, 9999, 60,\n"
                                                         " frames_per_outfile = 1, 1, 24,\n"
                                                         " restart_interval = 180,\n"
@@ -126,7 +132,7 @@ int t_wrf_parse_restart()
 
     const std::string wrf_namelist_without_restart_key = "&time_control\n"
                                                          " run_days = 0,\n"
-                                                         " run_hours = 1,\n"
+                                                         " run_hours = 0,\n"
                                                          " run_minutes = 0,\n"
                                                          " run_seconds = 0,\n"
                                                          " start_year = 2022, 2022, 2022,\n"
@@ -135,6 +141,12 @@ int t_wrf_parse_restart()
                                                          " start_hour = 0, 0, 0,\n"
                                                          " start_minute = 0, 0, 0,\n"
                                                          " start_second = 0, 0, 0,\n"
+                                                         " end_year = 2022, 2022, 2022,\n"
+                                                         " end_month = 7, 7, 7,\n"
+                                                         " end_day = 1, 1, 1,\n"
+                                                         " end_hour = 1, 1, 1,\n"
+                                                         " end_minute = 0, 0, 0,\n"
+                                                         " end_second = 0, 0, 0,\n"
                                                          " history_interval = 9999, 9999, 60,\n"
                                                          " frames_per_outfile = 1, 1, 24,\n"
                                                          " restart_interval = 180,\n"
@@ -222,7 +234,8 @@ int t_wrf_parse_restart()
              wrf_model.parse_restart( restart_step ) && restart_step == "3" ) {
             test_passed++;
         } else {
-            std::cout << "Expected cached restart scan to survive file removal and map latest valid restart to step 3. Got step=" << restart_step << "\n";
+            std::cout << "Expected cached restart scan to survive file removal and map latest valid restart to step 3. Got step=" << restart_step
+                      << "\n";
         }
     }
 

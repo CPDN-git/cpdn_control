@@ -71,10 +71,10 @@ bool remove_files( const fs::path& dir, const std::vector<std::string>& filename
 }
 
 
-bool namelist_contains_restart_start_time( const std::string& content, const std::string& expected_restart_line, const std::string& expected_year_line,
-                                           const std::string& expected_month_line, const std::string& expected_day_line,
-                                           const std::string& expected_hour_line, const std::string& expected_minute_line,
-                                           const std::string& expected_second_line )
+bool namelist_contains_restart_start_time( const std::string& content, const std::string& expected_restart_line,
+                                           const std::string& expected_year_line, const std::string& expected_month_line,
+                                           const std::string& expected_day_line, const std::string& expected_hour_line,
+                                           const std::string& expected_minute_line, const std::string& expected_second_line )
 {
     return content.find( expected_restart_line ) != std::string::npos && content.find( expected_year_line ) != std::string::npos &&
            content.find( expected_month_line ) != std::string::npos && content.find( expected_day_line ) != std::string::npos &&
@@ -234,7 +234,8 @@ int t_wrf_parse_restart()
              wrf_model.parse_restart( restart_step ) && restart_step == "3" ) {
             test_passed++;
         } else {
-            std::cout << "Expected cached restart scan to survive file removal and map latest valid restart to step 3. Got step=" << restart_step << "\n";
+            std::cout << "Expected cached restart scan to survive file removal and map latest valid restart to step 3. Got step=" << restart_step
+                      << "\n";
         }
     }
 

@@ -589,8 +589,8 @@ int main( int argc, char** argv )
     }
 
     if ( using_app_config_nthreads ) {
-        std::cerr << "Using --nthreads from app_config.xml: " << bconfig.ncpus << '\n';
         check_model_nthreads( app_config_nthreads, *model_ctrl );
+        std::cerr << "Using --nthreads from app_config.xml: " << app_config_nthreads << '\n';
         bconfig.ncpus = app_config_nthreads;
     }
     std::string nthreads = std::to_string( bconfig.ncpus );
@@ -877,7 +877,7 @@ int main( int argc, char** argv )
 
             if ( TrickleHandler::crossed_trickle_boundary( tstate.last_completed_step, observed_step, trickle_freq ) ) {
                 std::cerr << "Sending progress trickle message to CPDN at step: " << observed_step << '\n';
-                const int trickle_retval = trickler.process_trickle( tstate.current_cpu_time, observed_step );
+                const int trickle_retval = trickler.process_trickle( tstate.current_cpu_time, observed_step, bconfig.ncpus );
                 if ( trickle_retval != 0 ) {
                     std::cerr << "Progress trickle send failed at step " << observed_step << "; leaving last_trickle_step unchanged\n";
                 } else {
@@ -965,7 +965,7 @@ int main( int argc, char** argv )
     // upload_interval == 0 disables result uploads, but trickles remain enabled.
     if ( !bconfig.standalone && tstate.current_step > tstate.last_trickle_step ) {
         refresh_current_cpu_time( tstate );
-        const int trickle_retval = trickler.process_trickle( tstate.current_cpu_time, tstate.current_step );
+        const int trickle_retval = trickler.process_trickle( tstate.current_cpu_time, tstate.current_step, bconfig.ncpus );
         if ( trickle_retval != 0 ) {
             std::cerr << "Final trickle send failed at step " << tstate.current_step << "; leaving last_trickle_step unchanged\n";
         } else {

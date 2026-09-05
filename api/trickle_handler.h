@@ -39,7 +39,7 @@ class TrickleHandler {
     TrickleHandler& operator=( TrickleHandler&& ) = delete;
 
     // Construct and upload a trickle message
-    int process_trickle( double current_cpu_time, int current_step );
+    int process_trickle( double current_cpu_time, int current_step, int nthreads );
 
   private:
     // Read and sanitize trickle data from the trickle data file in current working directory.
@@ -63,7 +63,7 @@ class TrickleHandler {
 
     std::string_view ORIG_TRICKLE_FORMAT = "<wu>{}</wu>\n<result>{}</result>\n<ph>{}</ph>\n<ts>{}</ts>\n<cp>{}</cp>\n<vr>{}</vr>\n";
     std::string_view GENERAL_TRICKLE_FORMAT =
-        "<wu>{}</wu>\n<result>{}</result>\n<ph>{}</ph>\n<ts>{}</ts>\n<cp>{}</cp>\n<vr>{}</vr>\n<data>{}</data>\n";
+        "<wu>{}</wu>\n<result>{}</result>\n<ph>{}</ph>\n<ts>{}</ts>\n<cp>{}</cp>\n<ncpus>{}</ncpus>\n<vr>{}</vr>\n<data>{}</data>\n";
 
     // Persistent buffers for trickle data passed to BOINC.
     // These are member variables to ensure extended lifetime, as BOINC may process

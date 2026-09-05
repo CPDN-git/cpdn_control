@@ -25,6 +25,8 @@
 #include <string>
 #include <vector>
 
+#include <fmt/format.h>
+
 #include "../api/trickle_handler.h"
 #include "unit_tests.h"
 
@@ -118,6 +120,20 @@ int t_trickle_handler()
         test_passed++;
     } else {
         std::cerr << "  Frequency test FAILED: expected percentage-based frequency of 600 steps for long 1-hour run\n";
+    }
+
+    test_count++;
+    {
+        TrickleHandler handler( "test_wu", "test_result", "test_slot" );
+        const std::string general_trickle =
+            fmt::format( handler.GENERAL_TRICKLE_FORMAT, "test_wu", "test_result", "", 12, 345, 4, "", "1.5,-2.0" );
+        const std::string expected = "<wu>test_wu</wu>\n<result>test_result</result>\n<ph></ph>\n<ts>12</ts>\n<cp>345</cp>\n"
+                                     "<ncpus>4</ncpus>\n<vr></vr>\n<data>1.5,-2.0</data>\n";
+        if ( general_trickle == expected ) {
+            test_passed++;
+        } else {
+            std::cerr << "  General trickle format test FAILED\n";
+        }
     }
 
     // Use a test directory for isolation

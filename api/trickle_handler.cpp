@@ -102,8 +102,9 @@ std::string TrickleHandler::read_trickle_data_file() const
  * @brief Construct and upload a trickle message to the CPDN server.
  * @param current_cpu_time The current CPU time used by the task.
  * @param current_step The current model step count.
+ * @param nthreads The effective number of model threads in use.
  */
-int TrickleHandler::process_trickle( double current_cpu_time, int current_step )
+int TrickleHandler::process_trickle( double current_cpu_time, int current_step, int nthreads )
 {
     std::string ph = "";
     std::string vr = "";
@@ -117,7 +118,7 @@ int TrickleHandler::process_trickle( double current_cpu_time, int current_step )
         // integer CPU time even though the controller tracks it as a double.
         trickle_msg = fmt::format( ORIG_TRICKLE_FORMAT, wu_name, result_base_name, ph, current_step, trickle_cpu_time, vr );
     } else if ( variety == "general" ) {
-        trickle_msg = fmt::format( GENERAL_TRICKLE_FORMAT, wu_name, result_base_name, ph, current_step, trickle_cpu_time, vr, data );
+        trickle_msg = fmt::format( GENERAL_TRICKLE_FORMAT, wu_name, result_base_name, ph, current_step, trickle_cpu_time, nthreads, vr, data );
     } else {
         std::cerr << "Error: Unrecognized trickle variety: " << variety << "\n";
         return -1;

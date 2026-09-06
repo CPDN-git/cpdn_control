@@ -1,0 +1,7 @@
+
+To update version:
+1/ edit src/cpdn_main.cpp and edit VERSION string
+2/ edit CMakeLists.txt and edit VERSION string.
+
+Rebuild.
+

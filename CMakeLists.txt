@@ -22,7 +22,7 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-project(cpdn_control VERSION 1.0.0  DESCRIPTION "CPDN BOINC task controller"  LANGUAGES C CXX)
+project(cpdn_control VERSION 2.0.3  DESCRIPTION "CPDN BOINC task controller"  LANGUAGES C CXX)
 
 # Export compile_commands.json for VS Code SonarCube linter extension (and other tools)
 # so we can easily see what compilation commands will be used.

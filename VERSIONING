@@ -1,7 +1,11 @@
 
 To update version:
+
 1/ edit src/cpdn_main.cpp and edit VERSION string
 2/ edit CMakeLists.txt and edit VERSION string.
+3/ add new tag if required for release:
+    git tag -a v2.0.10 -m "brief description of changes here"
+    git push origin v2.0.10
 
 Rebuild.
 

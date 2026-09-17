@@ -2,6 +2,7 @@
 //
 //  Glenn Carver, CPDN, 2026
 
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -72,6 +73,75 @@ int t_parse_control_input()
         std::cout << "Unexpected parse result:" << " ok=" << parsed.ok << ", timestep_seconds=" << parsed.timestep_seconds
                   << ", output_interval=" << parsed.output_interval << ", restart_interval=" << parsed.restart_interval
                   << ", total_steps=" << parsed.total_steps << ", forecast_length_time=" << parsed.forecast_length_time << "\n";
+        fs::current_path( original_cwd );
+        fs::remove_all( tmp_dir, ec );
+        return EXIT_FAILURE;
+    }
+
+    std::cout << "Subtest: parse OpenIFS CUSTOP timestep, hour, and day forms\n";
+    const std::array<std::string, 4> custop_forms = { "'48'", "'t48'", "'h48'", "'d2'" };
+    for ( const auto& custop_form : custop_forms ) {
+        std::string custop_content = valid_content;
+        custop_content.replace( custop_content.find( "CUSTOP=48" ), std::string( "CUSTOP=48" ).size(), "CUSTOP=" + custop_form );
+        if ( !write_control_input( tmp_dir / "fort.4", custop_content ) ) {
+            TEST_FAIL;
+            std::cout << "Unable to write CUSTOP control input\n";
+            fs::current_path( original_cwd );
+            fs::remove_all( tmp_dir, ec );
+            return EXIT_FAILURE;
+        }
+
+        parsed = model.parse_control_input();
+        if ( !parsed.ok || parsed.total_steps != 48 || parsed.forecast_length_time != 172800.0 ) {
+            TEST_FAIL;
+            std::cout << "Unexpected CUSTOP parse result for " << custop_form << ": ok=" << parsed.ok << ", total_steps=" << parsed.total_steps
+                      << ", forecast_length_time=" << parsed.forecast_length_time << "\n";
+            fs::current_path( original_cwd );
+            fs::remove_all( tmp_dir, ec );
+            return EXIT_FAILURE;
+        }
+    }
+
+    std::cout << "Subtest: parse duration-form CUSTOP before UTSTEP\n";
+    std::string custop_before_timestep_content = valid_content;
+    custop_before_timestep_content.replace( custop_before_timestep_content.find( " UTSTEP=3600.0,\n CUSTOP=48," ),
+                                            std::string( " UTSTEP=3600.0,\n CUSTOP=48," ).size(), " CUSTOP='h240',\n UTSTEP=3600.0," );
+    if ( !write_control_input( tmp_dir / "fort.4", custop_before_timestep_content ) ) {
+        TEST_FAIL;
+        std::cout << "Unable to write reordered CUSTOP control input\n";
+        fs::current_path( original_cwd );
+        fs::remove_all( tmp_dir, ec );
+        return EXIT_FAILURE;
+    }
+
+    parsed = model.parse_control_input();
+    if ( !parsed.ok || parsed.total_steps != 240 || parsed.forecast_length_time != 864000.0 ) {
+        TEST_FAIL;
+        std::cout << "Unexpected reordered CUSTOP parse result: ok=" << parsed.ok << ", total_steps=" << parsed.total_steps
+                  << ", forecast_length_time=" << parsed.forecast_length_time << "\n";
+        fs::current_path( original_cwd );
+        fs::remove_all( tmp_dir, ec );
+        return EXIT_FAILURE;
+    }
+
+    std::cout << "Subtest: reject duration-form CUSTOP that is not an exact number of timesteps\n";
+    std::string non_integral_custop_content = valid_content;
+    non_integral_custop_content.replace( non_integral_custop_content.find( "UTSTEP=3600.0" ), std::string( "UTSTEP=3600.0" ).size(),
+                                         "UTSTEP=2700.0" );
+    non_integral_custop_content.replace( non_integral_custop_content.find( "CUSTOP=48" ), std::string( "CUSTOP=48" ).size(), "CUSTOP='h1'" );
+    if ( !write_control_input( tmp_dir / "fort.4", non_integral_custop_content ) ) {
+        TEST_FAIL;
+        std::cout << "Unable to write non-integral CUSTOP control input\n";
+        fs::current_path( original_cwd );
+        fs::remove_all( tmp_dir, ec );
+        return EXIT_FAILURE;
+    }
+
+    parsed = model.parse_control_input();
+    if ( parsed.ok || parsed.error_step != "parse" || parsed.error_field != "CUSTOP" ) {
+        TEST_FAIL;
+        std::cout << "Expected CUSTOP duration validation failure, got ok=" << parsed.ok << ", error_step=" << parsed.error_step
+                  << ", error_field=" << parsed.error_field << ", error_message=" << parsed.error_message << "\n";
         fs::current_path( original_cwd );
         fs::remove_all( tmp_dir, ec );
         return EXIT_FAILURE;

@@ -10,6 +10,7 @@
 #include <cctype>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -51,6 +52,73 @@ bool parse_oifs_output_filename( std::string_view filename )
     }
 
     return is_ascii_digit( filename.substr( 10, 6 ) );
+}
+
+/**
+ * @brief Convert an OpenIFS CUSTOP value to a model step count.
+ *
+ * OpenIFS accepts a bare count or a `t` prefix as a timestep count. `h` and
+ * `d` respectively specify hours and days, which must be converted using the
+ * model timestep from UTSTEP.
+ */
+bool parse_oifs_custop( const std::string& value, const int timestep_seconds, int& total_steps, std::string& err_msg )
+{
+    if ( value.empty() ) {
+        err_msg = "empty CUSTOP value";
+        return false;
+    }
+
+    std::string count_text = value;
+    long long seconds_per_unit = 0;
+
+    switch ( value.front() ) {
+    case 't':
+        count_text = value.substr( 1 );
+        break;
+    case 'h':
+        count_text = value.substr( 1 );
+        seconds_per_unit = 3600;
+        break;
+    case 'd':
+        count_text = value.substr( 1 );
+        seconds_per_unit = 86400;
+        break;
+    default:
+        break;
+    }
+
+    int count = 0;
+    if ( !parse_int( count_text, count, err_msg ) ) {
+        return false;
+    }
+    if ( count <= 0 ) {
+        err_msg = "CUSTOP must specify a positive timestep count or duration";
+        return false;
+    }
+
+    if ( seconds_per_unit == 0 ) {
+        total_steps = count;
+        return true;
+    }
+    if ( timestep_seconds <= 0 ) {
+        err_msg = "UTSTEP must be a positive integer before converting a duration-form CUSTOP";
+        return false;
+    }
+
+    const long long total_seconds = static_cast<long long>( count ) * seconds_per_unit;
+    if ( total_seconds % timestep_seconds != 0 ) {
+        err_msg = "CUSTOP duration is not an exact multiple of UTSTEP";
+        return false;
+    }
+
+    const long long calculated_steps = total_seconds / timestep_seconds;
+    if ( calculated_steps > std::numeric_limits<int>::max() ) {
+        err_msg = "CUSTOP converts to a timestep count outside the supported range";
+        return false;
+    }
+
+    total_steps = static_cast<int>( calculated_steps );
+    return true;
 }
 
 }    // namespace
@@ -164,6 +232,7 @@ ModelControlInputData OpenIFSControl::parse_control_input() const
     std::string input_line;
     std::string parsed_key;
     std::string parsed_value;
+    std::string custop_value;
     std::string tmpstr;
     std::string err_msg;
 
@@ -213,11 +282,14 @@ ModelControlInputData OpenIFSControl::parse_control_input() const
                 return make_parse_error( control_input_file, "validate", parsed_key, "expected a 4-character experiment ID" );
             }
         } else if ( parsed_key == "CUSTOP" ) {
-            tmpstr = parsed_value;
-            if ( !parse_int( tmpstr, parsed.total_steps, err_msg ) ) {
-                return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
-            }
+            // CUSTOP may be a timestep count or an hour/day duration. Delay
+            // conversion until UTSTEP has been read, regardless of line order.
+            custop_value = parsed_value;
         }
+    }
+
+    if ( !custop_value.empty() && !parse_oifs_custop( custop_value, parsed.timestep_seconds, parsed.total_steps, err_msg ) ) {
+        return make_parse_error( control_input_file, "parse", "CUSTOP", err_msg );
     }
 
     std::vector<std::string> missing_fields;

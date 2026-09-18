@@ -474,6 +474,13 @@ Run just one functional scenario (example, all three steps):
 ctest --test-dir build -R '^FTest1(_Setup|_Validate)?$' -V
 ```
 
+The controller runs directly by default. To run its functional-test phase under
+Valgrind with full leak checking, set `CPDN_FUNCTIONAL_USE_VALGRIND` (and ensure
+`valgrind` is available on `PATH`):
+```
+CPDN_FUNCTIONAL_USE_VALGRIND=1 ctest --test-dir build -R '^FTest1$' -V
+```
+
 Run a single phase of a functional test (examples):
 ```
 ctest --test-dir build -R '^FTest1_Setup$' -V

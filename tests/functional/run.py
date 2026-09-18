@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -29,12 +30,12 @@ def detect_platform() -> str:
     return f"{arch}-pc-linux-gnu"
 
 
-def running_in_github_actions() -> bool:
-    return os.environ.get("GITHUB_ACTIONS", "").lower() == "true"
-
-
 def valgrind_available() -> bool:
     return shutil.which("valgrind") is not None
+
+
+def use_valgrind() -> bool:
+    return bool(os.environ.get("CPDN_FUNCTIONAL_USE_VALGRIND"))
 
 
 def parse_args():
@@ -77,6 +78,33 @@ def copy_binary(src: Path, dst: Path, label: str):
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dst)
     print(f"[run] Copied {label} binary to {dst}")
+
+
+def find_latest_controller_binary(build_dir: Path, platform_triplet: str) -> Path:
+    """Find the newest release controller build for the current platform.
+
+    The executable name includes the CMake project version, so functional tests
+    must not duplicate a particular version here.  Debug builds intentionally
+    do not match this pattern: the functional test runs the release controller.
+    """
+    extension = r"\.exe" if platform_triplet.endswith("windows-msvc") else ""
+    pattern = re.compile(
+        rf"^cpdn_control_(?P<version>\d+(?:\.\d+)*)_{re.escape(platform_triplet)}{extension}$"
+    )
+    candidates = []
+    for candidate in build_dir.iterdir() if build_dir.is_dir() else []:
+        match = pattern.match(candidate.name)
+        if match and candidate.is_file():
+            version = tuple(int(part) for part in match.group("version").split("."))
+            candidates.append((version, candidate))
+
+    if not candidates:
+        raise FileNotFoundError(
+            "release controller binary not found in "
+            f"{build_dir} for platform {platform_triplet}"
+        )
+
+    return max(candidates, key=lambda item: item[0])[1]
 
 
 def ensure_app_bundle_zip(slot0_dir: Path, member_id: str, batch_id: str, filename_label: str):
@@ -138,12 +166,9 @@ def main():
     slot0_dir = workdir / "slots" / "0"
     print(f"[run] Working directory: {workdir}")
 
-    #default_controller = f"cpdn_control_1.0.0_{platform_triplet}-debug"
-    # if using valgrind, do not use binary linked with AddressSanitizer
-    default_controller = f"cpdn_control_1.0.0_{platform_triplet}"
     default_model = "test_model"
 
-    controller_name = args.controller_binary or default_controller
+    controller_name = args.controller_binary
     model_name = args.model_binary or default_model
 
     # Append .exe on Windows if no extension was provided and the file is missing
@@ -152,10 +177,13 @@ def main():
             return name + ".exe"
         return name
 
-    controller_name = with_exe(controller_name)
     model_name = with_exe(model_name)
 
-    controller_src = args.build_dir / controller_name
+    if controller_name:
+        controller_src = args.build_dir / with_exe(controller_name)
+    else:
+        controller_src = find_latest_controller_binary(args.build_dir, platform_triplet)
+    controller_name = controller_src.name
     controller_dst = project_dir / controller_name
     copy_binary(controller_src, controller_dst, "controller")
 
@@ -197,12 +225,12 @@ def main():
         f"--upload_interval={upload_interval}",
     ]
 
-    if running_in_github_actions():
-        print("[run] GitHub Actions detected; running controller without valgrind")
-    elif valgrind_available():
+    if use_valgrind() and valgrind_available():
         controller_cmd = ["valgrind", "--leak-check=full", *controller_cmd]
+    elif use_valgrind():
+        print("[run] CPDN_FUNCTIONAL_USE_VALGRIND is set, but valgrind was not found; running controller directly")
     else:
-        print("[run] Valgrind not found; running controller without valgrind")
+        print("[run] CPDN_FUNCTIONAL_USE_VALGRIND is not set; running controller without valgrind")
 
     print(f"[run] Launching controller: {' '.join(controller_cmd)}")
     try:

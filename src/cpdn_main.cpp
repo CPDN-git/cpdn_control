@@ -88,7 +88,8 @@ static std::unique_ptr<ModelControl> create_model_control( std::string_view mode
     if ( model_name == "test_model" ) {
         model = std::make_unique<OpenIFSControl>( "CPDN", model_name, app_version, "test_model" );
 
-    } else if ( model_name == "oifs_43r3_omp_l159" || model_name == "oifs_43r3_omp_l319" || model_name == "oifs_43r3_parest_omp_l319" ) {
+    } else if ( model_name == "oifs_43r3_omp_l159" || model_name == "oifs_43r3_omp_l255L137" || model_name == "oifs_43r3_omp_l319" ||
+                model_name == "oifs_43r3_parest_omp_l319" ) {
         model = std::make_unique<OpenIFSControl>( "ECMWF", model_name, app_version, "oifs_43r3_omp_model.exe" );
 
     } else if ( model_name == "wrf_4.6.1_urban" ) {

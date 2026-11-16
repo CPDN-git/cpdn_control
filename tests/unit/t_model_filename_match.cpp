@@ -91,8 +91,12 @@ int t_model_filename_match()
     }
 
     test_count++;
-    if ( openifs_model.is_output_filename( "ICMSHABCD+000123" ) && openifs_model.is_output_filename( "ICMGGABCD+999999" ) &&
-         !openifs_model.is_output_filename( "ICMSHAB1D+000123" ) && !openifs_model.is_output_filename( "ICMSHABCD-000123" ) ) {
+    if ( openifs_model.is_output_filename( "ICMSHTES1+000123" ) && openifs_model.is_output_filename( "ICMGGTES1+999999" ) &&
+         openifs_model.is_output_filename( "ICMUATES1+000000" ) && openifs_model.is_output_filename( "ICMSHacj1+000640" ) &&
+         openifs_model.is_output_filename( "ICMSHABCD+000123" ) && openifs_model.is_output_filename( "ICMSH1234+000123" ) &&
+         !openifs_model.is_output_filename( "ICMSHTE_1+000123" ) && !openifs_model.is_output_filename( "ICMSHTES1-000123" ) &&
+         !openifs_model.is_output_filename( "ICMXXTES1+000123" ) && !openifs_model.is_output_filename( "ICMSHTES1+00012" ) &&
+         !openifs_model.is_output_filename( "ICMSHTES1+0001234" ) && !openifs_model.is_output_filename( "ICMSHTES1+00012a" ) ) {
         test_passed++;
     } else {
         std::cerr << "  OpenIFS output filename matching did not behave as expected\n";

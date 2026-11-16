@@ -2,7 +2,7 @@
     "test_name": "test1",
     "forecast_length": 24,
     "filename_label": "20220701_london_caseD",
-    "experiment_id": "EXPT",
+    "experiment_id": "TES1",
     "member_id": "NNNN",
     "batch_id": "d000",
     "wu_name": "0",

@@ -129,7 +129,7 @@ int main()
             std::cerr << "Writing ICM output files at timestep: " << timestep << std::endl;
 
             std::ostringstream ss;
-            ss << exptid << "+" << std::setfill( '0' ) << std::setw( 5 ) << timestep;
+            ss << exptid << "+" << std::setfill( '0' ) << std::setw( 6 ) << timestep;
             second_part = ss.str();
 
             fs::path ICMGG_file = slot_path / ( "ICMGG" + second_part );

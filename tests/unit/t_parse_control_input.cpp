@@ -48,7 +48,7 @@ int t_parse_control_input()
                                       "&NAMARG\n"
                                       " UTSTEP=3600.0,\n"
                                       " CUSTOP=48,\n"
-                                      " CNMEXP='ABCD',\n"
+                                      " CNMEXP='TES1',\n"
                                       "/\n"
                                       "&NAMRES\n"
                                       " NFRRES=-24,\n"
@@ -76,6 +76,47 @@ int t_parse_control_input()
         fs::current_path( original_cwd );
         fs::remove_all( tmp_dir, ec );
         return EXIT_FAILURE;
+    }
+
+    std::cout << "Subtest: generated OpenIFS output filenames pass upload filtering\n";
+    for ( const int step : { 0, 123, 999999 } ) {
+        const auto filenames = model.get_output_filenames( step );
+        if ( filenames.size() != 3 ) {
+            TEST_FAIL;
+            fs::current_path( original_cwd );
+            fs::remove_all( tmp_dir, ec );
+            return EXIT_FAILURE;
+        }
+        for ( const auto& filename : filenames ) {
+            if ( filename.substr( 5, 4 ) != "TES1" || !model.is_output_filename( filename ) ) {
+                TEST_FAIL;
+                std::cout << "Generated output filename rejected: " << filename << '\n';
+                fs::current_path( original_cwd );
+                fs::remove_all( tmp_dir, ec );
+                return EXIT_FAILURE;
+            }
+        }
+    }
+
+    std::cout << "Subtest: reject invalid OpenIFS experiment IDs\n";
+    for ( const std::string invalid_id : { "TES", "TEST1", "TE_1", "TE-1" } ) {
+        std::string invalid_id_content = valid_content;
+        invalid_id_content.replace( invalid_id_content.find( "CNMEXP='TES1'" ), std::string( "CNMEXP='TES1'" ).size(),
+                                    "CNMEXP='" + invalid_id + "'" );
+        if ( !write_control_input( tmp_dir / "fort.4", invalid_id_content ) ) {
+            TEST_FAIL;
+            fs::current_path( original_cwd );
+            fs::remove_all( tmp_dir, ec );
+            return EXIT_FAILURE;
+        }
+        const auto invalid_id_result = model.parse_control_input();
+        if ( invalid_id_result.ok || invalid_id_result.error_step != "validate" || invalid_id_result.error_field != "CNMEXP" ) {
+            TEST_FAIL;
+            std::cout << "Expected CNMEXP validation failure for " << invalid_id << '\n';
+            fs::current_path( original_cwd );
+            fs::remove_all( tmp_dir, ec );
+            return EXIT_FAILURE;
+        }
     }
 
     std::cout << "Subtest: parse OpenIFS CUSTOP timestep, hour, and day forms\n";

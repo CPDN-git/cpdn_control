@@ -32,6 +32,14 @@ std::vector<std::string> oifs_get_omp_env_vars( const std::string& nthreads )
     return { "OMP_NUM_THREADS=" + nthreads, "OMP_SCHEDULE=STATIC", "OMP_STACKSIZE=128M" };
 }
 
+/** @brief Validate the experiment ID shared by CNMEXP parsing and output filename filtering. */
+bool is_valid_oifs_experiment_id( std::string_view id )
+{
+    return id.size() == 4 && std::all_of( id.begin(), id.end(), []( unsigned char ch ) {
+               return ( ch >= 'A' && ch <= 'Z' ) || ( ch >= 'a' && ch <= 'z' ) || ( ch >= '0' && ch <= '9' );
+           } );
+}
+
 bool parse_oifs_output_filename( std::string_view filename )
 {
     if ( filename.size() != 16 ) {
@@ -43,7 +51,7 @@ bool parse_oifs_output_filename( std::string_view filename )
         return false;
     }
 
-    if ( !is_ascii_alpha( filename.substr( 5, 4 ) ) ) {
+    if ( !is_valid_oifs_experiment_id( filename.substr( 5, 4 ) ) ) {
         return false;
     }
 
@@ -277,10 +285,10 @@ ModelControlInputData OpenIFSControl::parse_control_input() const
                 return make_parse_error( control_input_file, "parse", parsed_key, err_msg );
             }
         } else if ( parsed_key == "CNMEXP" ) {    // only needed for OpenIFS, identifier part of OIFS control class instance rather than base class.
-            experiment_id = parsed_value;
-            if ( experiment_id.length() != 4 ) {
-                return make_parse_error( control_input_file, "validate", parsed_key, "expected a 4-character experiment ID" );
+            if ( !is_valid_oifs_experiment_id( parsed_value ) ) {
+                return make_parse_error( control_input_file, "validate", parsed_key, "expected a 4-character ASCII alphanumeric experiment ID" );
             }
+            experiment_id = parsed_value;
         } else if ( parsed_key == "CUSTOP" ) {
             // CUSTOP may be a timestep count or an hour/day duration. Delay
             // conversion until UTSTEP has been read, regardless of line order.

@@ -1,208 +1,165 @@
 # CPDN Control Data Flow
 
-## Purpose
+## Scope and ownership
 
-This note maps where setup data currently comes from before it is used by `cpdn_control`.
+This note describes the current controller interfaces and execution order. Use
+[the file-flow guide](boinc_file_flow_summary.md) for archive paths and
+[BOINC exit behaviour](boinc_exit_behaviour.md) for process ownership, exit
+classification, and the lifecycle findings still under review.
 
-There are two broad classes of values in the current code:
+The shared controller selects and monitors a model, manages BOINC interaction,
+and stages uploads. The model adapter owns its control-file format, input
+manifest, restart interpretation, output readiness, and success checks. A model
+need not use a Fortran namelist.
 
-1. Controller-facing values needed by `cpdn_control` itself.
-2. Model-facing values needed to prepare and run the model process.
+## Input sources
 
-Today these are split across BOINC init data, controller command-line arguments, CPDN-injected metadata inside `fort.4`, normal Fortran namelist entries inside `fort.4`, and a number of values derived in `main()`.
-
-## Main Input Sources
-
-| Source | Where read | Notes |
+| Source | Reader | Destination and use |
 | --- | --- | --- |
-| BOINC init data (`APP_INIT_DATA`) | `init_boinc()` in `src/cpdn_control.cpp` | Supplies BOINC/task environment values. |
-| Controller CLI args | `parse_args()` in `src/parse_args.cpp`, then `process_args()` in `src/parse_args.cpp` | Supplies CPDN task identifiers and opaque app-bundle filename metadata. |
-| Raw trailing `--nthreads` arg | Directly inspected in `main()` in `src/cpdn_main.cpp` | Bypasses `ParseResult` and `TaskConfig`. |
-| CPDN header metadata in `fort.4` | Parsed in `main()` in `src/cpdn_main.cpp` | Comment-style `!KEY=VALUE` lines near top of file. |
-| Standard Fortran namelist values in `fort.4` | Parsed in `main()` in `src/cpdn_main.cpp` | Used for model timing/output scheduling. |
-| Derived values | Various calculations in `main()` | Used for filenames, scheduling, progress, upload cadence, and state tracking. |
+| BOINC `APP_INIT_DATA` | `init_boinc()` in `src/cpdn_control.cpp` | `BoincConfig`: app identity/version, project and BOINC directories, result/workunit names, CPU allocation, standalone mode. |
+| Current working directory | `init_boinc()` | `BoincConfig::slot_path`; the controller runs in the BOINC slot. |
+| Controller CLI | `parse_args()` then `process_args()` in `src/parse_args.cpp` | `TaskConfig`: batch, workunit, member ID, filename label, upload interval. |
+| Optional trailing `--nthreads` | `get_app_config_nthreads()` in `src/cpdn_main.cpp` | Validated against the model's thread range; overrides `BoincConfig::ncpus`. |
+| Model-owned input manifest | `ModelControl::get_input_manifest(workunit)` | Logical archive names and relative unzip directories. Available before model control input is parsed. |
+| Model control file | `ModelControl::parse_control_input()` | Validated `ModelControlInputData`; model-specific values remain private to the adapter. |
+| Model restart state and controller progress file | Model restart hooks and `initialize_task_state_from_restart()` | Initial `TaskState`, reconciled model step, restored CPU baseline and upload state. |
+| BOINC runtime messages | BOINC API background processing; `boinc_get_status()` copies received flags | `BoincRuntime::client_status`, separate from child-process status. |
 
-## Current Flow Summary
+`boinc_get_status()` reads the latest received status snapshot; it does not
+synchronously drain pending client IPC messages. Startup checks reduce unwanted
+launches, and controller-owned cleanup handles requests observed after launch.
 
-| Stage | Data pulled in | Output of stage |
+## Configuration boundaries
+
+### BOINC environment: `BoincConfig`
+
+`app_name` selects the model adapter and application archive. `app_version` is
+reformatted for archive naming. `project_dir`, `boinc_dir`, `wu_name`,
+`result_name`, and `ncpus` come from BOINC initialization. The CPU count is
+clamped to at least one before any valid thread override is applied.
+
+`slot_path` comes from the current working directory. `standalone` records
+whether BOINC client interaction is available. `app_files` is declared but is
+not currently populated.
+
+### Task policy: `TaskConfig` and `ParseResult`
+
+| Field | Source | Meaning |
 | --- | --- | --- |
-| BOINC init | app version/name, project dir, result/workunit names, CPU count, standalone flag | `BoincConfig` |
-| CLI parse | batch, workunit, memberid, filename label | `ParseResult` then `TaskConfig` |
-| CLI override | `--nthreads` if present at end of argv | `nthreads`, `nthreads_int`, also overwrites `bconfig.ncpus` |
-| `fort.4` CPDN header parse | archive names and metadata like `UPLOAD_INTERVAL` | loose locals in `main()` |
-| `fort.4` namelist parse | `UTSTEP`, `NFRPOS`, `NFRRES` | loose locals in `main()` |
-| Derived calculations | `num_days`, `total_nsteps`, `trickle_freq`, upload paths, etc. | more loose locals in `main()` |
-| Runtime monitoring | child pid, progress, upload counters, current step/cpu/fraction done | `TaskState` plus some additional locals |
+| `batch` | `--batch` | CPDN batch identifier. |
+| `workunit` | `--workunit` | CPDN workunit identifier. |
+| `memberid` | `--memberid` | CPDN member identifier. |
+| `filename_label` | `--filename_label` | Opaque filename component used to resolve the task app bundle before model input is available. |
+| `upload_interval` | `--upload_interval` | Controller upload interval in integer model steps; zero disables result uploads, including final uploads, but does not disable trickles. |
 
-## `BoincConfig` Field Sources
+The parser accepts the five options above. `ParseResult::app_name` is a remaining
+unused member; the model identity comes from BOINC. The parser permits extra
+arguments so the separately handled `--nthreads` argument can be supplied by
+BOINC task configuration. Removed fields such as `ancil_files`, `model_args`,
+`fclen`, and `exptid` are not part of the current task configuration contract.
 
-| Field | Current source | Classification | Notes |
-| --- | --- | --- | --- |
-| `app_version` | `APP_INIT_DATA.app_version` in `init_boinc()`, then reformatted | BOINC | Stored as string and dotted manually. |
-| `app_name` | `APP_INIT_DATA.app_name` in `init_boinc()` | BOINC | Used to choose model type and app zip name. |
-| `project_dir` | `APP_INIT_DATA.project_dir` in `init_boinc()` | BOINC | Trailing slash appended. |
-| `wu_name` | `APP_INIT_DATA.wu_name` in `init_boinc()` | BOINC | Used by trickle handler. |
-| `result_name` | `APP_INIT_DATA.result_name` in `init_boinc()` | BOINC | Currently not central in `main()`. |
-| `ncpus` | `APP_INIT_DATA.ncpus` in `init_boinc()` | BOINC, then overridden | Minimum clamped to 1. Later overwritten if trailing `--nthreads` is present. |
-| `boinc_dir` | `APP_INIT_DATA.boinc_dir` in `init_boinc()` | BOINC | Trailing slash appended. Not currently used much. |
-| `app_files` | No current population | None / unused | Declared but not currently filled. |
-| `slot_path` | `std::filesystem::current_path()` in `init_boinc()` | Derived | BOINC gives slot number, current code derives full path from cwd. |
-| `standalone` | `boinc_is_standalone()` in `init_boinc()` | BOINC | Controls BOINC upload/trickle/reporting behavior. |
+Do not infer dates, forecast duration, or OpenIFS `CUSTOP` from `filename_label`.
+Upload policy comes from the CLI, not a CPDN comment header in `fort.4`.
 
-## `TaskConfig` Field Sources
+### Model timing: `ModelControlInputData`
 
-| Field | Current source | Classification | Notes |
-| --- | --- | --- | --- |
-| `batch` | `--batch` via `ParseResult` -> `process_args()` | Controller CLI | CPDN task identifier. |
-| `workunit` | `--workunit` via `ParseResult` -> `process_args()` | Controller CLI | CPDN task identifier. |
-| `memberid` | `--memberid` via `ParseResult` -> `process_args()` | Controller CLI | CPDN task identifier / UMID. |
-| `filename_label` | `--filename_label` via `ParseResult` -> `process_args()` | Controller CLI | Opaque middle component used to locate the app-bundle archive before model input can be parsed. |
+The adapter returns:
 
-## `ParseResult` Fields Not Properly Folded Into Config
+- `ok`, `source_file`, and structured error step/field/message information;
+- `timestep_seconds`;
+- `output_interval`, `restart_interval`, and `total_steps` in model steps;
+- `forecast_length_time`, the forecast duration in seconds.
 
-These are parsed but are either ignored or only partially used:
+These values describe the whole run, including steps completed before a restart.
+For example, WRF can rewrite restart start dates while preserving original-run
+control information for timing calculations.
 
-| Field | Current source | Current status |
-| --- | --- | --- |
-| `app_name` | `--app_name` | Parsed but not used; BOINC `app_name` is used instead. |
-| `upload_interval` | `--upload_interval` | Parsed but ignored; current upload interval comes from CPDN header metadata in `fort.4`. |
-| `ancil_files` | `--cpdn_ancil_files` | Parsed but ignored. |
-| `model_args` | `--model_args` | Parsed but ignored. |
+OpenIFS parses `fort.4` privately. It validates `CNMEXP` and stores the experiment
+identifier in the OpenIFS adapter for filename generation. It converts `UTSTEP`,
+`NFRPOS`, `NFRRES`, and `CUSTOP` into the shared timing result. `CUSTOP` can be a
+step count or a supported hour/day duration. Negative OpenIFS output/restart
+intervals represent hours and are converted to steps. Resolution, grid, and
+experiment identifiers are not fields of the shared result.
 
-This is one sign that controller setup data is currently split between an intended CLI schema and the legacy `fort.4` metadata path.
+WRF owns `namelist.input` and its restart rewrites. Its model-specific timestamp
+and domain handling remains outside `main()`.
 
-## `fort.4` Values Read In `main()`
+## Current execution order
 
-### Normal Fortran namelist values
+1. Initialize BOINC, create the model adapter, parse task arguments, and apply a
+   valid thread override.
+2. Read and log received BOINC status before expensive staging. Observed
+   quit/abort/heartbeat loss prevents launch; suspension defers startup.
+3. Stage the application executable archive, then the task app bundle.
+4. Call `setup_directories(slot_path)`, obtain the model input manifest, and
+   stage its remaining archives.
+5. Call `setup(slot_path)` and `parse_control_input()` on the model adapter,
+   then derive trickle cadence from the validated timing data.
+6. Reconcile model restart metadata and `cpdn_progressfile.txt`, prepare transient
+   controller-run state, and write initial progress.
+7. Derive result naming and create `UploadManager` and `TrickleHandler`. The upload interval remains `TaskConfig` policy.
+8. Validate executable presence/permissions, check and log received BOINC status
+   immediately before launch, then launch an owned model process set.
+9. Read and log status immediately after launch and apply child process control
+   if needed. The run loop then polls at its normal cadence.
+10. On observed step changes, invoke model step tasks, collect files the model
+    declares safe to copy, process scheduled uploads and trickles, and write
+    progress.
+11. Follow the selected exit route through `finish_task_exit()` in
+    `src/task_lifecycle.cpp`.
 
-| Local variable in `main()` | `fort.4` key | Used for | Classification |
-| --- | --- | --- | --- |
-| `timestep` | `UTSTEP` | Convert steps to seconds, derive trickle and total step counts | Shared controller/model timing |
-| `ICM_file_interval` | `NFRPOS` | Intended to describe output production cadence | Shared, but currently underused |
-| `restart_interval` | `NFRRES` | Restart/progress restart logic | Shared controller/model timing |
+OpenIFS diagnostics are invoked through the model's step hook and implemented
+in `models/openifs/external_diagnostics.cpp`. They run before the controller
+collects that iteration's copyable outputs. Their generated `trickle_data`
+remains in the slot for `TrickleHandler`.
 
-### Important values present in the model domain but not sourced cleanly for controller use
+## Runtime and progress state
 
-| Value | Current controller handling | Note |
-| --- | --- | --- |
-| `exptid` / `EXPTID` | Not read from `fort.4`; controller uses hard-coded `TaskConfig.exptid = "NSET"` | This is the clearest current mismatch. The model/test code reads `EXPTID` directly from `fort.4`, but the controller does not. |
-| Forecast length / stop condition | Controller reads the model control input after app-bundle staging | Runtime duration must not be inferred from `filename_label`. |
+`TaskState::current_step`, `last_completed_step`, `last_trickle_step`, and
+`last_upload_step` are integer step counts. Elapsed model time is derived from
+steps and `timestep_seconds`; it is not stored in these step fields.
 
-## Derived Values in `main()` That Are Not In Config Structs
+`prior_acc_cpu_time` is the accumulated CPU baseline restored from an earlier
+controller run. `current_cpu_time` includes that baseline plus the current model
+child's CPU time. Startup seeds the live total from the baseline before the
+first progress write. The progress file stores the accumulated total; the
+baseline remains fixed during the current controller process. The current
+progress file writes `control_pid`, accumulated CPU time under the historical
+`prior_acc_cpu_time` key, `upload_file_number`, `last_completed_step`,
+`last_upload_step`, and `model_completed`. `last_trickle_step` is an in-memory
+field and is not currently persisted by this handler.
 
-These are important values, but they are currently loose locals rather than grouped configuration/state.
+`child_status` describes only the model leader: running, exited, terminated,
+suspended, or unavailable. It must not encode BOINC quit/abort/suspend meanings.
+A terminal leader status does not prove that all descendants have exited.
 
-| Variable | Derived from | Role |
-| --- | --- | --- |
-| `nthreads` | `bconfig.ncpus`, optionally overridden by trailing `--nthreads` | Model launch env setup |
-| `nthreads_int` | Parsed integer form of `nthreads` | Progress/fraction calculations |
-| `app_bundle_path` | `app_name`, `memberid`, `filename_label`, `batch`, `workunit` | Locate and stage the app-bundle archive |
-| `namelist_file` | `slot_path` + `fort.4` | Main model/controller metadata file |
-| `trickle_freq` | `timestep`, `total_nsteps` via `TrickleHandler::get_trickle_frequency()` | Controller trickle cadence |
-| `total_nsteps` | `num_days`, `timestep` | Total step count estimate |
-| `total_length_of_simulation` | `num_days` | Total length in seconds |
-| `upload_dir` | `project_dir`, `app_name`, `workunit` | Temp staging directory for uploads |
-| `result_base_name` | `BoincConfig` + `TaskConfig` | Upload/trickle naming |
-| `model_exe` | `slot_path`, model selection | Child executable path |
-| `diag_exe` | `slot_path`, fixed filename | Optional diagnostics path |
+`child_process` retains launch ownership after the leader exits. POSIX uses a
+private process group and a waitable leader; Windows retains process and Job
+Object handles. `child_cleanup` records the model cleanup attempt so recovery
+and final exit do not restart its two-second confirmation budget. This state is
+transient and is not restored from the progress file.
 
-## Runtime / Progress Variables Outside The Input Structs
+## Current finalization limits under review
 
-`TaskState` already groups much of the mutable runtime state. That is good, but there are still related values outside it.
+The existing normal-completion path performs model finalization and upload work
+before the final exit helper attempts remaining-descendant cleanup. A failed or
+expired cleanup result does not currently override its chosen completion code.
+Controller-error recovery instead attempts cleanup before upload work and skips
+all remaining upload finalization if termination is unconfirmed, including when
+only zombie descendants keep a POSIX group present.
 
-### `TaskState` itself
+These behaviours are review findings, not guarantees that files are quiescent
+or that every error path preserves staged evidence. Further code corrections are
+pending agreement. The two-second cleanup confirmation budget also does not
+bound total shutdown latency: synchronous diagnostics can run for their separate
+30-second execution timeout before `main()` observes a BOINC request.
 
-`TaskState` is the current runtime state holder for:
+## Source references
 
-- last known step/upload/trickle/cpu values
-- model pid and child status
-- completion/success flags
-- fraction done
-
-This is already the right direction. The main issue is that some state uses mixed units and only part of it is persisted to `progress_file`.
-
-### Additional runtime locals in `main()`
-
-| Variable | Current role | Comment |
-| --- | --- | --- |
-| `step` | Current step as a string from model polling | Repeatedly converted to int. This is one of the muddier variables. |
-| `delay_count` | Loop delay counter | Upload polling cadence control. |
-| `delay_max` | Active loop delay target | Toggled by diagnostics run. |
-| `zfl` | List of files to zip for upload | Temporary upload working set. |
-| `restart_exists` | Snapshot of restart-file presence before startup recovery logic | Narrow-scope state, ok as local. |
-
-## Observations About The Current Split
-
-### Controller-facing values
-
-These are currently mainly:
-
-- BOINC execution context from `BoincConfig`
-- CPDN task identifiers from `TaskConfig`
-- upload/trickle/restart cadence values parsed from `fort.4`
-- runtime monitoring/progress state in `TaskState`
-
-### Model-facing values
-
-These are currently mainly:
-
-- model executable path and model selection
-- thread count / environment variables
-- ancillary archive names and derived unpack directories
-- `fort.4` itself
-- restart control file (`rcf`)
-
-### Where things are muddled
-
-| Issue | Current symptom |
-| --- | --- |
-| Controller config is split across CLI and `fort.4` metadata | `TaskConfig` only holds some controller data; `upload_interval` and input archive names live as loose locals. |
-| Model identity/config is split between BOINC app name, model class, and `fort.4` | `exptid` is the clearest example. |
-| `TaskConfig` contains some values that code comments say should not really come from CLI | `fclen`, `exptid`. |
-| `ParseResult` includes fields that are not actually part of the working data flow | `app_name`, `upload_interval`, `ancil_files`, `model_args`. |
-| Runtime state uses mixed units and duplicated representations | `step` is in model steps as a string, while `TaskState.current_step` is seconds. |
-
-## Minimal Refactoring Suggestions
-
-Keep this simple. The smallest useful tidy-up would be:
-
-1. Add a dedicated struct for values parsed from `fort.4`.
-   Suggested scope: archive names, resolution metadata, `upload_interval`, `timestep`, `NFRPOS`, `NFRRES`, and eventually `exptid`.
-
-2. Keep `TaskConfig` for controller CLI/task identity only.
-   Good candidates to keep here: `batch`, `workunit`, `memberid`, `startdate`.
-   Good candidates to remove later: `exptid`, `fclen`.
-
-3. Keep `BoincConfig` strictly for BOINC/runtime environment data.
-   This struct is already close to that role.
-
-4. Add a small derived scheduling struct if desired.
-   Suggested scope: `nthreads`, `nthreads_int`, `num_days`, `timestep`, `restart_interval`, `trickle_freq`, `total_nsteps`, `total_length_of_simulation`.
-   This would remove a large cluster of loosely related locals from `main()`.
-
-5. Normalize step/time handling.
-   The simplest improvement would be to hold the in-memory current step as an integer step count, and derive seconds only where needed.
-
-6. Move `exptid` sourcing into model/namelist handling.
-   This looks like the highest-value cleanup because it is already known to be wrong in the current controller flow.
-
-## Suggested Future Struct Split
-
-One simple target structure could be:
-
-- `BoincConfig`
-  BOINC-provided runtime/environment values only.
-
-- `TaskConfig`
-  CPDN CLI/task identity values only.
-
-- `Fort4Config` or `ModelInputConfig`
-  Values parsed from `fort.4`, including both CPDN-injected metadata and model namelist values needed by the controller.
-
-- `RunSchedule`
-  Derived timing/scheduling values computed from `TaskConfig` + `Fort4Config` + `BoincConfig`.
-
-- `TaskState`
-  Mutable runtime progress and child-process state.
-
-That would keep the current design direction but make the data flow much easier to follow and much easier to tidy later.
+- [Controller configuration and state](../src/cpdn_control.h)
+- [Controller orchestration](../src/cpdn_main.cpp)
+- [Startup reconciliation](../src/control_start.cpp)
+- [Model interface](../api/model_control.h)
+- [Input manifest types](../api/model_input_manifest.h)
+- [Final exit handling](../src/task_lifecycle.cpp)
+- [Input/configuration future work](input_file_refactor_plan.md)

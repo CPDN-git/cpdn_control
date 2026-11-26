@@ -7,7 +7,10 @@ the moment the process exits, not just on the controller's chosen exit code.
 
 ## BOINC Client Rules
 
-BOINC client source references below are from `$HOME/github/boinc`.
+BOINC client source references below were checked against the local
+`$HOME/github/boinc` checkout at `client_release/8.0/8.0.2`. They describe that
+implementation, not a guarantee about every deployed client version. The remote
+clients in the overwrite-error logs were not identified.
 
 ### `QUIT_PENDING` takes precedence over finish-file handling
 
@@ -106,6 +109,27 @@ Relevant code:
 
 - `client/app_control.cpp`: finish-file timeout handling
 
+## Executable overwrite incident and evidence
+
+Two supplied task logs identify controller commit `06d51d04`. Both show a model
+launch, an observed BOINC quit request five seconds later, and a restart that
+fails to overwrite `wrf_4.6.1_urban.exe` with Linux `ETXTBSY` (Text file busy).
+One task fails again six seconds after the first retry.
+
+The confirmed controller defect was that the BOINC shutdown exit route skipped
+child termination and delegated it to the client. A missed descendant in BOINC's
+saved process list is a strong explanation for a surviving model. The exact
+interleaving remains unproven: the logs record when the controller noticed quit,
+not when the client sent it or enumerated descendants. Five seconds is the
+controller polling interval, and the repeated failure does not by itself rule
+out delayed termination. An unreaped zombie alone does not keep the executable
+image busy.
+
+The corrective implementation records current-run process ownership and attempts
+termination on every controlled exit. It does not recover old orphans, and a
+bounded confirmation deadline cannot guarantee that a process delayed in the
+kernel has released its executable before a rapid restart.
+
 ## Controller ownership and startup checks
 
 The controller owns termination of its model and helper processes and their
@@ -114,16 +138,22 @@ and applies on Linux, macOS, and Windows. BOINC client cleanup is an additional
 fallback, not the owner of this responsibility.
 
 Before staging startup archives and immediately before launching a model,
-`check_boinc_before_launch()` refreshes BOINC status and writes the status flags,
-phase, and decision to stderr. Quit, abort, or heartbeat loss prevents launch.
-Suspension defers launch until resume or shutdown. Standalone operation skips
-client polling and logs that fact.
+`check_boinc_before_launch()` reads the latest received BOINC status and writes
+the status flags, phase, and decision to stderr. Observed quit, abort, or
+heartbeat loss prevents launch. Suspension defers launch until resume or
+shutdown. Standalone operation skips client polling and logs that fact.
 
-A further poll immediately after launch covers requests received between the
-last check and process creation. Suspension at this point acts on the launched
-child. A shutdown request goes through the same final cleanup as any other exit.
-The checks cannot make process creation atomic with arrival of a BOINC message;
-controller-owned cleanup is what closes that remaining race.
+`boinc_get_status()` copies flags maintained by BOINC's background message
+processing; it does not synchronously drain pending client IPC. A clear snapshot
+therefore does not prove that no shutdown message is queued. The immediate
+postlaunch poll can observe a request received across process creation, but a
+request not yet received can remain invisible to both closely spaced checks.
+
+Suspension observed after launch acts on the actual child. Observed shutdown
+goes through the same final cleanup as any other exit. The checks reduce
+unnecessary launches; controller-owned cleanup handles late-observed requests.
+The normal main-loop poll interval is five seconds, and synchronous work can
+delay the next controller-side check.
 
 Relevant code:
 
@@ -160,8 +190,10 @@ A cleanup result distinguishes no owned process, confirmed termination,
 termination failure, and deadline expiry. Stderr includes the reason, PID/group,
 whether termination was requested, elapsed milliseconds, and any failure detail.
 A successful signal submission alone is never reported as confirmed exit.
-If the deadline expires, the controller logs the unconfirmed outcome and exits;
-it does not wait indefinitely during host shutdown.
+If the deadline expires, the controller logs the unconfirmed outcome and
+continues its selected exit path without another indefinite wait. This bounds
+cleanup confirmation, not total shutdown latency or the time the OS takes to
+terminate a process.
 
 `TaskState::child_cleanup` records the model cleanup result. Controller-error
 recovery and final exit share this result, so repeated cleanup calls do not
@@ -169,7 +201,10 @@ restart the wait budget. Synchronous external helpers use the same bounded
 cleanup and return its structured result in `TimedProcessResult::cleanup`.
 They are cleaned up on completion, timeout, or a wait failure, including any
 remaining ordinary descendants. Their execution timeout remains separate from
-the termination-confirmation budget.
+the termination-confirmation budget. OpenIFS diagnostics currently have a
+30-second execution timeout and do not poll BOINC status while running. A quit
+arriving during that call can wait for completion or timeout before `main()`
+initiates model cleanup. Other synchronous operations can also delay polling.
 
 Relevant code:
 
@@ -192,11 +227,38 @@ attempt, and the BOINC critical section is unwound before returning.
 | BOINC abort | Return 1, no finish file | No upload finalization |
 | Startup or immediate controller failure | Return nonzero, no finish file | Attempt owned cleanup |
 | Controller-error recovery | Return nonzero, no finish file | Stop model before finalizing uploads; skip finalization if termination is unconfirmed |
-| Natural timestep-loop completion | `boinc_finish()` with model-success result | Success checked and final uploads handled by normal completion flow |
+| Normal post-loop completion route | `boinc_finish()` with the previously selected model-success result | Model finalization and uploads precede remaining-descendant cleanup; cleanup failure does not override the completion code |
 
 BOINC client state still determines how it classifies an exit, as described
 above. In particular, a plain zero exit is not task completion, and client
 `QUIT_PENDING` handling can override application exit status.
+
+## Lifecycle findings awaiting code decisions
+
+The following describe current implementation limits identified during review.
+They are not corrected by the documentation update, and further code changes
+remain subject to agreement.
+
+1. **Normal-completion ordering.** After observing leader exit, `main()` runs
+   model finalization, success checks, output/log collection, final uploads and
+   file-settle waits before `finish_task_exit()` attempts remaining-descendant
+   cleanup. A descendant can therefore still be active during file handling.
+   Retaining the Windows Job Object until final exit changes the former behaviour
+   of closing it when leader exit was observed. A failed/expired final cleanup
+   result does not currently override a selected successful `boinc_finish(0)`.
+2. **Error-finalization policy.** `recover_after_controller_error()` skips all
+   remaining upload finalization on failed or expired cleanup, including staged
+   outputs, final logs and required placeholders. A POSIX group containing only
+   zombie descendants can trigger this policy even though every process has
+   terminated. Preservation of staged evidence in that case remains unresolved.
+3. **Diagnostics acceptance.** `run_process_with_timeout()` returns cleanup
+   failure separately from leader execution status. The OpenIFS diagnostics
+   caller currently checks execution status and output freshness but ignores
+   `TimedProcessResult::cleanup`, so it can accept data while helper cleanup is
+   unconfirmed.
+
+Do not infer whole-process-set quiescence from leader exit, execution success,
+or submission of a termination signal. These are separate observations.
 
 ## Limits and regression coverage
 
@@ -205,12 +267,24 @@ POSIX descendants that deliberately leave the owned process group are outside
 its guarantee. Recovery or automatic termination of orphans from an earlier
 controller run is outside the scope of this change.
 
-`TaskLifecycleTest` exercises pending startup shutdown, suspension/resume,
-status-read failure, the actual BOINC final exit route with running/suspended
-children, immediate executable overwrite after exit, descendant cleanup after
-leader exit, isolation from another launch, and deadline expiry without granting
-final exit another wait budget. `LaunchProcessTest` and
-`RunProcessWithTimeoutTest` cover the underlying model/helper process seams.
+`TaskLifecycleTest` exercises the startup guard and shared final exit helper,
+including running/suspended children, immediate executable overwrite after
+cleanup, descendant cleanup after leader exit, and isolation from another launch.
+Its deadline case uses a zero wait budget and checks that final exit does not
+replace the stored result. It does not exercise the production nonzero-deadline
+waiting loop through expiry. Linux descendant tests use a subreaper and explicit
+reaping threads, so they do not cover persistent zombie-only group presence.
+
+The guard and final helper are tested separately; the tests do not deliver real
+BOINC IPC across process creation through `main()`. `LaunchProcessTest` and
+`RunProcessWithTimeoutTest` cover the underlying model/helper seams.
+
+The corrective implementation passed the Linux CTest suite and a separate ASan
+unit suite plus a short ASan functional run. In this environment, leak detection
+was disabled and ordinary launch helpers were used because instrumented helper
+startup conflicts with the launcher's unlimited-stack setting. Those results do
+not establish native macOS or Windows behaviour for this change; the native
+workflows still need execution, including platform-specific failure paths.
 
 Keep this note, AGENTS.md, and the Doxygen comments aligned when changing
 controller process ownership or BOINC exit semantics.

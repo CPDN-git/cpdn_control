@@ -552,3 +552,38 @@ Comparison against the previous recorded point:
 | Function | Prior `pmccabe` | Current `pmccabe` | Change | Prior `lizard` NLOC | Current `lizard` NLOC | Change |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | `src/cpdn_main.cpp::main()` | 47 | 46 | -1 (`-2.1%`) | 246 | 241 | -5 (`-2.0%`) |
+
+
+## After controller-owned bounded child shutdown
+
+Measured on 2026-11-26 on branch `fix/controller-child-shutdown` with `pmccabe`
+and `/home/glenn/.local/bin/lizard`, scanning `src/cpdn_main.cpp`,
+`src/cpdn_control.cpp`, `src/task_lifecycle.cpp`, `lib/process_control.cpp`, both
+platform process backends, and `lib/utils.cpp`.
+
+- Moved exit decisions and the final exit endpoint into `task_lifecycle` so the
+  real BOINC shutdown route is directly testable.
+- Every controlled exit now attempts model-independent owned process-set cleanup.
+- Added startup BOINC checks and bounded process-group/Job Object termination
+  confirmation, retaining ownership after the model leader exits.
+- Synchronous helper programs share that cleanup rather than using an unbounded
+  POSIX wait after timeout.
+
+| File | Function | `pmccabe` | `lizard` CCN | `lizard` NLOC | Notes |
+| --- | --- | ---: | ---: | ---: | --- |
+| `src/cpdn_main.cpp` | `main()` | 51 | 51 | 260 | Adds pre-staging, prelaunch, and immediate postlaunch status checks. |
+| `src/cpdn_main.cpp` | `recover_after_controller_error()` | 8 | 8 | 20 | Skips upload finalization when model termination is unconfirmed. |
+| `src/cpdn_control.cpp` | `check_boinc_before_launch()` | 10 | 10 | 29 | Logs decisions and defers launch during suspension. |
+| `src/task_lifecycle.cpp` | `finish_task_exit()` | 3 | 3 | 13 | All routes use one cleanup owner. |
+| `src/task_lifecycle.cpp` | `stop_child_for_shutdown()` | 5 | 5 | 23 | Reuses the first cleanup result and wait budget. |
+| `lib/process_control.cpp` | `shutdown_child_process()` | 6 | 6 | 30 | One bounded confirmation loop shared by both backends. |
+| `lib/process_control_posix.cpp` | `start_child_process()` | 15 | 15 | 67 | Establishes isolated group ownership before reporting launch success. |
+| `lib/process_control_posix.cpp` | `poll_child_process()` | 8 | 13 | 45 | Keeps the exited leader waitable until group termination is requested. |
+| `lib/process_control_posix.cpp` | `poll_child_process_tree()` | 12 | 12 | 33 | Reaps the direct child and conservatively checks group presence. |
+| `lib/process_control_windows.cpp` | `poll_child_process_tree()` | 9 | 9 | 20 | Confirms leader exit and zero active Job Object processes. |
+| `lib/utils.cpp` | `run_process_with_timeout()` | 27 | 52 | 174 | Both platform branches are included by the scanners; lizard counts both conditional implementations. |
+
+Against parent commit `8321a63`, `main()` changes from `46` to `51` in both
+complexity measures and from `241` to `260` lizard NLOC. It remains within the
+working target range. The exit endpoint becomes simpler while process ownership
+and confirmation move into dedicated, tested helpers.

@@ -198,6 +198,8 @@ add_library(cpdn_control
         ./src/parse_args.cpp
         ./src/upload_manager.cpp
         ${CPDN_PROCESS_CONTROL_SOURCE}
+        ./lib/process_control.cpp
+        ./src/task_lifecycle.cpp
         ./lib/logging_utils.cpp
         ./lib/utils.cpp
         ./lib/cpdn_cpu_time.cpp

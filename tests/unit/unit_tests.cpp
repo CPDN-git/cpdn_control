@@ -34,6 +34,7 @@ int main( int argc, char* argv[] )
         { "Set Env Var", t_set_env_var },
         { "Get Out Files", t_get_out_files },
         { "Launch Process", t_launch_process },
+        { "Task Lifecycle", t_task_lifecycle },
         { "Trickle Handler", t_trickle_handler },
         { "Run Process With Timeout", t_run_process_with_timeout },
         { "Verify Project Zip MD5", t_verify_project_zip_md5 },

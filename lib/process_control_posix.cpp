@@ -124,6 +124,9 @@ ChildProcessHandle start_child_process( const std::string& executable, const std
     }
 
     if ( pid == 0 ) {
+        if ( setpgid( 0, 0 ) != 0 ) {
+            _exit( 121 );
+        }
         if ( working_dir_path[0] != '\0' && chdir( working_dir_path ) != 0 ) {
             _exit( 126 );
         }
@@ -156,6 +159,16 @@ ChildProcessHandle start_child_process( const std::string& executable, const std
     }
 
     child_process.process_id = static_cast<ProcessId>( pid );
+    // Both parent and child establish the group so an immediate shutdown cannot
+    // race the child entering its group. The child always does so before exec.
+    if ( setpgid( pid, pid ) != 0 && getpgid( pid ) != pid ) {
+        const std::string group_error = std::strerror( errno );
+        (void)shutdown_child_process( child_process );
+        close_child_process_handle( child_process );
+        err_msg = "cannot establish model process group: " + group_error;
+        return child_process;
+    }
+    child_process.process_group_id = static_cast<ProcessId>( pid );
     return child_process;
 }
 
@@ -169,50 +182,106 @@ ChildProcessState poll_child_process( ChildProcessHandle& child_process, int& ex
         return ChildProcessState::unavailable;
     }
 
-    int stat = 0;
-    int wait_options = WNOHANG | WUNTRACED;
-#ifdef WCONTINUED
-    wait_options |= WCONTINUED;
-#endif
-    pid_t wait_result = waitpid( static_cast<pid_t>( child_process.process_id ), &stat, wait_options );
-    if ( wait_result == 0 ) {
-        return child_process.suspended ? ChildProcessState::suspended : ChildProcessState::running;
+    if ( child_process.state == ChildProcessState::exited || child_process.state == ChildProcessState::terminated ) {
+        exit_code = child_process.exit_code;
+        return child_process.state;
     }
-    if ( wait_result == -1 ) {
+
+    siginfo_t info{};
+    // Observe exits without reaping. Keeping the leader waitable reserves its
+    // PID/PGID until shutdown has signalled any surviving descendants.
+    if ( waitid( P_PID, static_cast<id_t>( child_process.process_id ), &info, WEXITED | WSTOPPED | WCONTINUED | WNOHANG | WNOWAIT ) != 0 ) {
+        if ( errno == EINTR ) {
+            return child_process.state;
+        }
         err_msg = std::strerror( errno );
         return ChildProcessState::unavailable;
     }
+    if ( info.si_pid == 0 ) {
+        return child_process.state;
+    }
 
-    if ( WIFEXITED( stat ) ) {
-        exit_code = WEXITSTATUS( stat );
-        close_child_process_handle( child_process );
-        return ChildProcessState::exited;
-    }
-    if ( WIFSIGNALED( stat ) ) {
-        exit_code = -1;
-        close_child_process_handle( child_process );
-        return ChildProcessState::terminated;
-    }
-    if ( WIFSTOPPED( stat ) ) {
+    switch ( info.si_code ) {
+    case CLD_EXITED:
+        child_process.exit_code = info.si_status;
+        child_process.state = ChildProcessState::exited;
+        break;
+    case CLD_KILLED:
+    case CLD_DUMPED:
+        child_process.exit_code = -1;
+        child_process.state = ChildProcessState::terminated;
+        break;
+    case CLD_STOPPED:
+    case CLD_TRAPPED:
         child_process.suspended = true;
-        exit_code = -1;
-        return ChildProcessState::suspended;
-    }
-#ifdef WIFCONTINUED
-    if ( WIFCONTINUED( stat ) ) {
+        child_process.state = ChildProcessState::suspended;
+        break;
+    case CLD_CONTINUED:
         child_process.suspended = false;
-        return ChildProcessState::running;
+        child_process.state = ChildProcessState::running;
+        break;
     }
-#endif
-
-    return child_process.suspended ? ChildProcessState::suspended : ChildProcessState::running;
+    exit_code = child_process.exit_code;
+    return child_process.state;
 }
 
 
 bool terminate_child_process( ChildProcessHandle& child_process, std::string& err_msg )
 {
+    err_msg.clear();
+    if ( child_process.termination_requested ) {
+        return true;
+    }
+    if ( child_process.process_group_id != 0 ) {
+        const auto group = static_cast<pid_t>( child_process.process_group_id );
+        if ( group <= 1 || group == getpgrp() ) {
+            err_msg = "refusing to signal a process group not isolated from the controller";
+            return false;
+        }
+        if ( kill( -group, SIGKILL ) != 0 && errno != ESRCH ) {
+            err_msg = std::strerror( errno );
+            return false;
+        }
+    } else if ( !send_signal( child_process.process_id, SIGKILL, err_msg ) ) {
+        return false;
+    }
     child_process.termination_requested = true;
-    return send_signal( child_process.process_id, SIGKILL, err_msg );
+    return true;
+}
+
+
+ChildTreeState poll_child_process_tree( ChildProcessHandle& child_process, std::string& err_msg )
+{
+    int exit_code = 0;
+    auto state = poll_child_process( child_process, exit_code, err_msg );
+    if ( state == ChildProcessState::unavailable ) {
+        return ChildTreeState::unavailable;
+    }
+    if ( state != ChildProcessState::exited && state != ChildProcessState::terminated ) {
+        return ChildTreeState::active;
+    }
+    if ( !child_process.reaped ) {
+        const auto reaped_pid = waitpid( static_cast<pid_t>( child_process.process_id ), nullptr, WNOHANG );
+        if ( reaped_pid == 0 || ( reaped_pid < 0 && errno == EINTR ) ) {
+            return ChildTreeState::active;
+        }
+        if ( reaped_pid < 0 ) {
+            err_msg = std::strerror( errno );
+            return ChildTreeState::unavailable;
+        }
+        child_process.reaped = true;
+    }
+    if ( child_process.process_group_id == 0 ) {
+        return ChildTreeState::gone;
+    }
+    if ( kill( -static_cast<pid_t>( child_process.process_group_id ), 0 ) == 0 ) {
+        return ChildTreeState::active;
+    }
+    if ( errno == ESRCH ) {
+        return ChildTreeState::gone;
+    }
+    err_msg = std::strerror( errno );
+    return ChildTreeState::unavailable;
 }
 
 
@@ -222,6 +291,7 @@ bool suspend_child_process( ChildProcessHandle& child_process, std::string& err_
         return false;
     }
     child_process.suspended = true;
+    child_process.state = ChildProcessState::suspended;
     return true;
 }
 
@@ -232,17 +302,18 @@ bool resume_child_process( ChildProcessHandle& child_process, std::string& err_m
         return false;
     }
     child_process.suspended = false;
+    child_process.state = ChildProcessState::running;
     return true;
 }
 
 
 void close_child_process_handle( ChildProcessHandle& child_process )
 {
-    child_process.process_id = 0;
-    child_process.native_process_handle = 0;
-    child_process.native_job_handle = 0;
-    child_process.suspended = false;
-    child_process.termination_requested = false;
+    if ( child_process.process_id != 0 && !child_process.reaped ) {
+        // Never block here, including when cleanup exhausted its deadline.
+        (void)waitpid( static_cast<pid_t>( child_process.process_id ), nullptr, WNOHANG );
+    }
+    child_process = {};
 }
 
 #endif

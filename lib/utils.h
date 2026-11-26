@@ -8,6 +8,8 @@
 #include <utility>
 #include <vector>
 
+#include "process_control.h"
+
 /**
  * @brief Status values returned by run_process_with_timeout().
  *        Distinguishes launch, wait, timeout, and child-exit outcomes.
@@ -28,6 +30,7 @@ struct TimedProcessResult {
     TimedProcessStatus status = TimedProcessStatus::spawn_failed;
     int exit_code = -1;
     bool output_updated = false;
+    ChildCleanupResult cleanup;    // Owned helper process-set cleanup, including descendants.
 };
 
 bool set_env_var( const std::string&, const std::string& );
@@ -55,6 +58,8 @@ bool is_ascii_digit( char ch );
  *        Accepts optional argv-style arguments, can set child environment variables before exec,
  *        can check whether an expected output file was created or updated,
  *        and can optionally redirect child stdout/stderr to a combined log file.
+ *        Owns ordinary descendants through a POSIX process group or Windows Job Object;
+ *        all return paths after launch attempt bounded cleanup, with a separate two-second confirmation budget.
  */
 TimedProcessResult run_process_with_timeout( const std::string& executable, const std::vector<std::string>& args, const std::string& working_dir,
                                              int timeout_seconds, const std::filesystem::path& expected_output_file = {},

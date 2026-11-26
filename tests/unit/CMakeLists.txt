@@ -26,6 +26,7 @@ add_executable(unit_tests unit_tests.cpp
                         t_upload_manager.cpp
                         t_set_env_var.cpp
                         t_get_out_files.cpp
+                        t_task_lifecycle.cpp
                         t_launch_process.cpp
                         t_trickle_handler.cpp
                         t_run_process_with_timeout.cpp
@@ -90,3 +91,6 @@ add_test( NAME WRFParseRestartTest COMMAND unit_tests "WRF Parse Restart" )
 add_test( NAME WRFCheckModelSuccessTest COMMAND unit_tests "WRF Check Model Success" )
 add_test( NAME WRFRestartPruningTest COMMAND unit_tests "WRF Restart Pruning" )
 add_test( NAME FilenameLabelArgsTest COMMAND unit_tests "Filename Label Args" )
+
+add_test( NAME TaskLifecycleTest COMMAND unit_tests "Task Lifecycle" )
+set_tests_properties(TaskLifecycleTest PROPERTIES TIMEOUT 30)

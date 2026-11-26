@@ -26,6 +26,7 @@
 #include "lib/logging_utils.h"
 #include "lib/utils.h"
 #include "parse_args.h"
+#include "task_lifecycle.h"
 #include "upload_manager.h"
 
 #include "api/model_control.h"
@@ -289,143 +290,16 @@ static void banner( const BoincConfig& bc, const std::string& code_version )
 }
 
 
-enum class ExitReason {
-    loop_completed,
-    boinc_quit,
-    boinc_abort,
-    boinc_no_heartbeat,
-    startup_error,
-    controller_error,
-    upload_error,
-};
-
-/**
- * @brief Defines the cleanup policy for a controller exit independently from its cause.
- */
-enum class ExitRoute {
-    immediate,
-    controller_error_recovery,
-    boinc_shutdown,
-    task_completed,
-};
-
-struct ExitDecision {
-    ExitReason reason;
-    int exit_code;
-    ExitRoute route;
-};
-
-static const char* exit_reason_to_string( const ExitReason reason )
-{
-    switch ( reason ) {
-    case ExitReason::loop_completed:
-        return "loop_completed";
-    case ExitReason::boinc_quit:
-        return "boinc_quit";
-    case ExitReason::boinc_abort:
-        return "boinc_abort";
-    case ExitReason::boinc_no_heartbeat:
-        return "boinc_no_heartbeat";
-    case ExitReason::startup_error:
-        return "startup_error";
-    case ExitReason::controller_error:
-        return "controller_error";
-    case ExitReason::upload_error:
-        return "upload_error";
-    }
-    return "unknown";
-}
-
-
-static const char* exit_route_to_string( const ExitRoute route )
-{
-    switch ( route ) {
-    case ExitRoute::immediate:
-        return "immediate";
-    case ExitRoute::controller_error_recovery:
-        return "controller_error_recovery";
-    case ExitRoute::boinc_shutdown:
-        return "boinc_shutdown";
-    case ExitRoute::task_completed:
-        return "task_completed";
-    }
-    return "unknown";
-}
-
-/**
- * @brief Construct a non-completion exit that stops an active child and leaves immediately.
- */
-static ExitDecision make_immediate_exit_decision( const ExitReason reason, const int exit_code )
-{
-    return { reason, exit_code, ExitRoute::immediate };
-}
-
-
-/**
- * @brief Construct a non-completion exit after controller recovery has already stopped the child.
- */
-static ExitDecision make_recovered_exit_decision( const ExitReason reason, const int exit_code )
-{
-    return { reason, exit_code, ExitRoute::controller_error_recovery };
-}
-
-
-/**
- * @brief Construct the explicit controller exit decision for a BOINC-driven shutdown.
- *        QUIT remains restartable, while abort/no-heartbeat take a terminal non-finish path.
- */
-static ExitDecision make_boinc_shutdown_exit_decision( const BoincRuntime& runtime )
-{
-    ExitReason reason = ExitReason::controller_error;    // default failure
-
-    // Classify the BOINC shutdown request into a controller exit reason for logging.
-    if ( runtime.client_status.quit_request ) {
-        reason = ExitReason::boinc_quit;
-    } else if ( runtime.client_status.abort_request ) {
-        reason = ExitReason::boinc_abort;
-    } else if ( runtime.client_status.no_heartbeat ) {
-        reason = ExitReason::boinc_no_heartbeat;
-    }
-
-    // If boinc is shutting down or the heartbeat is lost, return a non-zero exit code to indicate failure to the BOINC client.
-    if ( reason == ExitReason::boinc_quit || reason == ExitReason::boinc_no_heartbeat ) {
-        return { reason, 0, ExitRoute::boinc_shutdown };
-    }
-    // BOINC has asked to abort the task.
-    return { reason, 1, ExitRoute::boinc_shutdown };
-}
-
-/**
- * @brief Construct the genuine task-completion exit decision.
- *        This is the only path that is allowed to call boinc_finish().
- */
-static ExitDecision make_completion_exit_decision( const bool model_success )
-{
-    return { ExitReason::loop_completed, model_success ? 0 : 1, ExitRoute::task_completed };
-}
-
-
-/**
- * @brief Stop the model child process if it is still active during controller shutdown.
- */
-static void stop_child_for_shutdown( TaskState& tstate )
-{
-    bool child_termination_requested = false;
-    std::string child_cleanup_err;
-    if ( !terminate_child_process_if_active( tstate.child_process, tstate.child_status, child_termination_requested, child_cleanup_err ) ) {
-        std::cerr << "Failed to terminate active child process during task shutdown: " << child_cleanup_err << '\n';
-    } else if ( child_termination_requested ) {
-        std::cerr << "Task shutdown requested while child process is still active; terminating child process before controller exit\n";
-    }
-}
-
-
 /**
  * @brief Preserve staged outputs after a controller error before returning a normal final exit decision.
  */
 static ExitDecision recover_after_controller_error( TaskState& tstate, UploadManager& upload_manager, BoincRuntime& runtime, const int exit_code )
 {
-    stop_child_for_shutdown( tstate );
+    stop_child_for_shutdown( tstate, "controller_error" );
+    if ( tstate.child_cleanup->status == ChildCleanupStatus::failed || tstate.child_cleanup->status == ChildCleanupStatus::timed_out ) {
+        std::cerr << "Skipping upload finalization because model process termination is unconfirmed\n";
+        return make_recovered_exit_decision( ExitReason::controller_error, exit_code );
+    }
 
     std::cerr << "Waiting for file operations to complete...(" << FILE_OP_DELAY << " secs)" << std::endl;
     if ( !sleep_with_boinc_poll( runtime, upload_manager.standalone(), FILE_OP_DELAY ) ) {
@@ -467,42 +341,6 @@ static std::optional<ExitDecision> wait_for_boinc_exit( TaskState& tstate, Boinc
 }
 
 
-/**
- * @brief Take the controller's single final-exit path.
- *        The exit route selects any required child cleanup, then this function closes the child
- *        handle, ends the critical section, and calls boinc_finish() only after natural completion.
- */
-static int finish_task_exit( TaskState& tstate, const ExitDecision& decision )
-{
-    switch ( decision.route ) {
-    case ExitRoute::immediate:
-    case ExitRoute::task_completed:
-        stop_child_for_shutdown( tstate );
-        break;
-
-    case ExitRoute::controller_error_recovery:
-        // recover_after_controller_error() already stopped the child before handling files.
-        break;
-
-    case ExitRoute::boinc_shutdown:
-        // The BOINC client owns the process-tree shutdown; do not finalize uploads here.
-        break;
-    }
-
-    // Log the exit decision and key task state to stderr for debugging and post-mortem analysis.
-    std::cerr << "Exit decision: reason=" << exit_reason_to_string( decision.reason ) << ", route=" << exit_route_to_string( decision.route )
-              << ", exit_code=" << decision.exit_code << ", child_status=" << tstate.child_status << ", model_completed=" << tstate.model_completed
-              << ", model_success=" << ( tstate.model_success ? "true" : "false" ) << '\n';
-
-    close_child_process_handle( tstate.child_process );
-    boinc_end_critical_section();    // in case we abort while in critical section (boinc api handles case if not in critical section).
-    if ( decision.route == ExitRoute::task_completed ) {
-        boinc_finish( decision.exit_code );    // boinc_finish exits, no further code executed after this call (unless a dummy library is used).
-    }
-    return decision.exit_code;
-}
-
-
 //----------------------------------------------------------------------------
 //----------------------------- MAIN PROGRAM ---------------------------------
 //----------------------------------------------------------------------------
@@ -510,6 +348,7 @@ static int finish_task_exit( TaskState& tstate, const ExitDecision& decision )
 
 int main( int argc, char** argv )
 {
+    BoincRuntime bruntime;
     BoincConfig bconfig;    // BOINC settings from init_data.xml.
     TaskConfig tconfig;     // CPDN task settings from command line.
     TaskState tstate;       // Task state is declared early so finish paths can always release child resources.
@@ -597,6 +436,10 @@ int main( int argc, char** argv )
     std::string nthreads = std::to_string( bconfig.ncpus );
 
     // --------------- Prepare the task environment -----------------
+
+    if ( !check_boinc_before_launch( bruntime, bconfig.standalone, "before_staging" ) ) {
+        return finish_task_exit( tstate, make_boinc_shutdown_exit_decision( bruntime ) );
+    }
 
     boinc_begin_critical_section();
 
@@ -762,7 +605,6 @@ int main( int argc, char** argv )
 
     // Create the trickle handler (only trickle if not in standalone mode)
     TrickleHandler trickler( bconfig.wu_name, result_base_name, bconfig.slot_path );
-    BoincRuntime bruntime;
 
     // Check model executable to run.
     // GC. This could be an input parameter on the command line or the init_data.xml (or model_config.xml) later on.
@@ -791,6 +633,10 @@ int main( int argc, char** argv )
     // child_status = 4 suspended
     // child_status = 5 child process not found / status unavailable
 
+    if ( !check_boinc_before_launch( bruntime, bconfig.standalone, "before_launch" ) ) {
+        return finish_task_exit( tstate, make_boinc_shutdown_exit_decision( bruntime ) );
+    }
+
     std::cerr << "Launching model executable: " << model_exe << std::endl;
     tstate.child_process = launch_process( *model_ctrl, bconfig.project_dir, bconfig.slot_path, model_exe.string(), nthreads );
 
@@ -799,6 +645,21 @@ int main( int argc, char** argv )
     } else {
         std::cerr << "Error launching model process" << std::endl;
         return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::startup_error, 1 ) );
+    }
+
+    // Cover requests received between the prelaunch check and process creation.
+    if ( !bconfig.standalone ) {
+        retval = boinc_get_status( &bruntime.client_status );
+        if ( retval != 0 ) {
+            log_boinc_api_error( "boinc_get_status", retval );
+            return finish_task_exit( tstate, make_immediate_exit_decision( ExitReason::controller_error, 1 ) );
+        }
+        std::cerr << "BOINC launch check: phase=after_launch, quit=" << bruntime.client_status.quit_request
+                  << ", abort=" << bruntime.client_status.abort_request << ", no_heartbeat=" << bruntime.client_status.no_heartbeat
+                  << ", suspended=" << bruntime.client_status.suspended << '\n';
+        if ( !apply_boinc_suspend_resume( tstate.child_process, bruntime ) ) {
+            return finish_task_exit( tstate, make_boinc_shutdown_exit_decision( bruntime ) );
+        }
     }
 
     boinc_end_critical_section();

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -36,6 +37,7 @@ struct TaskState {
     int current_step = 0;                // Current model step count
     int last_trickle_step = 0;           // Last model step count for which a trickle was sent
     ChildProcessHandle child_process;    // Child process handle and portable process id for the model child.
+    std::optional<ChildCleanupResult> child_cleanup;    // One cleanup attempt/budget shared by all exit routes.
     int child_status = 1;             // Child process status: 0=running, 1=exited normally, 3=abnormal/forced termination, 4=suspended, 5=not found.
     int exit_code = 0;                // Child process exit code (valid for normal exit)
     double current_cpu_time = 0.0;    // Current process accum CPU time; add prior_acc_cpu_time for total task CPU time.
@@ -107,8 +109,12 @@ int init_boinc( BoincConfig& );
 int stage_and_unzip_app_file( const std::string&, const std::string&, const std::string&, const std::string& );
 int check_child_status( ChildProcessHandle&, int, int& );
 bool apply_boinc_suspend_resume( ChildProcessHandle&, BoincRuntime& );
+using BoincStatusReader = int ( * )( BOINC_STATUS* );
+/** @brief Log fresh startup status and defer launch while suspended; false on shutdown or status-read failure.
+ *  The reader defaults to the BOINC API; an alternate reader allows deterministic request-timing tests.
+ */
+bool check_boinc_before_launch( BoincRuntime&, bool standalone, std::string_view phase, BoincStatusReader reader = boinc_get_status );
 ChildProcessHandle launch_process( const ModelControl&, const std::string&, const std::string&, const std::string&, const std::string& );
-bool terminate_child_process_if_active( ChildProcessHandle&, int, bool&, std::string& );
 double model_frac_done( double, double, int );
 bool sleep_with_boinc_poll( BoincRuntime&, bool, double );
 int move_result_file( const std::filesystem::path&, const std::filesystem::path&, const std::string& );

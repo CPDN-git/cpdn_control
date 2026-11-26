@@ -11,6 +11,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -37,12 +38,12 @@
 #include <sys/stat.h>    // for chmod
 
 #include "cpdn_cpu_time.h"
+#include "process_control.h"
 #include "utils.h"
 
 namespace fs = std::filesystem;
 
-// Anonymous namespace to give file-local internal linkage to helper functions: get_file_mtime, file_was_updated, and
-// terminate_child_process in lib/utils.cpp. Without it, those functions would have external linkage by default,
+// Anonymous namespace to give file-local internal linkage to the helpers in lib/utils.cpp. Without it, those functions would have external linkage by default,
 // meaning they would be visible outside that translation unit and could collide with similarly named helpers
 // elsewhere.The anonymous namespace makes it explicit that they are private implementation details of utils.cpp.
 
@@ -270,44 +271,18 @@ HANDLE open_combined_output_handle( const fs::path& combined_output_file )
     return CreateFileW( combined_output_w->c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, &security_attributes,
                         OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr );
 }
-#else
-bool terminate_child_process( pid_t pid )
-{
-    int status = 0;
-    pid_t wait_result = waitpid( pid, &status, WNOHANG );
-    if ( wait_result == pid ) {
-        return true;
-    }
-    if ( wait_result == -1 ) {
-        return false;
-    }
-
-    constexpr auto kGracePeriod = std::chrono::seconds( 2 );
-    auto deadline = std::chrono::steady_clock::now() + kGracePeriod;
-
-    if ( kill( pid, SIGTERM ) != 0 && errno != ESRCH ) {
-        return false;
-    }
-
-    while ( std::chrono::steady_clock::now() < deadline ) {
-        wait_result = waitpid( pid, &status, WNOHANG );
-        if ( wait_result == pid ) {
-            return true;
-        }
-        if ( wait_result == -1 ) {
-            return false;
-        }
-        std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
-    }
-
-    if ( kill( pid, SIGKILL ) != 0 && errno != ESRCH ) {
-        return false;
-    }
-
-    wait_result = waitpid( pid, &status, 0 );
-    return wait_result == pid || ( wait_result == -1 && errno == ECHILD );
-}
 #endif
+
+/** @brief Apply the same bounded process-set cleanup to synchronous helper programs on every platform. */
+void cleanup_timed_process( ChildProcessHandle& owned, TimedProcessResult& result, const std::string& executable )
+{
+    result.cleanup = shutdown_child_process( owned );
+    if ( result.cleanup.status == ChildCleanupStatus::failed || result.cleanup.status == ChildCleanupStatus::timed_out ) {
+        std::cerr << "Helper cleanup: executable=" << executable << ", pid=" << owned.process_id
+                  << ", result=" << child_cleanup_status_to_string( result.cleanup.status ) << ", detail=" << result.cleanup.message << '\n';
+    }
+    close_child_process_handle( owned );
+}
 
 }    // namespace
 
@@ -827,19 +802,21 @@ TimedProcessResult run_process_with_timeout( const std::string& executable, cons
         CloseHandle( combined_output_handle );
     }
 
+    ChildProcessHandle owned;
+    owned.process_id = static_cast<ProcessId>( process_info.dwProcessId );
+    owned.native_process_handle = reinterpret_cast<std::uintptr_t>( process_info.hProcess );
+
     if ( !AssignProcessToJobObject( job_handle, process_info.hProcess ) ) {
-        TerminateProcess( process_info.hProcess, 1 );
         CloseHandle( process_info.hThread );
-        CloseHandle( process_info.hProcess );
+        cleanup_timed_process( owned, result, executable );
         CloseHandle( job_handle );
         return result;
     }
 
+    owned.native_job_handle = reinterpret_cast<std::uintptr_t>( job_handle );
     if ( ResumeThread( process_info.hThread ) == static_cast<DWORD>( -1 ) ) {
-        TerminateJobObject( job_handle, 1 );
         CloseHandle( process_info.hThread );
-        CloseHandle( process_info.hProcess );
-        CloseHandle( job_handle );
+        cleanup_timed_process( owned, result, executable );
         return result;
     }
 
@@ -860,23 +837,19 @@ TimedProcessResult run_process_with_timeout( const std::string& executable, cons
                 result.output_updated = expected_output_file.empty() ? true : file_was_updated( expected_output_file, previous_output_mtime );
             }
 
-            CloseHandle( process_info.hProcess );
-            CloseHandle( job_handle );
+            cleanup_timed_process( owned, result, executable );
             return result;
         }
 
         if ( wait_result == WAIT_FAILED ) {
             result.status = TimedProcessStatus::wait_failed;
-            CloseHandle( process_info.hProcess );
-            CloseHandle( job_handle );
+            cleanup_timed_process( owned, result, executable );
             return result;
         }
 
         if ( std::chrono::steady_clock::now() >= deadline ) {
-            TerminateJobObject( job_handle, 1 );
             result.status = TimedProcessStatus::timed_out;
-            CloseHandle( process_info.hProcess );
-            CloseHandle( job_handle );
+            cleanup_timed_process( owned, result, executable );
             return result;
         }
     }
@@ -895,6 +868,9 @@ TimedProcessResult run_process_with_timeout( const std::string& executable, cons
     }
 
     if ( pid == 0 ) {
+        if ( setpgid( 0, 0 ) != 0 ) {
+            _exit( 121 );
+        }
         if ( !working_dir.empty() && chdir( working_dir.c_str() ) != 0 ) {
             _exit( 126 );
         }
@@ -929,35 +905,38 @@ TimedProcessResult run_process_with_timeout( const std::string& executable, cons
         _exit( 127 );
     }
 
-    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds( timeout_seconds );
-    int status = 0;
+    ChildProcessHandle owned;
+    owned.process_id = static_cast<ProcessId>( pid );
+    if ( setpgid( pid, pid ) != 0 && getpgid( pid ) != pid ) {
+        std::cerr << "Cannot establish helper process group for " << executable << ": " << std::strerror( errno ) << '\n';
+        cleanup_timed_process( owned, result, executable );
+        return result;
+    }
+    owned.process_group_id = static_cast<ProcessId>( pid );
 
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds( timeout_seconds );
     while ( true ) {
-        pid_t wait_result = waitpid( pid, &status, WNOHANG );
-        if ( wait_result == pid ) {
-            if ( WIFEXITED( status ) ) {
-                result.exit_code = WEXITSTATUS( status );
-                result.status = ( result.exit_code == 0 ) ? TimedProcessStatus::success : TimedProcessStatus::child_failed;
-            } else {
-                result.status = TimedProcessStatus::child_failed;
-            }
+        std::string wait_error;
+        auto state = poll_child_process( owned, result.exit_code, wait_error );
+        if ( state == ChildProcessState::exited || state == ChildProcessState::terminated ) {
+            result.status =
+                state == ChildProcessState::exited && result.exit_code == 0 ? TimedProcessStatus::success : TimedProcessStatus::child_failed;
             break;
         }
-
-        if ( wait_result == -1 ) {
+        if ( state == ChildProcessState::unavailable ) {
+            std::cerr << "Cannot observe helper " << executable << ": " << wait_error << '\n';
             result.status = TimedProcessStatus::wait_failed;
-            return result;
+            break;
         }
-
         if ( std::chrono::steady_clock::now() >= deadline ) {
-            terminate_child_process( pid );
             result.status = TimedProcessStatus::timed_out;
-            return result;
+            break;
         }
 
         std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
     }
 
+    cleanup_timed_process( owned, result, executable );
     result.output_updated = expected_output_file.empty() ? true : file_was_updated( expected_output_file, previous_output_mtime );
     return result;
 #endif

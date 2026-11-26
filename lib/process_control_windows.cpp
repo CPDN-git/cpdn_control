@@ -334,12 +334,22 @@ bool apply_thread_action( HANDLE job_handle, bool suspend_threads, std::string& 
     return false;
 }
 
+/** @brief Retain and clean up a suspended process even when job assignment or resume fails. */
+void cleanup_failed_launch( ChildProcessHandle& child, std::string& error )
+{
+    const auto result = shutdown_child_process( child );
+    if ( result.status == ChildCleanupStatus::failed || result.status == ChildCleanupStatus::timed_out ) {
+        error += "; child cleanup " + std::string( child_cleanup_status_to_string( result.status ) ) + ": " + result.message;
+    }
+    close_child_process_handle( child );
+}
+
 }    // namespace
 
 
 bool child_process_is_valid( const ChildProcessHandle& child_process )
 {
-    return child_process.process_id != 0 && child_process.native_process_handle != 0 && child_process.native_job_handle != 0;
+    return child_process.process_id != 0 && child_process.native_process_handle != 0;
 }
 
 
@@ -425,29 +435,27 @@ ChildProcessHandle start_child_process( const std::string& executable, const std
         CloseHandle( child_stderr_handle );
     }
 
+    child_process.process_id = static_cast<ProcessId>( process_info.dwProcessId );
+    child_process.native_process_handle = reinterpret_cast<std::uintptr_t>( process_info.hProcess );
+
     if ( !AssignProcessToJobObject( job_handle, process_info.hProcess ) ) {
         err_msg = get_windows_error_message( GetLastError() );
-        TerminateProcess( process_info.hProcess, 1 );
         CloseHandle( process_info.hThread );
-        CloseHandle( process_info.hProcess );
+        cleanup_failed_launch( child_process, err_msg );
         CloseHandle( job_handle );
         return child_process;
     }
 
+    child_process.native_job_handle = reinterpret_cast<std::uintptr_t>( job_handle );
     if ( ResumeThread( process_info.hThread ) == static_cast<DWORD>( -1 ) ) {
         err_msg = get_windows_error_message( GetLastError() );
-        TerminateJobObject( job_handle, 1 );
         CloseHandle( process_info.hThread );
-        CloseHandle( process_info.hProcess );
-        CloseHandle( job_handle );
+        cleanup_failed_launch( child_process, err_msg );
         return child_process;
     }
 
     CloseHandle( process_info.hThread );
 
-    child_process.process_id = static_cast<ProcessId>( process_info.dwProcessId );
-    child_process.native_process_handle = reinterpret_cast<std::uintptr_t>( process_info.hProcess );
-    child_process.native_job_handle = reinterpret_cast<std::uintptr_t>( job_handle );
     return child_process;
 }
 
@@ -459,6 +467,11 @@ ChildProcessState poll_child_process( ChildProcessHandle& child_process, int& ex
     if ( !child_process_is_valid( child_process ) ) {
         err_msg = "child process handle is not valid";
         return ChildProcessState::unavailable;
+    }
+
+    if ( child_process.state == ChildProcessState::exited || child_process.state == ChildProcessState::terminated ) {
+        exit_code = child_process.exit_code;
+        return child_process.state;
     }
 
     HANDLE process_handle = reinterpret_cast<HANDLE>( child_process.native_process_handle );
@@ -478,13 +491,16 @@ ChildProcessState poll_child_process( ChildProcessHandle& child_process, int& ex
     }
 
     bool termination_requested = child_process.termination_requested;
-    close_child_process_handle( child_process );
     if ( termination_requested ) {
         exit_code = -1;
+        child_process.exit_code = exit_code;
+        child_process.state = ChildProcessState::terminated;
         return ChildProcessState::terminated;
     }
 
     exit_code = static_cast<int>( process_exit_code );
+    child_process.exit_code = exit_code;
+    child_process.state = ChildProcessState::exited;
     return ChildProcessState::exited;
 }
 
@@ -492,19 +508,47 @@ ChildProcessState poll_child_process( ChildProcessHandle& child_process, int& ex
 bool terminate_child_process( ChildProcessHandle& child_process, std::string& err_msg )
 {
     err_msg.clear();
+    if ( child_process.termination_requested ) {
+        return true;
+    }
     if ( !child_process_is_valid( child_process ) ) {
         err_msg = "child process handle is not valid";
         return false;
     }
 
     HANDLE job_handle = reinterpret_cast<HANDLE>( child_process.native_job_handle );
-    if ( !TerminateJobObject( job_handle, 1 ) ) {
+    // Before job assignment, a failed launch owns only its suspended root.
+    const BOOL terminated = job_handle != nullptr ? TerminateJobObject( job_handle, 1 )
+                                                  : TerminateProcess( reinterpret_cast<HANDLE>( child_process.native_process_handle ), 1 );
+    if ( !terminated ) {
         err_msg = get_windows_error_message( GetLastError() );
         return false;
     }
 
     child_process.termination_requested = true;
     return true;
+}
+
+
+ChildTreeState poll_child_process_tree( ChildProcessHandle& child_process, std::string& err_msg )
+{
+    int exit_code = 0;
+    auto state = poll_child_process( child_process, exit_code, err_msg );
+    if ( state == ChildProcessState::unavailable ) {
+        return ChildTreeState::unavailable;
+    }
+    if ( child_process.native_job_handle == 0 ) {
+        return state == ChildProcessState::exited || state == ChildProcessState::terminated ? ChildTreeState::gone : ChildTreeState::active;
+    }
+    JOBOBJECT_BASIC_ACCOUNTING_INFORMATION accounting{};
+    if ( !QueryInformationJobObject( reinterpret_cast<HANDLE>( child_process.native_job_handle ), JobObjectBasicAccountingInformation, &accounting,
+                                     sizeof( accounting ), nullptr ) ) {
+        err_msg = get_windows_error_message( GetLastError() );
+        return ChildTreeState::unavailable;
+    }
+    return accounting.ActiveProcesses == 0 && ( state == ChildProcessState::exited || state == ChildProcessState::terminated )
+               ? ChildTreeState::gone
+               : ChildTreeState::active;
 }
 
 
@@ -551,11 +595,7 @@ void close_child_process_handle( ChildProcessHandle& child_process )
         CloseHandle( reinterpret_cast<HANDLE>( child_process.native_job_handle ) );
     }
 
-    child_process.process_id = 0;
-    child_process.native_process_handle = 0;
-    child_process.native_job_handle = 0;
-    child_process.suspended = false;
-    child_process.termination_requested = false;
+    child_process = {};
 }
 
 #endif

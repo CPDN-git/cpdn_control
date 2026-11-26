@@ -332,36 +332,34 @@ bool apply_boinc_suspend_resume( ChildProcessHandle& child_process, BoincRuntime
 }
 
 
-bool terminate_child_process_if_active( ChildProcessHandle& child_process, int child_status, bool& termination_requested, std::string& err_msg )
+bool check_boinc_before_launch( BoincRuntime& runtime, bool standalone, std::string_view phase, BoincStatusReader reader )
 {
-    termination_requested = false;
-    err_msg.clear();
-
-    if ( !child_process_is_valid( child_process ) ) {
-        return true;
+    while ( true ) {
+        if ( !standalone ) {
+            const int retval = reader( &runtime.client_status );
+            if ( retval != 0 ) {
+                log_boinc_api_error( "boinc_get_status", retval );
+                std::cerr << "BOINC launch check: phase=" << phase << ", decision=status_read_failed\n";
+                return false;
+            }
+        }
+        const auto& status = runtime.client_status;
+        const bool shutdown = status.quit_request || status.abort_request || status.no_heartbeat;
+        std::cerr << "BOINC launch check: phase=" << phase << ", standalone=" << standalone << ", quit=" << status.quit_request
+                  << ", abort=" << status.abort_request << ", no_heartbeat=" << status.no_heartbeat << ", suspended=" << status.suspended
+                  << ", decision="
+                  << ( shutdown           ? "shutdown"
+                       : status.suspended ? "wait_for_resume"
+                                          : "continue" )
+                  << '\n';
+        if ( shutdown ) {
+            return false;
+        }
+        if ( !status.suspended ) {
+            return true;
+        }
+        sleep_seconds( 1 );
     }
-
-    int exit_code = 0;
-    ChildProcessState process_state = poll_child_process( child_process, exit_code, err_msg );
-    if ( process_state == ChildProcessState::exited || process_state == ChildProcessState::terminated ) {
-        err_msg.clear();
-        return true;
-    }
-
-    const bool child_was_expected_active = ( child_status == 0 || child_status == 4 );
-    if ( process_state != ChildProcessState::running && process_state != ChildProcessState::suspended &&
-         !( process_state == ChildProcessState::unavailable && child_was_expected_active ) ) {
-        return true;
-    }
-
-    err_msg.clear();
-    if ( !terminate_child_process( child_process, err_msg ) ) {
-        return false;
-    }
-
-    termination_requested = true;
-    err_msg.clear();
-    return true;
 }
 
 

@@ -106,55 +106,111 @@ Relevant code:
 
 - `client/app_control.cpp`: finish-file timeout handling
 
-## Current CPDN Controller Behaviour
+## Controller ownership and startup checks
 
-Current controller source references are from this repository.
+The controller owns termination of its model and helper processes and their
+ordinary descendants whenever it can execute cleanup. This is model-independent
+and applies on Linux, macOS, and Windows. BOINC client cleanup is an additional
+fallback, not the owner of this responsibility.
 
-### BOINC `QUIT` now takes an explicit restartable no-finish path
+Before staging startup archives and immediately before launching a model,
+`check_boinc_before_launch()` refreshes BOINC status and writes the status flags,
+phase, and decision to stderr. Quit, abort, or heartbeat loss prevents launch.
+Suspension defers launch until resume or shutdown. Standalone operation skips
+client polling and logs that fact.
 
-The current controller polls BOINC state in the main loop and, on quit, builds
-an explicit `boinc_quit` exit decision with process exit code `0` and
-`should_call_boinc_finish=false`. The controller cleans up the child and
-returns from `main()` without writing a `boinc_finish_called` file.
+A further poll immediately after launch covers requests received between the
+last check and process creation. Suspension at this point acts on the launched
+child. A shutdown request goes through the same final cleanup as any other exit.
+The checks cannot make process creation atomic with arrival of a BOINC message;
+controller-owned cleanup is what closes that remaining race.
 
 Relevant code:
 
-- `src/cpdn_main.cpp`: `make_boinc_shutdown_exit_decision(...)`
-- `src/cpdn_main.cpp`: `shutdown_task(...)`
-- `src/cpdn_main.cpp`: `exit_task(...)`
+- `src/cpdn_control.cpp`: `check_boinc_before_launch()`
+- `src/cpdn_main.cpp`: startup staging, prelaunch guard, postlaunch poll
 
-Practical consequence:
+## Owned process sets and bounded termination
 
-- `QUIT` no longer depends on BOINC racing between live `QUIT_PENDING` handling
-  and finish-file handling
-- the controller now leaves BOINC to treat the exit as a restartable premature
-  exit rather than a finished result
+Linux and macOS launches establish a private process group before returning a
+successful launch handle. The model's ordinary descendants inherit this group.
+Windows launches assign the child to a Job Object before resuming it. Cleanup
+uses these recorded identities, never a machine-wide search for WRF or another
+executable name. Processes from another BOINC slot must not be targeted.
 
-### Current code has multiple exit routes
+Ownership outlives the model leader. POSIX polling uses `waitid(..., WNOWAIT)`
+to observe an exit without reaping the leader. This reserves the leader's PID
+and group identity until cleanup has sent its signal to surviving descendants.
+Windows retains the process and Job Object handles until final cleanup.
 
-The current controller can exit from:
+`shutdown_child_process()` requests immediate termination (`SIGKILL` on POSIX,
+`TerminateJobObject()` on Windows), then checks termination with nonblocking
+polls and short sleeps. There is one monotonic wait deadline of two seconds for
+the entire owned process set, not two seconds per descendant. The wait ends as
+soon as termination is confirmed. There is no additional graceful-signal wait.
 
-- early startup/setup failures
-- BOINC quit/abort/no-heartbeat
-- progress-file write failure
-- scheduled upload/final upload failure
-- post-loop completion
+On POSIX, the direct child is reaped after the group has been signalled. Group
+presence checks can conservatively remain positive for zombie descendants until
+their parent or system reaper collects them; such a deadline expiry is logged as
+unconfirmed cleanup rather than a claim that an executable is still running.
+On Windows, confirmation requires both leader exit and zero active Job Object
+processes.
 
-Those routes currently converge imperfectly:
+A cleanup result distinguishes no owned process, confirmed termination,
+termination failure, and deadline expiry. Stderr includes the reason, PID/group,
+whether termination was requested, elapsed milliseconds, and any failure detail.
+A successful signal submission alone is never reported as confirmed exit.
+If the deadline expires, the controller logs the unconfirmed outcome and exits;
+it does not wait indefinitely during host shutdown.
 
-- child termination is centralized in the final exit helper
-- BOINC quit still bypasses post-loop diagnostics by design
-- `boinc_finish(...)` is now reserved for genuine timestep-loop completion
+`TaskState::child_cleanup` records the model cleanup result. Controller-error
+recovery and final exit share this result, so repeated cleanup calls do not
+restart the wait budget. Synchronous external helpers use the same bounded
+cleanup and return its structured result in `TimedProcessResult::cleanup`.
+They are cleaned up on completion, timeout, or a wait failure, including any
+remaining ordinary descendants. Their execution timeout remains separate from
+the termination-confirmation budget.
 
-## Current Contract
+Relevant code:
 
-The current controller contract is:
+- `lib/process_control.h`, `lib/process_control.cpp`
+- `lib/process_control_posix.cpp`, `lib/process_control_windows.cpp`
+- `lib/utils.cpp`: `run_process_with_timeout()`
+- `src/task_lifecycle.cpp`: `stop_child_for_shutdown()`
 
-1. `QUIT` becomes an explicit restartable non-finish path
-2. `boinc_finish(...)` is reserved for genuine timestep-loop completion only
-3. `check_model_success()` is run only after natural loop completion
-4. non-completion failures become terminal non-finish exits
-5. one helper owns final child termination and exit logging
+## Final exit routes and BOINC semantics
 
-This note should be kept in sync with the controller exit-path refactor because
-it documents the contract the controller must respect when running under BOINC.
+All controlled exits pass through `finish_task_exit()` in
+`src/task_lifecycle.cpp`. Every route attempts owned child cleanup, including
+BOINC quit, abort, and heartbeat loss. Handles are released only after that
+attempt, and the BOINC critical section is unwound before returning.
+
+| Cause | Controller exit | Upload/completion behaviour |
+| --- | --- | --- |
+| BOINC quit | Return 0, no finish file | Restartable; no upload finalization |
+| Heartbeat loss | Return 0, no finish file | Restartable; no upload finalization |
+| BOINC abort | Return 1, no finish file | No upload finalization |
+| Startup or immediate controller failure | Return nonzero, no finish file | Attempt owned cleanup |
+| Controller-error recovery | Return nonzero, no finish file | Stop model before finalizing uploads; skip finalization if termination is unconfirmed |
+| Natural timestep-loop completion | `boinc_finish()` with model-success result | Success checked and final uploads handled by normal completion flow |
+
+BOINC client state still determines how it classifies an exit, as described
+above. In particular, a plain zero exit is not task completion, and client
+`QUIT_PENDING` handling can override application exit status.
+
+## Limits and regression coverage
+
+Cleanup cannot execute after an uncatchable controller kill or power loss.
+POSIX descendants that deliberately leave the owned process group are outside
+its guarantee. Recovery or automatic termination of orphans from an earlier
+controller run is outside the scope of this change.
+
+`TaskLifecycleTest` exercises pending startup shutdown, suspension/resume,
+status-read failure, the actual BOINC final exit route with running/suspended
+children, immediate executable overwrite after exit, descendant cleanup after
+leader exit, isolation from another launch, and deadline expiry without granting
+final exit another wait budget. `LaunchProcessTest` and
+`RunProcessWithTimeoutTest` cover the underlying model/helper process seams.
+
+Keep this note, AGENTS.md, and the Doxygen comments aligned when changing
+controller process ownership or BOINC exit semantics.

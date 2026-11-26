@@ -17,8 +17,12 @@ This repository builds the **CPDN controller** executable used to run/manage cli
   - Core controller logic used by the release/debug executables and unit tests.
   - BOINC API call sites in controller helpers now log the failing BOINC function name, numeric return code, and `boincerror(...)` string locally before returning control to the caller.
   - Includes the BOINC suspend/resume helper used by `main()` to apply suspend/resume requests without deciding the final controller exit path.
+- `src/task_lifecycle.h`, `src/task_lifecycle.cpp`
+  - Model-independent exit decisions and the final cleanup path shared by every controller exit route.
+- `lib/process_control.h`, `lib/process_control.cpp`, `lib/process_control_posix.cpp`, `lib/process_control_windows.cpp`
+  - Owned process groups/Job Objects and bounded termination confirmation for Linux, macOS, and Windows.
 - `src/upload_manager.h`, `src/upload_manager.cpp`
-  - Upload/finalization helper used by `main()` and `shutdown_task(...)` to stage copyable model outputs, create placeholder payloads for missing scheduled uploads, zip result archives, and submit BOINC uploads.
+  - Upload/finalization helper used by `main()` and `recover_after_controller_error(...)` to stage copyable model outputs, create placeholder payloads for missing scheduled uploads, zip result archives, and submit BOINC uploads.
   - `UploadManager::move_copyable_output_files(...)` is intentionally best-effort: it should attempt to copy every eligible model output file, log individual failures, and continue so remote logs retain as much evidence as possible.
 - `api/model_input_manifest.h`
   - Shared manifest/context types for model-declared BOINC input archives.
@@ -252,23 +256,31 @@ Notes:
   - `1` = exited normally
   - `3` = terminated by signal
   - `4` = stopped
-  - `5` = not found by `waitpid()`
+  - `5` = process state unavailable from the platform poll
 - `BoincRuntime::client_status` stores the latest `BOINC_STATUS` snapshot returned by `boinc_get_status()`.
 - Do not overload `child_status` with BOINC meanings such as quit, abort, suspend, or no-heartbeat.
-- `sleep_with_boinc_poll(...)` in `src/cpdn_main.cpp` is intended to poll BOINC state only. It should not directly stop, resume, or kill the child process.
+- `sleep_with_boinc_poll(...)` in `src/cpdn_control.cpp` is intended to poll BOINC state only. It should not directly stop, resume, or kill the child process.
 - `apply_boinc_suspend_resume(...)` in `src/cpdn_control.cpp` is the side-effecting BOINC handler for suspend/resume only.
   It returns `false` on quit, abort, or no-heartbeat so `main()` can choose the correct final exit path.
-- `exit_task(...)` in `src/cpdn_main.cpp` is the general final-exit helper:
-  it performs defensive child-process shutdown, closes the child handle, unwinds the BOINC critical section, and only calls `boinc_finish(...)` on genuine loop completion.
-- `shutdown_task(...)` in `src/cpdn_main.cpp` is the controller-error shutdown helper:
+- `finish_task_exit(...)` in `src/task_lifecycle.cpp` is the general final-exit helper:
+  it performs controller-owned child-process cleanup on every route, including BOINC quit/abort/no-heartbeat, closes the child handle, unwinds the BOINC critical section, and only calls `boinc_finish(...)` on genuine loop completion.
+- `recover_after_controller_error(...)` in `src/cpdn_main.cpp` is the controller-error shutdown helper:
   it may stop the child early so uploads can be finalized safely before the controller takes its final non-finish exit path.
+- The controller owns termination of every model/helper process it launches and their ordinary descendants when cleanup can execute. Never delegate this responsibility to the BOINC client.
+- Keep this contract model-independent and compatible with Linux, macOS, and Windows. Identify owned processes by their launch handles/PIDs and process group or Job Object, never by a global executable-name search.
+- Model/helper launches on Linux and macOS establish a private process group before launch is reported successful. Windows launches use a Job Object. Retain ownership until final cleanup even after the leader exits; POSIX polling observes terminal state without reaping until cleanup has signalled the group, avoiding reuse of its identity before signalling.
+- Cleanup requests termination immediately and confirms exit using nonblocking polls with one total two-second monotonic wait budget per owned process set. Recovery and final exit share the model cleanup result and must not restart that budget. Log failed or unconfirmed cleanup and exit when the deadline expires; never use an unbounded wait.
+- Check and log BOINC status before startup staging and immediately before model launch. Defer launch while suspended and exit without launch on quit/abort/no-heartbeat. Poll immediately after launch as well, applying suspend/resume to the actual child and cleaning it up if shutdown arrived across process creation.
+- Child-cleanup stderr must identify the exit reason and process identity, whether termination was requested, the confirmed/failed/deadline outcome, and elapsed time. Signal submission alone is not confirmed termination.
+- Forced controller termination or power loss may prevent cleanup. Descendants that deliberately detach from their process group are outside the POSIX process-group guarantee. Recovery of orphans from earlier controller runs is outside scope.
+- If controller-error recovery cannot confirm model termination, skip upload finalization rather than manipulate files potentially still being written.
 - Do not assume a non-BOINC controller error implies the child is already gone. If the controller is exiting after launch, preserve the invariant that the model child must not be left running.
 - In `main()`, prefer the explicit sequence:
   - call `boinc_get_status(&bruntime.client_status)`
   - inspect or poll for a BOINC state change
   - call `apply_boinc_suspend_resume(...)` if action is required
   - on BOINC `QUIT`, take the explicit restartable non-finish exit path
-  - on ordinary controller failure, route through `shutdown_task(...)` if uploads still need finalizing
+  - on ordinary controller failure, route through `recover_after_controller_error(...)` if uploads still need finalizing
   - only call `boinc_finish(...)` after natural timestep-loop completion and `check_model_success()`
 - If this area is refactored further, preserve the separation of responsibilities:
   - polling BOINC state

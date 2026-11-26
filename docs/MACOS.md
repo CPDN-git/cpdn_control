@@ -138,8 +138,10 @@ implemented.
 
 The two-second budget bounds cleanup confirmation, not total shutdown latency.
 Synchronous diagnostics have a separate execution timeout and can delay the next
-BOINC status check. Normal finalization ordering, unconfirmed-cleanup upload
-policy and diagnostics result acceptance remain under review, as recorded in
+BOINC status check. Review accepted the current finalization ordering and
+unconfirmed-cleanup upload policy for OpenIFS and WRF because they use threads
+and create no model subprocess descendants. Diagnostics now reject output on
+failed or expired helper cleanup. See the decisions and future-model limits in
 [BOINC exit behaviour](boinc_exit_behaviour.md).
 
 The Linux-specific subreaper used by descendant unit tests is not compiled on

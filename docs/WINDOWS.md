@@ -101,10 +101,12 @@ old orphan discovery is outside scope.
 The two-second budget does not cap total shutdown latency. BOINC status checks
 read flags already received by the API, and synchronous model work can delay
 controller-side polling. See [BOINC exit behaviour](boinc_exit_behaviour.md) for
-the remaining review findings: normal uploads occur before final descendant
-cleanup, error finalization skips uploads on unconfirmed cleanup, and diagnostics
-currently ignore the helper cleanup result when accepting output. These are
-current limits, not completed corrective work.
+the recorded review decisions. Normal uploads still precede final owned-process
+cleanup, and error finalization still skips uploads on unconfirmed cleanup;
+these policies were accepted for OpenIFS and WRF because their workers are
+threads rather than model subprocess descendants. Diagnostics now explicitly
+reject output on failed or expired helper cleanup. Models with subprocess
+workers require a fresh review of finalization ordering and upload policy.
 
 ## Remaining Windows Blockers
 

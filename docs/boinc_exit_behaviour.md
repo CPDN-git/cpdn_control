@@ -233,29 +233,36 @@ BOINC client state still determines how it classifies an exit, as described
 above. In particular, a plain zero exit is not task completion, and client
 `QUIT_PENDING` handling can override application exit status.
 
-## Lifecycle findings awaiting code decisions
+## Lifecycle review decisions
 
-The following describe current implementation limits identified during review.
-They are not corrected by the documentation update, and further code changes
-remain subject to agreement.
+Review confirmed that the current OpenIFS and WRF models use threads for
+parallel execution and do not create model subprocess descendants. The shared
+process-group/Job Object containment remains in place, but findings 1 and 2
+require no further code changes for these models.
 
-1. **Normal-completion ordering.** After observing leader exit, `main()` runs
-   model finalization, success checks, output/log collection, final uploads and
-   file-settle waits before `finish_task_exit()` attempts remaining-descendant
-   cleanup. A descendant can therefore still be active during file handling.
-   Retaining the Windows Job Object until final exit changes the former behaviour
-   of closing it when leader exit was observed. A failed/expired final cleanup
-   result does not currently override a selected successful `boinc_finish(0)`.
-2. **Error-finalization policy.** `recover_after_controller_error()` skips all
-   remaining upload finalization on failed or expired cleanup, including staged
-   outputs, final logs and required placeholders. A POSIX group containing only
-   zombie descendants can trigger this policy even though every process has
-   terminated. Preservation of staged evidence in that case remains unresolved.
-3. **Diagnostics acceptance.** `run_process_with_timeout()` returns cleanup
-   failure separately from leader execution status. The OpenIFS diagnostics
-   caller currently checks execution status and output freshness but ignores
-   `TimedProcessResult::cleanup`, so it can accept data while helper cleanup is
-   unconfirmed.
+1. **Normal-completion ordering: accepted for current models.** After observing
+   leader exit, `main()` runs model finalization, success checks, output/log
+   collection, final uploads and file-settle waits before `finish_task_exit()`
+   attempts owned-process cleanup. A failed/expired final cleanup result does
+   not override a selected successful completion code. This is unchanged:
+   there are no model subprocess descendants continuing to write after the
+   current models' process and its threads exit. Reassess this ordering before
+   integrating a model with subprocess workers.
+2. **Error-finalization policy: accepted for current models.**
+   `recover_after_controller_error()` skips remaining upload finalization on
+   failed or expired model cleanup. A POSIX group containing only zombie
+   descendants can keep the group-presence check positive, but that descendant
+   scenario does not arise from the current thread-only model workers. Review
+   requires no change to this policy for OpenIFS or WRF. Reassess staged-evidence
+   preservation if a future model creates subprocess descendants.
+3. **Diagnostics acceptance: corrected.** The OpenIFS diagnostics caller now
+   explicitly checks `TimedProcessResult::cleanup`. Failed or expired cleanup
+   rejects the output even when leader execution succeeded and the output file
+   was refreshed. Rejection logs the cleanup status, elapsed time and available
+   failure detail, removes `trickle_data` (logging any removal failure), and does
+   not report diagnostics success. Execution failure and stale output are also
+   rejected. Diagnostics remain optional, so rejection does not abort the model
+   task or change the existing attempted-run return convention.
 
 Do not infer whole-process-set quiescence from leader exit, execution success,
 or submission of a termination signal. These are separate observations.
@@ -278,6 +285,12 @@ reaping threads, so they do not cover persistent zombie-only group presence.
 The guard and final helper are tested separately; the tests do not deliver real
 BOINC IPC across process creation through `main()`. `LaunchProcessTest` and
 `RunProcessWithTimeoutTest` cover the underlying model/helper seams.
+`ExternalDiagnosticsTest` directly exercises the result-acceptance path with
+successful execution and fresh output combined with failed/expired cleanup,
+checking rejection, payload removal and diagnostic context. It also verifies
+accepted cleanup outcomes, execution failure and stale-output handling. These
+cases use supplied results rather than platform-dependent process failure
+injection, so the acceptance regression is deterministic across platforms.
 
 The corrective implementation passed the Linux CTest suite and a separate ASan
 unit suite plus a short ASan functional run. In this environment, leak detection

@@ -125,7 +125,9 @@ The CLI `--upload_interval` controls upload cadence in model steps.
 On an observed step change, the controller invokes `do_step_tasks(step, slot)`
 first. OpenIFS may run diagnostics through
 [external_diagnostics.cpp](../models/openifs/external_diagnostics.cpp), producing
-`trickle_data` in the slot. `TrickleHandler` consumes that file there.
+`trickle_data` in the slot. Diagnostics reject and remove the payload on failed
+or expired helper cleanup, execution failure, or stale output. Rejection remains
+nonfatal to the model. `TrickleHandler` consumes accepted data in the slot.
 
 The controller next asks `get_copyable_output_filenames(step)` for files the
 model considers safe to copy. `get_output_filenames(step)` is a nominal naming
@@ -172,12 +174,14 @@ attempts remaining-descendant cleanup. Cleanup failure does not currently
 change the preselected completion code. Controller-error recovery instead
 attempts cleanup before upload finalization, but skips all remaining final
 uploads when cleanup is failed or unconfirmed, including zombie-only group
-presence. These are active review findings; no further code correction is
-implied by this documentation update.
+presence. Review accepted these policies for OpenIFS and WRF because the models
+use threads and do not create model subprocess descendants; no further code
+change is required for these two findings. Reassess the policies before adding
+a model that creates subprocess workers.
 
 See [BOINC exit behaviour](boinc_exit_behaviour.md) for the two-second cleanup
 budget, received-status limitations, synchronous-helper shutdown latency,
-regression-test scope, and the findings still awaiting code decisions.
+regression-test scope, and the recorded review decisions.
 
 ## References
 

@@ -68,6 +68,36 @@ void replay_diagnostics_output_to_stderr( const fs::path& combined_output_path )
 
 }    // namespace
 
+bool accept_diagnostics_result( const TimedProcessResult& result, const fs::path& trickle_data_path )
+{
+    if ( result.cleanup.status == ChildCleanupStatus::failed || result.cleanup.status == ChildCleanupStatus::timed_out ) {
+        std::cerr << "Warning: rejecting diagnostics output because helper cleanup " << child_cleanup_status_to_string( result.cleanup.status )
+                  << ", elapsed_ms=" << result.cleanup.elapsed.count();
+        if ( !result.cleanup.message.empty() ) {
+            std::cerr << ", detail=" << result.cleanup.message;
+        }
+        std::cerr << '\n';
+    } else if ( result.status != TimedProcessStatus::success ) {
+        std::cerr << "Warning: diagnostics program failed with status " << timed_process_status_to_string( result.status );
+        if ( result.exit_code >= 0 ) {
+            std::cerr << ", exit_code=" << result.exit_code;
+        }
+        std::cerr << '\n';
+    } else if ( !result.output_updated ) {
+        std::cerr << "Warning: diagnostics program completed but did not produce a fresh trickle_data file\n";
+    } else {
+        std::cerr << "Diagnostics completed and updated trickle_data\n";
+        return true;
+    }
+
+    std::error_code ec;
+    fs::remove( trickle_data_path, ec );
+    if ( ec ) {
+        std::cerr << "Warning: failed to remove rejected diagnostics output " << trickle_data_path << ": " << ec.message() << '\n';
+    }
+    return false;
+}
+
 bool run_step_diagnostics( const ModelControl& model_ctrl, const fs::path& diag_exe, const fs::path& slot_path,
                            const std::vector<std::string>& output_files )
 {
@@ -117,22 +147,6 @@ bool run_step_diagnostics( const ModelControl& model_ctrl, const fs::path& diag_
                                                                trickle_data_path, diag_env_vars, diagnostics_log_path );
     replay_diagnostics_output_to_stderr( diagnostics_log_path );
 
-    if ( diag_result.status != TimedProcessStatus::success ) {
-        std::cerr << "Warning: diagnostics program failed with status " << timed_process_status_to_string( diag_result.status );
-        if ( diag_result.exit_code >= 0 ) {
-            std::cerr << ", exit_code=" << diag_result.exit_code;
-        }
-        std::cerr << '\n';
-        fs::remove( trickle_data_path, ec );
-        return true;
-    }
-
-    if ( !diag_result.output_updated ) {
-        std::cerr << "Warning: diagnostics program completed but did not produce a fresh trickle_data file\n";
-        fs::remove( trickle_data_path, ec );
-        return true;
-    }
-
-    std::cerr << "Diagnostics completed and updated trickle_data\n";
+    (void)accept_diagnostics_result( diag_result, trickle_data_path );
     return true;
 }

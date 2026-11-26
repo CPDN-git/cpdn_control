@@ -587,3 +587,21 @@ Against parent commit `8321a63`, `main()` changes from `46` to `51` in both
 complexity measures and from `241` to `260` lizard NLOC. It remains within the
 working target range. The exit endpoint becomes simpler while process ownership
 and confirmation move into dedicated, tested helpers.
+
+## After validating diagnostics helper cleanup
+
+Measured on 2026-11-26 with `pmccabe` and
+`/home/glenn/.local/bin/lizard` on
+`models/openifs/external_diagnostics.cpp`. Diagnostics result acceptance now
+checks helper cleanup before consuming a fresh output file. The existing
+execution/freshness checks share the same directly tested acceptance helper;
+model/controller process-lifecycle code is unchanged.
+
+| Function | Before `pmccabe` | After `pmccabe` | Before `lizard` CCN | After `lizard` CCN | Before NLOC | After NLOC |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `run_step_diagnostics()` | 9 | 6 | 9 | 6 | 49 | 35 |
+| `accept_diagnostics_result()` | — | 8 | — | 8 | — | 28 |
+
+The review accepted findings 1 and 2 for the current OpenIFS and WRF models,
+whose parallel workers are threads rather than model subprocess descendants.
+Their finalization order and upload policy were not changed.

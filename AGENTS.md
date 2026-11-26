@@ -182,7 +182,7 @@ Notes:
 - The experimental helper selects an `ICMSH...` input and builds the diagnostics argument list within the OpenIFS implementation. Keep further OpenIFS-specific decisions there.
 - Diagnostics run synchronously with a separate 30-second execution timeout. The two-second process cleanup confirmation budget does not bound total shutdown latency while a step hook is running.
 - `TrickleHandler` consumes `trickle_data` from the slot directory. A redesign that stages diagnostics elsewhere must preserve or deliberately update that contract.
-- The diagnostics caller currently ignores `TimedProcessResult::cleanup` when accepting an otherwise successful result. Handling failed/unconfirmed helper cleanup is under review; the implementation is not corrected by this documentation update.
+- Diagnostics explicitly validate `TimedProcessResult::cleanup` before accepting output. Failed or expired cleanup logs its status/context and discards `trickle_data`, even if the helper leader exited successfully and updated the file. Diagnostics rejection remains nonfatal to the model task.
 
 ## BOINC Input Staging Semantics
 
@@ -275,8 +275,8 @@ Notes:
 - Check and log the latest received BOINC status before startup staging and immediately before model launch. Defer launch while suspended and exit without launch on observed quit/abort/no-heartbeat. Poll immediately after launch as well, applying suspend/resume to the actual child and cleaning it up on observed shutdown. `boinc_get_status()` copies received flags; it does not synchronously drain pending client IPC.
 - Child-cleanup stderr must identify the exit reason and process identity, whether termination was requested, the confirmed/failed/deadline outcome, and elapsed time. Signal submission alone is not confirmed termination.
 - Forced controller termination or power loss may prevent cleanup. Descendants that deliberately detach from their process group are outside the POSIX process-group guarantee. Recovery of orphans from earlier controller runs is outside scope.
-- Current controller-error recovery skips all remaining upload finalization when cleanup fails or expires. A zombie-only POSIX group can trigger that outcome even after every process has terminated; preservation of already staged outputs, logs and placeholders in this case remains under review.
-- The current normal-completion path performs model finalization and upload work before the final remaining-descendant cleanup attempt. Its selected completion code is not overridden by cleanup failure. These ordering/outcome findings remain under review; do not document them as resolved or assume leader exit proves descendant exit.
+- Current controller-error recovery skips all remaining upload finalization when cleanup fails or expires. A zombie-only POSIX group can trigger that outcome. Review accepted the current policy for OpenIFS and WRF because these models use threads and do not create model subprocess descendants; no further code change is required for that finding.
+- The current normal-completion path performs model finalization and upload work before final owned-process cleanup. Its selected completion code is not overridden by cleanup failure. Review accepted this ordering for the current OpenIFS and WRF models, whose parallel workers are threads in the model process. Revisit the ordering and upload policy before integrating a model that creates subprocess descendants.
 - The two-second budget limits cleanup confirmation, not total request-to-exit latency. Synchronous diagnostics and other operations can delay the next controller-side status check.
 - Review findings do not authorize further implementation changes. Keep their status explicit in `docs/boinc_exit_behaviour.md` until a correction is agreed.
 - Do not assume a non-BOINC controller error implies the child is already gone. If the controller is exiting after launch, preserve the invariant that the model child must not be left running.

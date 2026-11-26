@@ -205,14 +205,17 @@ controller runs is outside scope.
 
 Auxiliary synchronous programs should use `run_process_with_timeout()`, which
 returns execution, output-freshness and cleanup outcomes. The helper execution
-timeout and cleanup budget are separate. Do not assume the current diagnostics
-caller already handles every cleanup outcome correctly.
+timeout and cleanup budget are separate. Check the cleanup result before
+accepting helper output; the OpenIFS diagnostics acceptance path rejects failed
+or expired cleanup even when execution succeeded and the file was refreshed.
 
 Read [BOINC exit behaviour](boinc_exit_behaviour.md) before integrating a model
-with descendants or auxiliary writers. The current normal-completion ordering,
-error-finalization behaviour and diagnostics cleanup acceptance have unresolved
-review findings. A leader exit or successful helper return does not by itself
-prove every writer has stopped. The two-second cleanup budget does not bound
+with descendants or auxiliary writers. Review accepted the current normal
+completion ordering and error-finalization policy for OpenIFS and WRF because
+their parallel workers are threads, not model subprocess descendants. Reassess
+these policies before adding a model with subprocess workers. A leader exit or
+successful helper return does not by itself prove every writer has stopped in
+such an integration. The two-second cleanup budget does not bound
 all time spent in model step hooks or other synchronous controller work.
 
 Extend tests for model control input, manifest staging, output readiness and

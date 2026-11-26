@@ -5,7 +5,7 @@
 This note describes the current controller interfaces and execution order. Use
 [the file-flow guide](boinc_file_flow_summary.md) for archive paths and
 [BOINC exit behaviour](boinc_exit_behaviour.md) for process ownership, exit
-classification, and the lifecycle findings still under review.
+classification, and the lifecycle review decisions and remaining validation limits.
 
 The shared controller selects and monitors a model, manages BOINC interaction,
 and stages uploads. The model adapter owns its control-file format, input
@@ -139,7 +139,7 @@ Object handles. `child_cleanup` records the model cleanup attempt so recovery
 and final exit do not restart its two-second confirmation budget. This state is
 transient and is not restored from the progress file.
 
-## Current finalization limits under review
+## Finalization review decisions
 
 The existing normal-completion path performs model finalization and upload work
 before the final exit helper attempts remaining-descendant cleanup. A failed or
@@ -148,11 +148,16 @@ Controller-error recovery instead attempts cleanup before upload work and skips
 all remaining upload finalization if termination is unconfirmed, including when
 only zombie descendants keep a POSIX group present.
 
-These behaviours are review findings, not guarantees that files are quiescent
-or that every error path preserves staged evidence. Further code corrections are
-pending agreement. The two-second cleanup confirmation budget also does not
-bound total shutdown latency: synchronous diagnostics can run for their separate
-30-second execution timeout before `main()` observes a BOINC request.
+Review accepted these behaviours for the current OpenIFS and WRF models: their
+parallel workers are threads and they create no model subprocess descendants.
+No further code change is required for those two findings. Reassess the policies
+before adding a model with subprocess workers. OpenIFS diagnostics separately
+validate execution, cleanup and freshness before accepting `trickle_data`;
+failed or expired helper cleanup discards the output without aborting the model.
+
+The two-second cleanup confirmation budget does not bound total shutdown
+latency: synchronous diagnostics can run for their separate 30-second execution
+timeout before `main()` observes a BOINC request.
 
 ## Source references
 

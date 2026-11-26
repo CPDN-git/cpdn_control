@@ -106,7 +106,7 @@ static int child_status_from_process_state( ChildProcessState process_state, int
 
 
 /**
- * @brief Initialise BOINC data structure and set the options
+ * @brief Initialise BOINC once with the final options and populate task configuration.
  *
  * @details
  * The controller uses BOINC's wrapper mode: BOINC reports client status and
@@ -129,18 +129,37 @@ static int child_status_from_process_state( ChildProcessState process_state, int
  * Introducing application threads into cpdn_control does not require enabling
  * either flag: the controller must coordinate their pause/shutdown and BOINC API
  * access while retaining ownership of its model/helper processes.
+ *
+ * boinc_init() already calls boinc_init_options(), so call only the latter to
+ * avoid creating a second timer thread. Standalone tests still supply a valid
+ * init_data.xml but run without BOINC client shared memory. Retain the explicit
+ * parse check: BOINC initialization otherwise falls back to standalone mode on
+ * missing or malformed initialization data instead of returning that error.
  */
 int init_boinc( BoincConfig& config )
 {
     int retval = 0;
 
-    //boinc_init_diagnostics(BOINC_DIAG_DEFAULTS);
-    retval = boinc_init();
+    // Set the final options before initialization starts BOINC's timer thread.
+    BOINC_OPTIONS options;
+    boinc_options_defaults( options );
+    options.main_program = true;    // tell boinc client this is the main program
+    options.multi_thread = false;
+    options.multi_process = false;
+    options.check_heartbeat = true;           // controller monitors 'heartbeat' messages from the client.
+    options.handle_process_control = true;    // controller will handle all suspend/quit/resume messages from the boinc client.
+    options.direct_process_action = false;    // controller will respond to quit messages and heartbeat failures by exiting,
+                                              // and will respond to suspend and resume messages by suspending and resuming
+    options.send_status_msgs = false;         // If set, the program will report its CPU time and fraction done to the client.
+                                              // Set in worker programs.
+
+    retval = boinc_init_options( &options );
     if ( retval ) {
-        log_boinc_api_error( "boinc_init", retval );
+        log_boinc_api_error( "boinc_init_options", retval );
         return retval;
     }
 
+    // Keep startup metadata errors fatal, including in standalone test runs.
     retval = boinc_parse_init_data_file();
     if ( retval ) {
         log_boinc_api_error( "boinc_parse_init_data_file", retval );
@@ -183,24 +202,7 @@ int init_boinc( BoincConfig& config )
     // The APP_INIT_DATA structure only has the slot number.
     config.slot_path = fs::current_path().string();
 
-    // Set BOINC optional values
-    BOINC_OPTIONS options;
-    boinc_options_defaults( options );
-    options.main_program = true;    // tell boinc client this is the main program
-    options.multi_thread = false;
-    options.multi_process = false;
-    options.check_heartbeat = true;           // controller monitors 'heartbeat' messages from the client.
-    options.handle_process_control = true;    // controller will handle all suspend/quit/resume messages from the boinc client.
-    options.direct_process_action = false;    // controller will respond to quit messages and heartbeat failures by exiting,
-                                              // and will respond to suspend and resume messages by suspending and resuming
-    options.send_status_msgs = false;         // If set, the program will report its CPU time and fraction done to the client.
-                                              // Set in worker programs.
-
-    retval = boinc_init_options( &options );
-    if ( retval ) {
-        log_boinc_api_error( "boinc_init_options", retval );
-    }
-    return retval;
+    return 0;
 }
 
 

@@ -107,6 +107,28 @@ static int child_status_from_process_state( ChildProcessState process_state, int
 
 /**
  * @brief Initialise BOINC data structure and set the options
+ *
+ * @details
+ * The controller uses BOINC's wrapper mode: BOINC reports client status and
+ * the controller manages model/helper suspension, resumption and termination
+ * through its owned process groups or Windows Job Objects.
+ *
+ * BOINC's multi_thread option is intended for automatic control of application
+ * threads: Windows enumerates threads for suspension/resumption, while POSIX
+ * has a legacy supervisor-process path. It does not enable thread creation or
+ * make BOINC API calls thread-safe. BOINC creates its internal timer thread
+ * even when this option is false; threads in the separate model process do not
+ * require enabling it in the controller.
+ *
+ * BOINC's multi_process option enables descendant termination in boinc_exit(),
+ * even with direct_process_action disabled. On POSIX it also enables descendant
+ * suspension/resumption during BOINC's automatic process control. It does not
+ * launch subprocesses or provide the controller's ownership and bounded cleanup.
+ *
+ * Both flags are explicitly false because the controller owns process control.
+ * Introducing application threads into cpdn_control does not require enabling
+ * either flag: the controller must coordinate their pause/shutdown and BOINC API
+ * access while retaining ownership of its model/helper processes.
  */
 int init_boinc( BoincConfig& config )
 {
@@ -165,15 +187,8 @@ int init_boinc( BoincConfig& config )
     BOINC_OPTIONS options;
     boinc_options_defaults( options );
     options.main_program = true;    // tell boinc client this is the main program
-    // Nov/2025. This option appears to sometimes cause a memory corruption (!prev); possible race condition
-    //          on 'static std::vector<UPLOAD_FILE_STATUS> upload_file_status'; in boinc_api.cpp upon destruction.
-    //          Disable for now. Monitor code did not use it.
-    //          If this is set true, the client will kill all our child processes on exit (supposedly).
-    //          It also appears to execute suspend/resume on child processes, which we do here.
-    //          If I disable this, then we should make sure all descendants are killed on exit.
-    // Dec/2025. Testing shows that even with this option commented out we still get the memory corruption.
-    //           TODO: try explicity setting the option to false?  Need to run a address sanitizer build as a batch to track this down.
-    //options.multi_process = true;           // if your app uses multiple processes, do this before creating any threads or processes, or storing the PID
+    options.multi_thread = false;
+    options.multi_process = false;
     options.check_heartbeat = true;           // controller monitors 'heartbeat' messages from the client.
     options.handle_process_control = true;    // controller will handle all suspend/quit/resume messages from the boinc client.
     options.direct_process_action = false;    // controller will respond to quit messages and heartbeat failures by exiting,

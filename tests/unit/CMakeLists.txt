@@ -35,6 +35,7 @@ add_executable(unit_tests unit_tests.cpp
                         t_stage_model_input_archive.cpp
                         t_parse_control_input.cpp
                         t_control_start.cpp
+                        t_init_boinc.cpp
                         t_logging_utils.cpp
                         t_get_env_vars.cpp
                         t_model_filename_match.cpp
@@ -83,6 +84,10 @@ add_test( NAME VerifyProjectZipMD5Test COMMAND unit_tests "Verify Project Zip MD
 add_test( NAME StageModelInputArchiveTest COMMAND unit_tests "Stage Model Input Archive" )
 add_test( NAME ParseControlInputTest COMMAND unit_tests "Parse Control Input" )
 add_test( NAME ControlStartTest COMMAND unit_tests "Control Start" )
+add_test( NAME InitBoincStandaloneTest COMMAND unit_tests "Init BOINC Standalone" )
+add_test( NAME InitBoincMissingDataTest COMMAND unit_tests "Init BOINC Missing Data" )
+add_test( NAME InitBoincMalformedDataTest COMMAND unit_tests "Init BOINC Malformed Data" )
+set_tests_properties(InitBoincStandaloneTest InitBoincMissingDataTest InitBoincMalformedDataTest PROPERTIES TIMEOUT 15)
 add_test( NAME LoggingUtilsTest COMMAND unit_tests "Logging Utils" )
 add_test( NAME GetEnvVarsTest COMMAND unit_tests "Get Env Vars" )
 add_test( NAME ModelFilenameMatchTest COMMAND unit_tests "Model Filename Match" )

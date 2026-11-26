@@ -38,6 +38,13 @@ reformatted for archive naming. `project_dir`, `boinc_dir`, `wu_name`,
 `result_name`, and `ncpus` come from BOINC initialization. The CPU count is
 clamped to at least one before any valid thread override is applied.
 
+`init_boinc()` constructs the final wrapper options and calls
+`boinc_init_options()` exactly once, creating one BOINC timer thread. It then
+explicitly checks `init_data.xml` parsing before copying task metadata. Standalone
+pre-production runs still require this file, but do not require a running BOINC
+client or shared-memory connection. Missing or malformed metadata remains a
+startup error rather than being accepted through BOINC's standalone fallback.
+
 `slot_path` comes from the current working directory. `standalone` records
 whether BOINC client interaction is available. `app_files` is declared but is
 not currently populated.

@@ -106,19 +106,63 @@ static int child_status_from_process_state( ChildProcessState process_state, int
 
 
 /**
- * @brief Initialise BOINC data structure and set the options
+ * @brief Initialise BOINC once with the final options and populate task configuration.
+ *
+ * @details
+ * The controller uses BOINC's wrapper mode: BOINC reports client status and
+ * the controller manages model/helper suspension, resumption and termination
+ * through its owned process groups or Windows Job Objects.
+ *
+ * BOINC's multi_thread option is intended for automatic control of application
+ * threads: Windows enumerates threads for suspension/resumption, while POSIX
+ * has a legacy supervisor-process path. It does not enable thread creation or
+ * make BOINC API calls thread-safe. BOINC creates its internal timer thread
+ * even when this option is false; threads in the separate model process do not
+ * require enabling it in the controller.
+ *
+ * BOINC's multi_process option enables descendant termination in boinc_exit(),
+ * even with direct_process_action disabled. On POSIX it also enables descendant
+ * suspension/resumption during BOINC's automatic process control. It does not
+ * launch subprocesses or provide the controller's ownership and bounded cleanup.
+ *
+ * Both flags are explicitly false because the controller owns process control.
+ * Introducing application threads into cpdn_control does not require enabling
+ * either flag: the controller must coordinate their pause/shutdown and BOINC API
+ * access while retaining ownership of its model/helper processes.
+ *
+ * boinc_init() already calls boinc_init_options(), so call only the latter to
+ * avoid creating a second timer thread. Standalone tests still supply a valid
+ * init_data.xml but run without BOINC client shared memory. Retain the explicit
+ * parse check: BOINC initialization otherwise falls back to standalone mode on
+ * missing or malformed initialization data instead of returning that error.
  */
 int init_boinc( BoincConfig& config )
 {
     int retval = 0;
 
-    //boinc_init_diagnostics(BOINC_DIAG_DEFAULTS);
-    retval = boinc_init();
+    // Set the final options before initialization starts BOINC's timer thread.
+    BOINC_OPTIONS options;
+    boinc_options_defaults( options );
+    options.main_program = true;    // tell boinc client this is the main program
+    options.multi_thread = false;
+    options.multi_process = false;
+    options.check_heartbeat = true;           // controller monitors 'heartbeat' messages from the client.
+    options.handle_process_control = true;    // controller will handle all suspend/quit/resume messages from the boinc client.
+    options.direct_process_action = false;    // controller will respond to quit messages and heartbeat failures by exiting,
+                                              // and will respond to suspend and resume messages by suspending and resuming
+    // Disable BOINC's automatic reporting of controller CPU time.
+    // main() explicitly reports model-task CPU time and progress.
+    // If set to true, main() must call boinc_fraction_done() each loop to
+    // supply the cached progress value used by automatic reporting.
+    options.send_status_msgs = false;
+
+    retval = boinc_init_options( &options );
     if ( retval ) {
-        log_boinc_api_error( "boinc_init", retval );
+        log_boinc_api_error( "boinc_init_options", retval );
         return retval;
     }
 
+    // Keep startup metadata errors fatal, including in standalone test runs.
     retval = boinc_parse_init_data_file();
     if ( retval ) {
         log_boinc_api_error( "boinc_parse_init_data_file", retval );
@@ -161,31 +205,7 @@ int init_boinc( BoincConfig& config )
     // The APP_INIT_DATA structure only has the slot number.
     config.slot_path = fs::current_path().string();
 
-    // Set BOINC optional values
-    BOINC_OPTIONS options;
-    boinc_options_defaults( options );
-    options.main_program = true;    // tell boinc client this is the main program
-    // Nov/2025. This option appears to sometimes cause a memory corruption (!prev); possible race condition
-    //          on 'static std::vector<UPLOAD_FILE_STATUS> upload_file_status'; in boinc_api.cpp upon destruction.
-    //          Disable for now. Monitor code did not use it.
-    //          If this is set true, the client will kill all our child processes on exit (supposedly).
-    //          It also appears to execute suspend/resume on child processes, which we do here.
-    //          If I disable this, then we should make sure all descendants are killed on exit.
-    // Dec/2025. Testing shows that even with this option commented out we still get the memory corruption.
-    //           TODO: try explicity setting the option to false?  Need to run a address sanitizer build as a batch to track this down.
-    //options.multi_process = true;           // if your app uses multiple processes, do this before creating any threads or processes, or storing the PID
-    options.check_heartbeat = true;           // controller monitors 'heartbeat' messages from the client.
-    options.handle_process_control = true;    // controller will handle all suspend/quit/resume messages from the boinc client.
-    options.direct_process_action = false;    // controller will respond to quit messages and heartbeat failures by exiting,
-                                              // and will respond to suspend and resume messages by suspending and resuming
-    options.send_status_msgs = false;         // If set, the program will report its CPU time and fraction done to the client.
-                                              // Set in worker programs.
-
-    retval = boinc_init_options( &options );
-    if ( retval ) {
-        log_boinc_api_error( "boinc_init_options", retval );
-    }
-    return retval;
+    return 0;
 }
 
 

@@ -150,8 +150,9 @@ int init_boinc( BoincConfig& config )
     options.handle_process_control = true;    // controller will handle all suspend/quit/resume messages from the boinc client.
     options.direct_process_action = false;    // controller will respond to quit messages and heartbeat failures by exiting,
                                               // and will respond to suspend and resume messages by suspending and resuming
-    options.send_status_msgs = false;         // If set, the program will report its CPU time and fraction done to the client.
-                                              // Set in worker programs.
+    // Disable BOINC's automatic reporting of controller CPU time.
+    // main() explicitly reports model-task CPU time and progress.
+    options.send_status_msgs = false;
 
     retval = boinc_init_options( &options );
     if ( retval ) {

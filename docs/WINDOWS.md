@@ -22,7 +22,7 @@ Already in place:
 - `run_process_with_timeout(...)` now has a Windows implementation using `CreateProcessW`, a child-only environment block, timeout handling, Job Object cleanup, and optional combined stdout/stderr capture.
 - `api/progressfile_handler.cpp` now uses `_getpid()` on Windows.
 - `src/cpdn_main.cpp` no longer depends on `mkdir` and the old unconditional POSIX directory headers for its upload-directory setup.
-- `move_and_unzip_app_file(...)` now uses the shared CMake `PLATFORM` triplet rather than hardcoded Linux/macOS filename suffixes.
+- `stage_and_unzip_app_file(...)` now uses the shared CMake `PLATFORM` triplet rather than hardcoded Linux/macOS filename suffixes.
 - the main repo and the separate `zip/` project now use the static MSVC runtime on Windows so they match the static BOINC package from vcpkg
 
 ## Windows BOINC Provisioning
@@ -57,28 +57,56 @@ Now in place:
   - `launch_process(...)`
   - `check_child_status(...)`
   - `apply_boinc_suspend_resume(...)`
+  - `check_boinc_before_launch(...)`
+- common bounded termination confirmation in `lib/process_control.cpp`
+- final exit decisions and controller-owned model cleanup in `src/task_lifecycle.cpp`
 
-The POSIX backend now keeps `setrlimit(...)` in the forked child, but all argument/environment preparation is done in the parent first. The child branch is intentionally limited to:
-
-- `chdir(...)`
-- `setrlimit(RLIMIT_CORE, ...)`
-- `setrlimit(RLIMIT_STACK, ...)`
-- `execve(...)`
-- `_exit(...)` on failure
-
-This keeps the old OpenIFS-compatible launch model while avoiding the earlier post-`fork()` C++ setup work in the child.
+For comparison, the POSIX backend prepares model arguments and environment in
+the parent, then the child establishes its process group with `setpgid(...)`,
+changes working directory, redirects stdout through `freopen`/`setvbuf`, applies
+resource limits, and calls `execve(...)` or `_exit(...)` on failure. Linux applies
+the unlimited-stack setting; macOS skips that setting. The parent also establishes
+or verifies the private process group before returning a successful launch.
 
 The Windows backend now implements:
 
 - `CreateProcessW` for launch
 - explicit child-only environment handoff
 - case-insensitive environment-variable merge for Windows child environments
-- `WaitForSingleObject(..., 0)` and `GetExitCodeProcess` for polling
+- `WaitForSingleObject(..., 0)` and `GetExitCodeProcess` for leader polling while retaining process/job handles after leader exit
 - Job Object containment so descendants stay attached to the launched model tree
-- `TerminateJobObject(...)` for forced shutdown of the full child tree
+- `TerminateJobObject(...)` for forced shutdown of the owned job tree
+- `QueryInformationJobObject(..., JobObjectBasicAccountingInformation, ...)` to require zero active job processes as well as leader exit during confirmation
+- bounded cleanup of a suspended root with `TerminateProcess(...)` if job assignment fails before it can be resumed
 - suspend/resume across the attached job tree via Tool Help thread enumeration and `SuspendThread` / `ResumeThread`
 
 The obsolete `process_env_overrides()` testing path has been removed. Model environment variables are now prepared as data and passed to the child launcher rather than being applied to the parent controller process.
+
+## Controller-owned shutdown and confirmation
+
+`CreateProcessW` creates the model suspended, and the launcher assigns it to its
+Job Object before resuming execution. The controller retains ownership handles
+after leader exit so remaining job processes can still be terminated. The Job
+Object also has `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` as a fallback; controller
+cleanup explicitly requests termination and attempts confirmation before closing
+handles.
+
+Every controlled final exit invokes shared model cleanup, including restartable
+BOINC quit. Confirmation uses one two-second monotonic wait budget for the owned
+process set. Failed job assignment or resume also attempts bounded cleanup before
+returning a failed launch. Synchronous helper programs use the same confirmation
+mechanism. Processes are selected by recorded ownership, not executable name;
+old orphan discovery is outside scope.
+
+The two-second budget does not cap total shutdown latency. BOINC status checks
+read flags already received by the API, and synchronous model work can delay
+controller-side polling. See [BOINC exit behaviour](boinc_exit_behaviour.md) for
+the recorded review decisions. Normal uploads still precede final owned-process
+cleanup, and error finalization still skips uploads on unconfirmed cleanup;
+these policies were accepted for OpenIFS and WRF because their workers are
+threads rather than model subprocess descendants. Diagnostics now explicitly
+reject output on failed or expired helper cleanup. Models with subprocess
+workers require a fresh review of finalization ordering and upload policy.
 
 ## Remaining Windows Blockers
 
@@ -90,7 +118,7 @@ The current workflow now compiles and runs unit tests against a real BOINC packa
 - end-to-end controller behavior under a Windows BOINC-style task layout
 - runtime behavior of the new Job Object suspend/resume and tree-termination logic under real model workloads
 
-To move beyond the current build-only validation:
+To extend the current build-and-unit-test validation:
 
 - keep the vcpkg-based BOINC path working and stable in CI
 - validate the re-enabled full Windows unit-test run in CI
@@ -104,7 +132,10 @@ Known follow-up areas:
 - keep watching the full Windows unit-test run in GitHub Actions for regressions
 - several tests still use Unix-centric assumptions or helpers directly
 - the Windows workflow still disables functional tests
-- the threaded suspend/resume and descendant-process termination paths need Windows-specific runtime coverage, not just compile success
+- run `TaskLifecycleTest` natively for running/suspended children, descendant cleanup after leader exit, process-set isolation and executable overwrite
+- validate job-assignment/resume failures, retained-handle cleanup and zero-active-process confirmation natively; the shutdown correction has only been executed on Linux so far
+- the deadline unit case uses a zero budget, so nonzero-deadline expiry remains a separate coverage gap
+- broader shutdown timing needs Windows BOINC/service testing, not just compile success
 
 ## Next practical milestones
 

@@ -28,6 +28,7 @@ int t_get_out_files();
 int t_launch_process();
 int t_trickle_handler();
 int t_run_process_with_timeout();
+int t_external_diagnostics();
 int t_verify_project_zip_md5();
 int t_stage_model_input_archive();
 int t_parse_control_input();
@@ -42,3 +43,5 @@ int t_wrf_parse_restart();
 int t_wrf_check_model_success();
 int t_wrf_restart_pruning();
 int t_filename_label_args();
+
+int t_task_lifecycle();

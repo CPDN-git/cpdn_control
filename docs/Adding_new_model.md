@@ -30,12 +30,12 @@ If the model needs additional utility functions for filenames, restart parsing, 
 
 Create a new class derived from `ModelControl`, similar to `OpenIFSControl` in:
 
-- `[models/openifs/oifs_control.h](/home/glenn/github/cpdn_control/models/openifs/oifs_control.h)`
-- `[models/openifs/oifs_control.cpp](/home/glenn/github/cpdn_control/models/openifs/oifs_control.cpp)`
+- [models/openifs/oifs_control.h](/home/glenn/github/cpdn_control/models/openifs/oifs_control.h)
+- [models/openifs/oifs_control.cpp](/home/glenn/github/cpdn_control/models/openifs/oifs_control.cpp)
 
 The new class must override the current pure virtual interface in:
 
-- `[api/model_control.h](/home/glenn/github/cpdn_control/api/model_control.h)`
+- [api/model_control.h](/home/glenn/github/cpdn_control/api/model_control.h)
 
 At a minimum this means implementing:
 
@@ -45,6 +45,8 @@ At a minimum this means implementing:
 - `parse_control_input()`
 - `get_current_step(...)`
 - `get_output_filenames(...)`
+- `get_copyable_output_filenames(...)`
+- `setup_directories(...)`
 - `is_output_filename(...)`
 - `is_restart_filename(...)`
 - `get_log_filenames()`
@@ -62,7 +64,7 @@ The new class will also need the necessary private member variables, for example
 
 Update:
 
-- `[src/cpdn_main.cpp](/home/glenn/github/cpdn_control/src/cpdn_main.cpp)`
+- [src/cpdn_main.cpp](/home/glenn/github/cpdn_control/src/cpdn_main.cpp)
 
 Add a new branch in `create_model_control(...)` so the controller can construct the new model control class when the BOINC app/model name matches `NewModel`.
 
@@ -72,7 +74,7 @@ This is the step that connects the new model into the executable at runtime.
 
 Update:
 
-- `[models/CMakeLists.txt](/home/glenn/github/cpdn_control/models/CMakeLists.txt)`
+- [models/CMakeLists.txt](/home/glenn/github/cpdn_control/models/CMakeLists.txt)
 
 Add the new source files to the `cpdn_models` object library so they are compiled and linked into the controller.
 
@@ -89,7 +91,7 @@ The controller now stages model input archives through the model manifest return
 
 This manifest uses:
 
-- `[api/model_input_manifest.h](/home/glenn/github/cpdn_control/api/model_input_manifest.h)`
+- [api/model_input_manifest.h](/home/glenn/github/cpdn_control/api/model_input_manifest.h)
 
 If `NewModel` uses BOINC logical input archives in the same general way as OpenIFS, implement the model-specific logical filenames and unzip destinations there.
 
@@ -107,18 +109,26 @@ If `NewModel` depends on those values, use them in the same way as OpenIFS for n
 
 So `NewModel` must implement `parse_control_input()` in its own control class.
 
-For a model similar to OpenIFS, this will usually populate:
+Populate the shared result with validated timing for the whole run:
 
-- horizontal resolution
-- vertical resolution
-- grid type
-- experiment id
-- timestep
-- output interval
-- restart interval
-- upload interval
-- total steps
-- model forecast length
+- `timestep_seconds`;
+- `output_interval`, `restart_interval`, and `total_steps` in model steps;
+- `forecast_length_time` in seconds;
+- `ok` and the source file, or structured error step/field/message information.
+
+On restart, these describe the original run, including completed steps, rather
+than only the remaining forecast. See WRF's handling of its rewritten namelist.
+
+Keep model-specific resolution, grid and experiment identifiers private to the
+adapter. OpenIFS reads `CNMEXP` into its own `experiment_id` for filename
+construction; these values are not fields of `ModelControlInputData`. Upload
+cadence comes from `TaskConfig::upload_interval` on the CLI, not model input.
+
+The startup order is executable archive, task app bundle,
+`setup_directories(slot_path)`, manifest staging, `setup(slot_path)`, then
+`parse_control_input()`. The manifest must therefore be available before control
+input is parsed. A model with no special directory preparation still implements
+`setup_directories(...)`, returning success for its no-op case.
 
 ## 7. Implement restart and step polling hooks
 
@@ -135,6 +145,15 @@ So `NewModel` must provide behaviour for:
 - `parse_restart(...)`
 - `get_current_step(...)`
 - `get_output_filenames(...)`
+- `get_copyable_output_filenames(...)`
+
+Step fields are integer model step counts. `parse_restart(...)` currently returns
+a string which shared startup code converts into an integer.
+
+`get_output_filenames(step)` supplies nominal names for model-internal use; it
+does not establish copy readiness. `get_copyable_output_filenames(current_step)`
+must return every file safe to copy as of the observed step. The controller can
+skip observed steps, and a single file can contain several steps of output.
 
 If the restart file format or current-step source differs from OpenIFS, that logic belongs in the new model implementation, not in `main()`.
 
@@ -160,8 +179,8 @@ For a model very similar to OpenIFS, the existing controller seams may be enough
 
 Even so, when adding `NewModel`, review these areas:
 
-- startup/restart seam in `[src/control_start.h](/home/glenn/github/cpdn_control/src/control_start.h)`
-- any assumptions in `[src/cpdn_main.cpp](/home/glenn/github/cpdn_control/src/cpdn_main.cpp)` about output naming, restart cadence, or upload cadence
+- startup/restart seam in [src/control_start.h](/home/glenn/github/cpdn_control/src/control_start.h)
+- any assumptions in [src/cpdn_main.cpp](/home/glenn/github/cpdn_control/src/cpdn_main.cpp) about output naming, restart cadence, or upload cadence
 
 The goal should be:
 
@@ -169,17 +188,54 @@ The goal should be:
 - keep model-specific rules in the new model directory
 - only extend shared interfaces when `NewModel` genuinely needs a new cross-model seam
 
+## 10. Preserve controller-owned process cleanup
+
+Use the shared launcher for the main executable. The controller owns its process
+set on Linux, macOS, and Windows: a private POSIX process group or a Windows Job
+Object. Valid launch ownership persists after leader exit until explicit cleanup
+and handle closure. Identify processes by their recorded launch ownership, never
+by a global executable-name search.
+
+All controlled exits use `finish_task_exit()` in `src/task_lifecycle.cpp`.
+Termination is immediate and confirmation has one two-second monotonic wait
+budget for the model process set. BOINC quit/abort/heartbeat loss must not bypass
+cleanup. Ordinary descendants must stay in the owned group/job; POSIX descendants
+that deliberately detach are outside the guarantee. Orphan recovery from earlier
+controller runs is outside scope.
+
+Auxiliary synchronous programs should use `run_process_with_timeout()`, which
+returns execution, output-freshness and cleanup outcomes. The helper execution
+timeout and cleanup budget are separate. Check the cleanup result before
+accepting helper output; the OpenIFS diagnostics acceptance path rejects failed
+or expired cleanup even when execution succeeded and the file was refreshed.
+
+Read [BOINC exit behaviour](boinc_exit_behaviour.md) before integrating a model
+with descendants or auxiliary writers. Review accepted the current normal
+completion ordering and error-finalization policy for OpenIFS and WRF because
+their parallel workers are threads, not model subprocess descendants. Reassess
+these policies before adding a model with subprocess workers. A leader exit or
+successful helper return does not by itself prove every writer has stopped in
+such an integration. The two-second cleanup budget does not bound
+all time spent in model step hooks or other synchronous controller work.
+
+Extend tests for model control input, manifest staging, output readiness and
+restart handling. Include process-lifecycle tests for a model that uses
+additional processes, and validate the affected backend natively on macOS and
+Windows as well as Linux.
+
 ## Short checklist
 
 Minimum code touchpoints for a new model similar to OpenIFS:
 
 - add `models/newmodel/`
 - implement `NewModelControl : ModelControl`
-- add new model `.cpp` files to `[models/CMakeLists.txt](/home/glenn/github/cpdn_control/models/CMakeLists.txt)`
-- update `create_model_control(...)` in `[src/cpdn_main.cpp](/home/glenn/github/cpdn_control/src/cpdn_main.cpp)`
+- add new model `.cpp` files to [models/CMakeLists.txt](/home/glenn/github/cpdn_control/models/CMakeLists.txt)
+- update `create_model_control(...)` in [src/cpdn_main.cpp](/home/glenn/github/cpdn_control/src/cpdn_main.cpp)
 - implement model manifest logic
 - implement model control-input parsing
 - implement restart/current-step/output/log/success hooks
+- implement `setup_directories(...)` and copy-readiness reporting
+- preserve shared process ownership and add appropriate lifecycle coverage
 
 This is sufficient as a starting point for a first similar model integration.
 

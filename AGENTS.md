@@ -8,7 +8,7 @@ This repository builds the **CPDN controller** executable used to run/manage cli
   - Program entry point (`main`) and high-level flow: BOINC init, argument parsing, model selection, run loop.
   - Contains the model factory `create_model_control(...)` mapping `app_name/model_name -> ModelControl`.
   - Now stages model input archives through a model-owned manifest rather than hardcoded OpenIFS filename handling in `main()`.
-  - Currently also contains **experimental** step-diagnostics glue that runs `diagnostics.exe` before result files are moved out of the slot directory. This is a temporary integration and is expected to move under model-class control later.
+  - Invokes generic model step hooks before collecting copyable outputs. OpenIFS diagnostics dispatch and argument construction live in `models/openifs/external_diagnostics.cpp`, called by the model adapter.
 - `src/parse_args.h`, `src/parse_args.cpp`
   - CLI11-based command-line parsing for controller/task arguments.
   - The `--filename_label` option is opaque CPDN filename-resolution metadata used to locate the app bundle before its model control input is available. It is not authoritative model runtime configuration.
@@ -17,8 +17,12 @@ This repository builds the **CPDN controller** executable used to run/manage cli
   - Core controller logic used by the release/debug executables and unit tests.
   - BOINC API call sites in controller helpers now log the failing BOINC function name, numeric return code, and `boincerror(...)` string locally before returning control to the caller.
   - Includes the BOINC suspend/resume helper used by `main()` to apply suspend/resume requests without deciding the final controller exit path.
+- `src/task_lifecycle.h`, `src/task_lifecycle.cpp`
+  - Model-independent exit decisions and the final cleanup path shared by every controller exit route.
+- `lib/process_control.h`, `lib/process_control.cpp`, `lib/process_control_posix.cpp`, `lib/process_control_windows.cpp`
+  - Owned process groups/Job Objects and bounded termination confirmation for Linux, macOS, and Windows.
 - `src/upload_manager.h`, `src/upload_manager.cpp`
-  - Upload/finalization helper used by `main()` and `shutdown_task(...)` to stage copyable model outputs, create placeholder payloads for missing scheduled uploads, zip result archives, and submit BOINC uploads.
+  - Upload/finalization helper used by `main()` and `recover_after_controller_error(...)` to stage copyable model outputs, create placeholder payloads for missing scheduled uploads, zip result archives, and submit BOINC uploads.
   - `UploadManager::move_copyable_output_files(...)` is intentionally best-effort: it should attempt to copy every eligible model output file, log individual failures, and continue so remote logs retain as much evidence as possible.
 - `api/model_input_manifest.h`
   - Shared manifest/context types for model-declared BOINC input archives.
@@ -42,6 +46,7 @@ This repository builds the **CPDN controller** executable used to run/manage cli
 - `tests/unit/`
   - CTest-driven unit tests (single `unit_tests` executable invoked with different arguments).
   - Includes `t_run_process_with_timeout.cpp` plus `timed_process_helper.cpp` for exercising timed external-process execution.
+  - Includes `t_task_lifecycle.cpp` for startup status guards and the shared final exit helper. Its zero-budget timeout test does not exercise a nonzero deadline, and Linux descendant tests arrange reaping explicitly.
   - Includes staging/checksum coverage for BOINC project archives such as `t_verify_project_zip_md5.cpp` and `t_stage_model_input_archive.cpp`.
   - Includes upload-finalization coverage such as `t_upload_manager.cpp` and `t_upload_placeholders.cpp`.
 - `tests/functional/`
@@ -131,8 +136,8 @@ or:
 
 Outputs are placed in `build/` (not installed). Notable binaries:
 
-- `cpdn_control_1.0.0_x86_64-pc-linux-gnu` (release-ish target; links with `-static` by default)
-- `cpdn_control_1.0.0_x86_64-pc-linux-gnu-debug` (AddressSanitizer enabled)
+- `cpdn_control_<version>_<platform>` (release target; Linux links with `-static` by default)
+- `cpdn_control_<version>_<platform>-debug` (AddressSanitizer enabled on supported non-MSVC builds)
 - `test_model` (simple model simulator used by functional tests)
 - `unit_tests`
 
@@ -173,10 +178,11 @@ Notes:
 
 ## Current experimental area
 
-- `src/cpdn_main.cpp` contains temporary logic for running an external `diagnostics.exe` program on completed OpenIFS output before `move_result_file()` removes those files from the slot directory.
-- The current implementation only looks for the `ICMSH...` file from `get_output_filenames(...)` and builds a hard-coded experimental argument list for diagnostics. Treat this as provisional, not as a stable interface.
-- If you are extending or refactoring this area, prefer moving the diagnostics decision-making and argument construction into model-specific code rather than growing more OpenIFS-specific logic in `main()`.
-- The diagnostics path currently depends on `TrickleHandler` consuming `trickle_data` from the slot directory, so any redesign that stages work elsewhere must either copy `trickle_data` back or update that contract deliberately.
+- OpenIFS diagnostics are model-owned: `OpenIFSControl::do_step_tasks(...)` calls the implementation in `models/openifs/external_diagnostics.cpp`; `main()` only invokes the generic step hook.
+- The experimental helper selects an `ICMSH...` input and builds the diagnostics argument list within the OpenIFS implementation. Keep further OpenIFS-specific decisions there.
+- Diagnostics run synchronously with a separate 30-second execution timeout. The two-second process cleanup confirmation budget does not bound total shutdown latency while a step hook is running.
+- `TrickleHandler` consumes `trickle_data` from the slot directory. A redesign that stages diagnostics elsewhere must preserve or deliberately update that contract.
+- Diagnostics explicitly validate `TimedProcessResult::cleanup` before accepting output. Failed or expired cleanup logs its status/context and discards `trickle_data`, even if the helper leader exited successfully and updated the file. Diagnostics rejection remains nonfatal to the model task.
 
 ## BOINC Input Staging Semantics
 
@@ -252,23 +258,34 @@ Notes:
   - `1` = exited normally
   - `3` = terminated by signal
   - `4` = stopped
-  - `5` = not found by `waitpid()`
+  - `5` = process state unavailable from the platform poll
 - `BoincRuntime::client_status` stores the latest `BOINC_STATUS` snapshot returned by `boinc_get_status()`.
 - Do not overload `child_status` with BOINC meanings such as quit, abort, suspend, or no-heartbeat.
-- `sleep_with_boinc_poll(...)` in `src/cpdn_main.cpp` is intended to poll BOINC state only. It should not directly stop, resume, or kill the child process.
+- `sleep_with_boinc_poll(...)` in `src/cpdn_control.cpp` is intended to poll BOINC state only. It should not directly stop, resume, or kill the child process.
 - `apply_boinc_suspend_resume(...)` in `src/cpdn_control.cpp` is the side-effecting BOINC handler for suspend/resume only.
   It returns `false` on quit, abort, or no-heartbeat so `main()` can choose the correct final exit path.
-- `exit_task(...)` in `src/cpdn_main.cpp` is the general final-exit helper:
-  it performs defensive child-process shutdown, closes the child handle, unwinds the BOINC critical section, and only calls `boinc_finish(...)` on genuine loop completion.
-- `shutdown_task(...)` in `src/cpdn_main.cpp` is the controller-error shutdown helper:
+- `finish_task_exit(...)` in `src/task_lifecycle.cpp` is the general final-exit helper:
+  it performs controller-owned child-process cleanup on every route, including BOINC quit/abort/no-heartbeat, closes the child handle, unwinds the BOINC critical section, and only calls `boinc_finish(...)` on genuine loop completion.
+- `recover_after_controller_error(...)` in `src/cpdn_main.cpp` is the controller-error shutdown helper:
   it may stop the child early so uploads can be finalized safely before the controller takes its final non-finish exit path.
+- The controller owns termination of every model/helper process it launches and their ordinary descendants when cleanup can execute. Never delegate this responsibility to the BOINC client.
+- Keep this contract model-independent and compatible with Linux, macOS, and Windows. Identify owned processes by their launch handles/PIDs and process group or Job Object, never by a global executable-name search.
+- Model/helper launches on Linux and macOS establish a private process group before launch is reported successful. Windows launches use a Job Object. Retain ownership until final cleanup even after the leader exits; POSIX polling observes terminal state without reaping until cleanup has signalled the group, avoiding reuse of its identity before signalling.
+- Cleanup requests termination immediately and confirms exit using nonblocking polls with one total two-second monotonic wait budget per owned process set. Recovery and final exit share the model cleanup result and must not restart that budget. Log failed or unconfirmed cleanup and exit when the deadline expires; never use an unbounded wait.
+- Check and log the latest received BOINC status before startup staging and immediately before model launch. Defer launch while suspended and exit without launch on observed quit/abort/no-heartbeat. Poll immediately after launch as well, applying suspend/resume to the actual child and cleaning it up on observed shutdown. `boinc_get_status()` copies received flags; it does not synchronously drain pending client IPC.
+- Child-cleanup stderr must identify the exit reason and process identity, whether termination was requested, the confirmed/failed/deadline outcome, and elapsed time. Signal submission alone is not confirmed termination.
+- Forced controller termination or power loss may prevent cleanup. Descendants that deliberately detach from their process group are outside the POSIX process-group guarantee. Recovery of orphans from earlier controller runs is outside scope.
+- Current controller-error recovery skips all remaining upload finalization when cleanup fails or expires. A zombie-only POSIX group can trigger that outcome. Review accepted the current policy for OpenIFS and WRF because these models use threads and do not create model subprocess descendants; no further code change is required for that finding.
+- The current normal-completion path performs model finalization and upload work before final owned-process cleanup. Its selected completion code is not overridden by cleanup failure. Review accepted this ordering for the current OpenIFS and WRF models, whose parallel workers are threads in the model process. Revisit the ordering and upload policy before integrating a model that creates subprocess descendants.
+- The two-second budget limits cleanup confirmation, not total request-to-exit latency. Synchronous diagnostics and other operations can delay the next controller-side status check.
+- Review findings do not authorize further implementation changes. Keep their status explicit in `docs/boinc_exit_behaviour.md` until a correction is agreed.
 - Do not assume a non-BOINC controller error implies the child is already gone. If the controller is exiting after launch, preserve the invariant that the model child must not be left running.
 - In `main()`, prefer the explicit sequence:
   - call `boinc_get_status(&bruntime.client_status)`
   - inspect or poll for a BOINC state change
   - call `apply_boinc_suspend_resume(...)` if action is required
   - on BOINC `QUIT`, take the explicit restartable non-finish exit path
-  - on ordinary controller failure, route through `shutdown_task(...)` if uploads still need finalizing
+  - on ordinary controller failure, route through `recover_after_controller_error(...)` if uploads still need finalizing
   - only call `boinc_finish(...)` after natural timestep-loop completion and `check_model_success()`
 - If this area is refactored further, preserve the separation of responsibilities:
   - polling BOINC state

@@ -26,9 +26,11 @@ add_executable(unit_tests unit_tests.cpp
                         t_upload_manager.cpp
                         t_set_env_var.cpp
                         t_get_out_files.cpp
+                        t_task_lifecycle.cpp
                         t_launch_process.cpp
                         t_trickle_handler.cpp
                         t_run_process_with_timeout.cpp
+                        t_external_diagnostics.cpp
                         t_verify_project_zip_md5.cpp
                         t_stage_model_input_archive.cpp
                         t_parse_control_input.cpp
@@ -76,6 +78,7 @@ add_test( NAME GetOutFilesTest COMMAND unit_tests "Get Out Files" )
 add_test( NAME LaunchProcessTest COMMAND unit_tests "Launch Process" )
 add_test( NAME TrickleHandlerTest COMMAND unit_tests "Trickle Handler" )
 add_test( NAME RunProcessWithTimeoutTest COMMAND unit_tests "Run Process With Timeout" )
+add_test( NAME ExternalDiagnosticsTest COMMAND unit_tests "External Diagnostics" )
 add_test( NAME VerifyProjectZipMD5Test COMMAND unit_tests "Verify Project Zip MD5" )
 add_test( NAME StageModelInputArchiveTest COMMAND unit_tests "Stage Model Input Archive" )
 add_test( NAME ParseControlInputTest COMMAND unit_tests "Parse Control Input" )
@@ -90,3 +93,6 @@ add_test( NAME WRFParseRestartTest COMMAND unit_tests "WRF Parse Restart" )
 add_test( NAME WRFCheckModelSuccessTest COMMAND unit_tests "WRF Check Model Success" )
 add_test( NAME WRFRestartPruningTest COMMAND unit_tests "WRF Restart Pruning" )
 add_test( NAME FilenameLabelArgsTest COMMAND unit_tests "Filename Label Args" )
+
+add_test( NAME TaskLifecycleTest COMMAND unit_tests "Task Lifecycle" )
+set_tests_properties(TaskLifecycleTest PROPERTIES TIMEOUT 30)

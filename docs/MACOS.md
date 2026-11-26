@@ -12,7 +12,8 @@ Current scope:
 
 ## Current Status
 
-The repo is closer to a macOS build than this project's earlier notes suggested.
+The repository has an Apple Silicon build and unit-test workflow. Its presence
+does not establish native runtime validation of every process-control change.
 
 Already in place:
 - `CMakeLists.txt` already derives `PLATFORM=arm64-apple-darwin` on Apple Silicon
@@ -64,7 +65,8 @@ This matches the current CMake defaults:
 
 ## Code Review Findings
 
-The current codebase does not show a clear macOS controller blocker before the first build attempt, but these areas are the ones to watch.
+The following separates implemented build support from native validation still
+needed for process-control changes.
 
 Likely already sufficient:
 - [CMakeLists.txt](/home/glenn/github/cpdn_control/CMakeLists.txt)
@@ -82,13 +84,17 @@ Likely already sufficient:
 Areas still needing real build validation:
 - [lib/process_control_posix.cpp](/home/glenn/github/cpdn_control/lib/process_control_posix.cpp)
   - stack-limit changes are intentionally skipped on Apple
-  - this is acceptable for the first build, but should be revisited if process startup or runtime behaviour differs on macOS
+  - launches establish a private group with `setpgid(...)` before reporting success
+  - `waitid(..., WNOWAIT)` observes leader exit while retaining its PID/group identity until termination is requested
+  - confirmation reaps the leader and checks group presence with a two-second monotonic wait budget
+  - validate running/suspended children, descendants after leader exit, zombie-only group presence, and immediate executable overwrite natively
 - BOINC imported target metadata from `vcpkg`
   - the Windows work found that the BOINC package metadata can be incomplete
   - macOS may need the same compatibility path
-- top-level documentation
-  - the root [README.md](/home/glenn/github/cpdn_control/README.md) still says macOS is not yet ported
-  - update that after the first successful Apple build
+- runtime validation
+  - Linux test results for the shutdown correction do not establish native Apple behaviour
+  - the workflow must be run for the changed `waitid`, process-group and descendant-cleanup paths
+  - the root [README.md](/home/glenn/github/cpdn_control/README.md) already describes macOS build support; build availability and real BOINC runtime validation remain separate claims
 
 ## GitHub Actions Status
 
@@ -108,24 +114,44 @@ Runner note:
 
 ## Apple Build Settings
 
-Use these settings for the first Apple Silicon port attempt:
+The checked-in workflow configures:
 
-- `VCPKG_TRIPLET=arm64-osx-cpdn`
+- `VCPKG_TARGET_TRIPLET=arm64-osx-cpdn` (workflow variable `VCPKG_TRIPLET`)
+- `CMAKE_OSX_ARCHITECTURES=arm64`
 - `CMAKE_OSX_DEPLOYMENT_TARGET=11.0`
 - `PLATFORM=arm64-apple-darwin`
-- `CPDN_BUILD_UNIT_TESTS=OFF`
-- `CPDN_BUILD_FUNCTIONAL_TESTS=OFF`
-
-Current workflow settings differ slightly from the original first-attempt plan:
-
 - `CPDN_BUILD_UNIT_TESTS=ON`
 - `CPDN_BUILD_FUNCTIONAL_TESTS=OFF`
 - `CPDN_REQUIRE_STATIC_BOINC=OFF`
-- `-DVCPKG_INSTALLED_DIR=<repo>/vcpkg_installed`
+- `VCPKG_INSTALLED_DIR=<repo>/vcpkg_installed`
+
+Use the workflow as the source of truth for its current runner and build settings.
+
+## Controller-owned shutdown
+
+The shared exit helper in `src/task_lifecycle.cpp` owns model cleanup on all
+controlled exits, including BOINC quit/abort/heartbeat loss. The POSIX backend
+is shared with Linux, but macOS behaviour must be validated natively. Normal
+model descendants inherit the private process group; descendants that deliberately
+leave it are outside the process-group guarantee. Recovery of old orphans is not
+implemented.
+
+The two-second budget bounds cleanup confirmation, not total shutdown latency.
+Synchronous diagnostics have a separate execution timeout and can delay the next
+BOINC status check. Review accepted the current finalization ordering and
+unconfirmed-cleanup upload policy for OpenIFS and WRF because they use threads
+and create no model subprocess descendants. Diagnostics now reject output on
+failed or expired helper cleanup. See the decisions and future-model limits in
+[BOINC exit behaviour](boinc_exit_behaviour.md).
+
+The Linux-specific subreaper used by descendant unit tests is not compiled on
+macOS. Native descendant tests therefore also depend on the system reaper's
+behaviour; a lingering zombie can keep a group-presence probe positive without
+keeping an executable image busy.
 
 ## Next Steps
 
 1. Keep the manual macOS workflow passing as BOINC, `vcpkg`, and runner images change.
 2. Decide when macOS functional tests are practical, especially around BOINC runtime library setup and test fixture expectations.
-3. Update the root README where it still undersells the current macOS build/test status.
+3. Run native lifecycle tests for the shutdown correction and record the results separately from Linux validation.
 4. Decide whether the macOS workflow should remain manual-only or become a broader CI signal later.

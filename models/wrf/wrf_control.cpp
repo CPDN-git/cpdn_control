@@ -356,7 +356,7 @@ bool WRFControl::check_model_success() const
  */
 void WRFControl::print_logs( const int nlines ) const
 {
-    print_last_lines( model_log, nlines );    // from lib/utils.h; will check file exists
+    print_last_lines( model_log.string(), nlines );    // from lib/utils.h; will check file exists
 }
 
 
